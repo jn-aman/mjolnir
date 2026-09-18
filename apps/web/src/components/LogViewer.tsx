@@ -48,6 +48,7 @@ const LEVEL_TOKEN: Record<string, string> = {
 const ROW = 19;
 
 interface LogViewerProps {
+  readonly source?: 'kubernetes' | 'docker' | undefined;
   readonly context: string;
   readonly namespace: string;
   readonly pod: string;
@@ -59,6 +60,7 @@ interface LogViewerProps {
 }
 
 export function LogViewer({
+  source,
   context,
   namespace,
   pod,
@@ -81,6 +83,7 @@ export function LogViewer({
   const stickRef = useRef(true);
 
   const { lines, state, error } = useLogStream({
+    source,
     context,
     namespace,
     pod,

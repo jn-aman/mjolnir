@@ -117,6 +117,7 @@ interface DeploymentItem extends KubeItem {
     };
 }
 export declare function workloadProblem(item: DeploymentItem): string | undefined;
+export declare function formatBytes(value: number | undefined): string;
 /** Columns for a kind, priority-ordered, falling back to name/namespace/age. */
 export declare function columnsFor(kind: string): Array<Column<KubeItem>>;
 export {};

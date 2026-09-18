@@ -101,6 +101,83 @@ export interface LicenceStatus {
   reason?: string;
 }
 
+export interface DockerContextInfo {
+  name: string;
+  endpoint: string;
+  supported: boolean;
+  reachable: boolean;
+  version?: string;
+  platform?: string;
+  error?: string;
+}
+export interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  imageId: string;
+  state: string;
+  status: string;
+  created: string;
+  labels: Record<string, string>;
+  project?: string;
+  service?: string;
+  ports: Array<{ host?: number; container: number; protocol: string; ip?: string }>;
+  mounts: Array<{ type: string; source?: string; destination: string }>;
+  networks: Array<{ name: string; ip?: string }>;
+  cpuPercent?: number;
+  memoryBytes?: number;
+  memoryLimit?: number;
+  rxBytes?: number;
+  txBytes?: number;
+}
+export interface DockerImage {
+  id: string;
+  tags: string[];
+  digests: string[];
+  created: string;
+  size: number;
+  usedBy: string[];
+  labels: Record<string, string>;
+}
+export interface DockerVolume {
+  name: string;
+  driver: string;
+  mountpoint: string;
+  created?: string;
+  labels: Record<string, string>;
+  usedBy: string[];
+}
+export interface DockerNetwork {
+  id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  created: string;
+  internal: boolean;
+  subnets: string[];
+  containers: string[];
+}
+export interface ScanFinding {
+  id: string;
+  package: string;
+  installed: string;
+  fixed: string | null;
+  severity: string;
+  title: string;
+  url: string;
+  target: string;
+}
+export interface ScanReport {
+  cached?: boolean;
+  image: string;
+  scannedAt: string;
+  os?: { Family?: string; Name?: string };
+  total: number;
+  bySeverity: Record<string, number>;
+  fixable: number;
+  findings: ScanFinding[];
+}
+
 export interface ForwardRecord {
   readonly id: string;
   readonly context: string;
@@ -167,6 +244,29 @@ export const api = {
   removeCluster: (name: string, scope: 'hide' | 'kubeconfig') =>
     request<unknown>(`/api/clusters/${encodeURIComponent(name)}?scope=${scope}`, { method: 'DELETE' }),
   unhideCluster: (name: string) => request<unknown>(`/api/clusters/${encodeURIComponent(name)}/unhide`, { method: 'POST', body: '{}' }),
+
+  docker: {
+    contexts: () => request<{ contexts: DockerContextInfo[]; current: string }>('/api/docker'),
+    containers: (ctx: string) => request<{ containers: DockerContainer[] }>(`/api/docker/${encodeURIComponent(ctx)}/containers`),
+    container: (ctx: string, id: string) => request<Record<string, unknown>>(`/api/docker/${encodeURIComponent(ctx)}/containers/${encodeURIComponent(id)}`),
+    action: (ctx: string, id: string, action: string) =>
+      request<{ ok: boolean }>(`/api/docker/${encodeURIComponent(ctx)}/containers/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: '{}' }),
+    removeContainer: (ctx: string, id: string, options: { force?: boolean; volumes?: boolean } = {}) =>
+      request<{ ok: boolean }>(`/api/docker/${encodeURIComponent(ctx)}/containers/${encodeURIComponent(id)}?force=${options.force ? 'true' : 'false'}&volumes=${options.volumes ? 'true' : 'false'}`, { method: 'DELETE' }),
+    images: (ctx: string) => request<{ images: DockerImage[] }>(`/api/docker/${encodeURIComponent(ctx)}/images`),
+    removeImage: (ctx: string, id: string, force = false) => request<unknown>(`/api/docker/${encodeURIComponent(ctx)}/images/${encodeURIComponent(id)}?force=${force}`, { method: 'DELETE' }),
+    pull: (ctx: string, image: string) => request<{ ok: boolean; status?: string }>(`/api/docker/${encodeURIComponent(ctx)}/images/pull`, { method: 'POST', body: JSON.stringify({ image }) }),
+    volumes: (ctx: string) => request<{ volumes: DockerVolume[] }>(`/api/docker/${encodeURIComponent(ctx)}/volumes`),
+    removeVolume: (ctx: string, name: string, force = false) => request<unknown>(`/api/docker/${encodeURIComponent(ctx)}/volumes/${encodeURIComponent(name)}?force=${force}`, { method: 'DELETE' }),
+    networks: (ctx: string) => request<{ networks: DockerNetwork[] }>(`/api/docker/${encodeURIComponent(ctx)}/networks`),
+    removeNetwork: (ctx: string, id: string) => request<unknown>(`/api/docker/${encodeURIComponent(ctx)}/networks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    system: (ctx: string) => request<{ info: Record<string, unknown>; df: Record<string, unknown>; version: Record<string, unknown> }>(`/api/docker/${encodeURIComponent(ctx)}/system`),
+    prune: (ctx: string, what: string) => request<{ ok: boolean; reclaimed: number }>(`/api/docker/${encodeURIComponent(ctx)}/prune/${what}`, { method: 'POST', body: '{}' }),
+  },
+  scan: {
+    status: () => request<{ available: boolean; path: string | null; install: string }>('/api/scan'),
+    image: (image: string, force = false) => request<ScanReport>('/api/scan/image', { method: 'POST', body: JSON.stringify({ image, force }) }),
+  },
 
   forwards: {
     list: () => request<{ forwards: ForwardRecord[] }>('/api/forwards'),

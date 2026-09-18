@@ -1,5 +1,6 @@
 import type { WatchState } from '@mjolnir/k8s';
 import { type KubeItem } from './columns.tsx';
+import { type MenuEntry } from './ui/ContextMenu.tsx';
 /**
  * One table for every resource kind.
  *
@@ -23,7 +24,9 @@ interface ResourceListProps {
     readonly selectedName?: string | undefined;
     readonly onSelect?: (item: KubeItem) => void;
     readonly onAction?: (action: string, item: KubeItem) => void;
+    /** Replaces the Kubernetes row menu, for lists of other things. */
+    readonly menu?: ((item: KubeItem) => MenuEntry[]) | undefined;
 }
-export declare function ResourceList({ kind, items, state, error, filter, label, namespace, selectedName, onSelect, onAction, }: ResourceListProps): import("react").JSX.Element;
+export declare function ResourceList({ kind, items, state, error, filter, label, namespace, selectedName, onSelect, onAction, menu, }: ResourceListProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=ResourceList.d.ts.map

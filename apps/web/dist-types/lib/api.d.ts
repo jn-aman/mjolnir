@@ -76,6 +76,97 @@ export interface LicenceStatus {
     expiresAt?: string | null;
     reason?: string;
 }
+export interface DockerContextInfo {
+    name: string;
+    endpoint: string;
+    supported: boolean;
+    reachable: boolean;
+    version?: string;
+    platform?: string;
+    error?: string;
+}
+export interface DockerContainer {
+    id: string;
+    name: string;
+    image: string;
+    imageId: string;
+    state: string;
+    status: string;
+    created: string;
+    labels: Record<string, string>;
+    project?: string;
+    service?: string;
+    ports: Array<{
+        host?: number;
+        container: number;
+        protocol: string;
+        ip?: string;
+    }>;
+    mounts: Array<{
+        type: string;
+        source?: string;
+        destination: string;
+    }>;
+    networks: Array<{
+        name: string;
+        ip?: string;
+    }>;
+    cpuPercent?: number;
+    memoryBytes?: number;
+    memoryLimit?: number;
+    rxBytes?: number;
+    txBytes?: number;
+}
+export interface DockerImage {
+    id: string;
+    tags: string[];
+    digests: string[];
+    created: string;
+    size: number;
+    usedBy: string[];
+    labels: Record<string, string>;
+}
+export interface DockerVolume {
+    name: string;
+    driver: string;
+    mountpoint: string;
+    created?: string;
+    labels: Record<string, string>;
+    usedBy: string[];
+}
+export interface DockerNetwork {
+    id: string;
+    name: string;
+    driver: string;
+    scope: string;
+    created: string;
+    internal: boolean;
+    subnets: string[];
+    containers: string[];
+}
+export interface ScanFinding {
+    id: string;
+    package: string;
+    installed: string;
+    fixed: string | null;
+    severity: string;
+    title: string;
+    url: string;
+    target: string;
+}
+export interface ScanReport {
+    cached?: boolean;
+    image: string;
+    scannedAt: string;
+    os?: {
+        Family?: string;
+        Name?: string;
+    };
+    total: number;
+    bySeverity: Record<string, number>;
+    fixable: number;
+    findings: ScanFinding[];
+}
 export interface ForwardRecord {
     readonly id: string;
     readonly context: string;
@@ -127,6 +218,58 @@ export declare const api: {
     };
     removeCluster: (name: string, scope: 'hide' | 'kubeconfig') => Promise<unknown>;
     unhideCluster: (name: string) => Promise<unknown>;
+    docker: {
+        contexts: () => Promise<{
+            contexts: DockerContextInfo[];
+            current: string;
+        }>;
+        containers: (ctx: string) => Promise<{
+            containers: DockerContainer[];
+        }>;
+        container: (ctx: string, id: string) => Promise<Record<string, unknown>>;
+        action: (ctx: string, id: string, action: string) => Promise<{
+            ok: boolean;
+        }>;
+        removeContainer: (ctx: string, id: string, options?: {
+            force?: boolean;
+            volumes?: boolean;
+        }) => Promise<{
+            ok: boolean;
+        }>;
+        images: (ctx: string) => Promise<{
+            images: DockerImage[];
+        }>;
+        removeImage: (ctx: string, id: string, force?: boolean) => Promise<unknown>;
+        pull: (ctx: string, image: string) => Promise<{
+            ok: boolean;
+            status?: string;
+        }>;
+        volumes: (ctx: string) => Promise<{
+            volumes: DockerVolume[];
+        }>;
+        removeVolume: (ctx: string, name: string, force?: boolean) => Promise<unknown>;
+        networks: (ctx: string) => Promise<{
+            networks: DockerNetwork[];
+        }>;
+        removeNetwork: (ctx: string, id: string) => Promise<unknown>;
+        system: (ctx: string) => Promise<{
+            info: Record<string, unknown>;
+            df: Record<string, unknown>;
+            version: Record<string, unknown>;
+        }>;
+        prune: (ctx: string, what: string) => Promise<{
+            ok: boolean;
+            reclaimed: number;
+        }>;
+    };
+    scan: {
+        status: () => Promise<{
+            available: boolean;
+            path: string | null;
+            install: string;
+        }>;
+        image: (image: string, force?: boolean) => Promise<ScanReport>;
+    };
     forwards: {
         list: () => Promise<{
             forwards: ForwardRecord[];

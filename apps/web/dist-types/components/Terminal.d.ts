@@ -8,11 +8,12 @@ import '@xterm/xterm/css/xterm.css';
  * follows the theme with the rest of the app.
  */
 interface TerminalProps {
+    readonly source?: 'kubernetes' | 'docker' | undefined;
     readonly context: string;
     readonly namespace: string;
     readonly pod: string;
     readonly container?: string | undefined;
 }
-export declare function Terminal({ context, namespace, pod, container }: TerminalProps): import("react").JSX.Element;
+export declare function Terminal({ source, context, namespace, pod, container }: TerminalProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Terminal.d.ts.map

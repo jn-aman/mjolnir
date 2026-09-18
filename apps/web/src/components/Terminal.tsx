@@ -17,6 +17,7 @@ import { copyText, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx'
  * follows the theme with the rest of the app.
  */
 interface TerminalProps {
+  readonly source?: 'kubernetes' | 'docker' | undefined;
   readonly context: string;
   readonly namespace: string;
   readonly pod: string;
@@ -27,7 +28,7 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function Terminal({ context, namespace, pod, container }: TerminalProps) {
+export function Terminal({ source, context, namespace, pod, container }: TerminalProps) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<XTerm | null>(null);
   const socket = useRef<WebSocket | null>(null);
@@ -70,7 +71,7 @@ export function Terminal({ context, namespace, pod, container }: TerminalProps) 
     setState('connecting');
     setNote(null);
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'start', context, namespace, pod, container, cols: xterm.cols, rows: xterm.rows }));
+      ws.send(JSON.stringify({ type: 'start', ...(source ? { source } : {}), context, namespace, pod, container, cols: xterm.cols, rows: xterm.rows }));
       setState('open');
       xterm.focus();
     };
@@ -116,7 +117,7 @@ export function Terminal({ context, namespace, pod, container }: TerminalProps) 
       term.current = null;
       socket.current = null;
     };
-  }, [context, namespace, pod, container, generation]);
+  }, [source, context, namespace, pod, container, generation]);
 
   const entries: MenuEntry[] = [
     {

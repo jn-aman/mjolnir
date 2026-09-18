@@ -20,6 +20,8 @@ import type { ReactNode } from 'react';
 import type { KubeItem } from './columns.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { podStatus, podProblem } from './columns.tsx';
+import { scanImage } from './ScanDialog.tsx';
+import { ShieldAlert } from 'lucide-react';
 
 /**
  * The right-click menu on a resource row.
@@ -92,6 +94,9 @@ export function RowMenu({ item, kind, act, children }: RowMenuProps) {
           { id: 'dock-logs', label: 'Open logs in dock', icon: icon(ArrowDownToLine), onSelect: () => act('dock-logs') },
           { id: 'shell', label: 'Shell', icon: icon(Terminal), onSelect: () => act('shell') },
           { id: 'forward', label: 'Port forward…', icon: icon(ArrowLeftRight), onSelect: () => act('forward') },
+          ...((item.spec as { containers?: Array<{ image?: string }> } | undefined)?.containers?.[0]?.image
+            ? [{ id: 'scan', label: 'Scan image with Trivy', icon: icon(ShieldAlert), onSelect: () => scanImage((item.spec as { containers: Array<{ image?: string }> }).containers[0]?.image ?? '') }]
+            : []),
         ]
       : []),
     { id: 'yaml', label: 'Edit YAML', icon: icon(FileText), onSelect: () => act('yaml') },

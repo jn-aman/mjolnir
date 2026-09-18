@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { StatusChip, toneFor } from './StatusChip.tsx';
+import { StatusChip, toneFor, type StatusTone } from './StatusChip.tsx';
 import { tintFor } from '../lib/tint.ts';
 import { formatDateTime } from '../lib/time.ts';
 
@@ -409,6 +409,157 @@ const NODE_COLUMNS: Array<Column<NodeItem>> = [
   ageColumn<NodeItem>(),
 ];
 
+/* ---------------------------------- Docker --------------------------------- */
+
+export function formatBytes(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '-';
+  if (value < 1024) return `${value} B`;
+  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+  let v = value / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+interface DockerContainerItem extends KubeItem {
+  status?: { state?: string; status?: string; cpuPercent?: number; memoryBytes?: number; memoryLimit?: number };
+  spec?: { image?: string; ports?: Array<{ host?: number; container: number; protocol: string }>; project?: string; service?: string };
+}
+
+const CONTAINER_TONE: Record<string, StatusTone> = { running: 'ok', paused: 'warn', restarting: 'warn', exited: 'neutral', dead: 'error', created: 'neutral', removing: 'warn' };
+
+const DOCKER_CONTAINER_COLUMNS: Array<Column<DockerContainerItem>> = [
+  { ...name<DockerContainerItem>(), width: 'minmax(220px, 2fr)' },
+  {
+    id: 'state',
+    priority: 20,
+    header: 'State',
+    width: 'minmax(120px, 1fr)',
+    content: (c) => <StatusChip status={(c.status?.state ?? 'unknown').replace(/^./, (ch) => ch.toUpperCase())} tone={CONTAINER_TONE[c.status?.state ?? ''] ?? 'neutral'} />,
+    sortBy: (c) => c.status?.state ?? '',
+    searchText: (c) => c.status?.status,
+  },
+  {
+    id: 'image',
+    priority: 30,
+    header: 'Image',
+    width: 'minmax(180px, 2fr)',
+    content: (c) => <span className="truncate font-mono text-[12px] text-secondary" title={c.spec?.image}>{c.spec?.image ?? '-'}</span>,
+    sortBy: (c) => c.spec?.image ?? '',
+    searchText: (c) => c.spec?.image,
+  },
+  {
+    id: 'cpu',
+    priority: 40,
+    header: 'CPU',
+    width: '76px',
+    align: 'right',
+    content: (c) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{c.status?.cpuPercent === undefined ? '-' : `${c.status.cpuPercent.toFixed(1)}%`}</span>,
+    sortBy: (c) => c.status?.cpuPercent ?? -1,
+  },
+  {
+    id: 'memory',
+    priority: 50,
+    header: 'Memory',
+    width: '92px',
+    align: 'right',
+    content: (c) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{c.status?.memoryBytes === undefined ? '-' : formatBytes(c.status.memoryBytes)}</span>,
+    sortBy: (c) => c.status?.memoryBytes ?? -1,
+  },
+  {
+    id: 'ports',
+    priority: 60,
+    header: 'Ports',
+    width: 'minmax(120px, 1fr)',
+    content: (c) => (
+      <span className="truncate font-mono text-[11.5px] text-tertiary">
+        {(c.spec?.ports ?? []).filter((p) => p.host).map((p) => `${p.host}→${p.container}`).join(', ') || '-'}
+      </span>
+    ),
+  },
+  {
+    id: 'project',
+    priority: 70,
+    header: 'Compose',
+    width: 'minmax(120px, 1fr)',
+    content: (c) => <span className="truncate text-[12px] text-tertiary">{c.spec?.project ? `${c.spec.project} / ${c.spec.service ?? ''}` : '-'}</span>,
+    sortBy: (c) => c.spec?.project ?? '',
+    searchText: (c) => c.spec?.project,
+  },
+  ageColumn<DockerContainerItem>(),
+];
+
+interface DockerImageItem extends KubeItem {
+  spec?: { size?: number; usedBy?: string[]; id?: string; tags?: string[] };
+}
+const DOCKER_IMAGE_COLUMNS: Array<Column<DockerImageItem>> = [
+  { ...name<DockerImageItem>(), width: 'minmax(260px, 3fr)' },
+  {
+    id: 'size',
+    priority: 30,
+    header: 'Size',
+    width: '90px',
+    align: 'right',
+    content: (i) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{formatBytes(i.spec?.size)}</span>,
+    sortBy: (i) => i.spec?.size ?? 0,
+  },
+  {
+    id: 'used',
+    priority: 40,
+    header: 'Used by',
+    width: 'minmax(160px, 2fr)',
+    content: (i) => <span className="truncate text-[12px] text-tertiary">{i.spec?.usedBy?.length ? i.spec.usedBy.join(', ') : 'nothing'}</span>,
+    sortBy: (i) => i.spec?.usedBy?.length ?? 0,
+    searchText: (i) => i.spec?.usedBy?.join(' '),
+  },
+  {
+    id: 'id',
+    priority: 50,
+    header: 'Id',
+    width: '120px',
+    content: (i) => <span className="font-mono text-[11.5px] text-tertiary">{(i.spec?.id ?? '').replace(/^sha256:/, '').slice(0, 12)}</span>,
+  },
+  ageColumn<DockerImageItem>(),
+];
+
+interface DockerVolumeItem extends KubeItem {
+  spec?: { driver?: string; usedBy?: string[]; mountpoint?: string };
+}
+const DOCKER_VOLUME_COLUMNS: Array<Column<DockerVolumeItem>> = [
+  { ...name<DockerVolumeItem>(), width: 'minmax(260px, 3fr)' },
+  { id: 'driver', priority: 30, header: 'Driver', width: '100px', content: (v) => <span className="text-[12px] text-secondary">{v.spec?.driver ?? '-'}</span> },
+  {
+    id: 'used',
+    priority: 40,
+    header: 'Used by',
+    width: 'minmax(160px, 2fr)',
+    content: (v) => <span className="truncate text-[12px] text-tertiary">{v.spec?.usedBy?.length ? v.spec.usedBy.join(', ') : 'nothing'}</span>,
+    sortBy: (v) => v.spec?.usedBy?.length ?? 0,
+  },
+  ageColumn<DockerVolumeItem>(),
+];
+
+interface DockerNetworkItem extends KubeItem {
+  spec?: { driver?: string; scope?: string; subnets?: string[]; containers?: string[] };
+}
+const DOCKER_NETWORK_COLUMNS: Array<Column<DockerNetworkItem>> = [
+  { ...name<DockerNetworkItem>(), width: 'minmax(200px, 2fr)' },
+  { id: 'driver', priority: 30, header: 'Driver', width: '100px', content: (n) => <span className="text-[12px] text-secondary">{n.spec?.driver ?? '-'}</span> },
+  { id: 'subnet', priority: 40, header: 'Subnet', width: 'minmax(140px, 1fr)', content: (n) => <span className="font-mono text-[11.5px] text-tertiary">{n.spec?.subnets?.join(', ') || '-'}</span> },
+  {
+    id: 'containers',
+    priority: 50,
+    header: 'Containers',
+    width: 'minmax(160px, 2fr)',
+    content: (n) => <span className="truncate text-[12px] text-tertiary">{n.spec?.containers?.length ? n.spec.containers.join(', ') : 'none'}</span>,
+    sortBy: (n) => n.spec?.containers?.length ?? 0,
+  },
+  ageColumn<DockerNetworkItem>(),
+];
+
 const GENERIC_COLUMNS: Array<Column<KubeItem>> = [name(), namespace(), ageColumn()];
 
 const BY_KIND: Record<string, Array<Column<never>>> = {
@@ -417,6 +568,10 @@ const BY_KIND: Record<string, Array<Column<never>>> = {
   StatefulSet: DEPLOYMENT_COLUMNS as Array<Column<never>>,
   DaemonSet: DEPLOYMENT_COLUMNS as Array<Column<never>>,
   Node: NODE_COLUMNS as Array<Column<never>>,
+  DockerContainer: DOCKER_CONTAINER_COLUMNS as Array<Column<never>>,
+  DockerImage: DOCKER_IMAGE_COLUMNS as Array<Column<never>>,
+  DockerVolume: DOCKER_VOLUME_COLUMNS as Array<Column<never>>,
+  DockerNetwork: DOCKER_NETWORK_COLUMNS as Array<Column<never>>,
 };
 
 /** Columns for a kind, priority-ordered, falling back to name/namespace/age. */

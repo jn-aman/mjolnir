@@ -28,6 +28,7 @@ export interface DockTab {
   readonly containers?: readonly string[];
   /** For terminal tabs: the container to exec into. */
   readonly container?: string | undefined;
+  readonly source?: 'kubernetes' | 'docker' | undefined;
 }
 
 interface DockProps {
@@ -131,6 +132,7 @@ export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActiva
           <div key={tab.id} className="absolute inset-0 flex flex-col" style={{ display: tab.id === active.id ? 'flex' : 'none' }}>
             {tab.kind === 'logs' && tab.pod ? (
               <LogViewer
+                source={tab.source}
                 context={tab.context}
                 namespace={tab.namespace ?? ''}
                 pod={tab.pod}
@@ -141,7 +143,7 @@ export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActiva
             ) : tab.kind === 'assistant' ? (
               <Assistant context={tab.context || null} incoming={assistant?.incoming ?? null} onOpenSettings={assistant?.onOpenSettings ?? (() => undefined)} />
             ) : tab.kind === 'terminal' && tab.pod ? (
-              <Terminal context={tab.context} namespace={tab.namespace ?? ''} pod={tab.pod} container={tab.container} />
+              <Terminal source={tab.source} context={tab.context} namespace={tab.namespace ?? ''} pod={tab.pod} container={tab.container} />
             ) : null}
           </div>
         ))}

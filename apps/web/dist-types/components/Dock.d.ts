@@ -18,6 +18,7 @@ export interface DockTab {
     readonly containers?: readonly string[];
     /** For terminal tabs: the container to exec into. */
     readonly container?: string | undefined;
+    readonly source?: 'kubernetes' | 'docker' | undefined;
 }
 interface DockProps {
     readonly tabs: readonly DockTab[];

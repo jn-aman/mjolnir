@@ -6,6 +6,7 @@ import { EditableKeyValues } from './EditableKeyValues.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { EditableText } from '../ui/EditableText.tsx';
 import { detectObjectStorage, StorageCard } from './StorageCard.tsx';
+import { scanImage } from '../ScanDialog.tsx';
 import type { ContainerChange } from '../../lib/edits.ts';
 
 /**
@@ -386,6 +387,7 @@ function ContainerCard({
     askEntry('Ask about this container', `Container ${status.name ?? ''} (image ${status.image ?? spec?.image ?? 'unknown'}): what does it run, is it healthy, and what do its recent logs say?`),
     ...(onShell ? [{ id: 'shell', label: 'Shell', onSelect: () => onShell(status.name ?? '') }] : []),
     { id: 'logs', label: 'Logs', onSelect: () => onOpenLogs(status.name ?? '', false) },
+    { id: 'scan', label: 'Scan image with Trivy', onSelect: () => scanImage(spec?.image ?? status.image ?? '') },
     { id: 'previous', label: 'Previous logs', onSelect: () => onOpenLogs(status.name ?? '', true) },
     SEPARATOR,
     ...copyEntry('copy-name', 'Copy container name', status.name),
@@ -407,6 +409,14 @@ function ContainerCard({
           <span className="font-mono text-[11px] text-warn">{status.restartCount} restarts</span>
         ) : null}
         <div className="flex-1" />
+        <button
+          type="button"
+          data-testid="container-scan"
+          onClick={() => scanImage(spec?.image ?? status.image ?? '')}
+          className="rounded-sm px-1.5 py-0.5 text-[11.5px] text-secondary hover:bg-hover hover:text-primary"
+        >
+          Scan
+        </button>
         {onShell ? (
           <button
             type="button"

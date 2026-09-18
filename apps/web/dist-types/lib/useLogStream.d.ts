@@ -7,6 +7,8 @@ export interface StreamedLine {
 }
 export type StreamState = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 interface Options {
+    /** `docker` tails a container by id; default tails a pod. */
+    readonly source?: 'kubernetes' | 'docker' | undefined;
     readonly context: string;
     readonly namespace: string;
     readonly pod: string;

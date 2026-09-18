@@ -2,12 +2,16 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { LogLine } from '@mjolnir/k8s';
 import { logger } from '@mjolnir/logger';
 import type { ClusterRegistry } from './clusters.ts';
+import { demux } from './docker/client.ts';
+import { dockerClient } from './docker/contexts.ts';
 
 const log = logger.child('log-socket');
 
 /** Messages the client sends. One `start` per socket; close to stop. */
 interface StartMessage {
   readonly type: 'start';
+  /** `kubernetes` (default) tails a pod; `docker` tails a container by id. */
+  readonly source?: 'kubernetes' | 'docker';
   readonly context: string;
   readonly namespace: string;
   /** One pod, or several for an aggregated tail. */
@@ -99,6 +103,34 @@ export function attachLogSocket(registry: ClusterRegistry): WebSocketServer {
 
       void (async () => {
         try {
+          if (message.source === 'docker') {
+            const only = message.pods[0];
+            if (!only) return;
+            const client = dockerClient(message.context);
+            const inspect = await client.json<{ Config?: { Tty?: boolean }; Name?: string }>('GET', `/containers/${encodeURIComponent(only.name)}/json`);
+            socket.send(JSON.stringify({ type: 'started', pods: 1 }));
+            const response = await client.raw('GET', `/containers/${encodeURIComponent(only.name)}/logs`, {
+              query: { follow: true, stdout: true, stderr: true, timestamps: true, tail: message.tailLines ?? 500 },
+            });
+            abort.signal.addEventListener('abort', () => response.destroy());
+            let seq = 0;
+            let rest = '';
+            const name = inspect.Name?.replace(/^\//, '') ?? only.name;
+            for await (const text of demux(response, inspect.Config?.Tty === true)) {
+              rest += text;
+              const parts = rest.split('\n');
+              rest = parts.pop() ?? '';
+              for (const line of parts) {
+                const space = line.indexOf(' ');
+                const stamp = space > 0 ? new Date(line.slice(0, space)) : new Date(Number.NaN);
+                const stamped = space > 0 && !Number.isNaN(stamp.getTime());
+                push({ seq: seq++, timestamp: stamped ? stamp : null, message: stamped ? line.slice(space + 1) : line, pod: name, container: name });
+              }
+            }
+            flush();
+            if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({ type: 'ended' }));
+            return;
+          }
           const connection = registry.connect(message.context);
           const options = {
             follow: true,

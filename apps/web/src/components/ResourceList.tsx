@@ -6,6 +6,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { WatchState } from '@mjolnir/k8s';
 import { type Column, type KubeItem, columnsFor } from './columns.tsx';
 import { RowMenu } from './RowMenu.tsx';
+import { Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import { useTablePrefs } from '../lib/tablePrefs.ts';
 
 /**
@@ -32,6 +33,8 @@ interface ResourceListProps {
   readonly selectedName?: string | undefined;
   readonly onSelect?: (item: KubeItem) => void;
   readonly onAction?: (action: string, item: KubeItem) => void;
+  /** Replaces the Kubernetes row menu, for lists of other things. */
+  readonly menu?: ((item: KubeItem) => MenuEntry[]) | undefined;
 }
 
 const ROW_HEIGHT = 34;
@@ -82,6 +85,7 @@ export function ResourceList({
   selectedName,
   onSelect,
   onAction,
+  menu,
 }: ResourceListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sort, setSort] = useState<SortState>(null);
@@ -317,13 +321,19 @@ export function ResourceList({
                 const selected = item.metadata?.name === selectedName;
                 const act = (action: string) => onAction?.(action, item);
 
+                const Wrap = menu
+                  ? ({ children }: { children: React.ReactElement }) => (
+                      <Menu label={item.metadata?.name ?? ''} entries={menu(item)} testId="row-menu">
+                        {children}
+                      </Menu>
+                    )
+                  : ({ children }: { children: React.ReactElement }) => (
+                      <RowMenu item={item} kind={kind} act={act}>
+                        {children}
+                      </RowMenu>
+                    );
                 return (
-                  <RowMenu
-                    key={item.metadata?.name ?? row.index}
-                    item={item}
-                    kind={kind}
-                    act={act}
-                  >
+                  <Wrap key={item.metadata?.name ?? row.index}>
                     <div
                       data-testid="resource-row"
                       data-selected={selected}
@@ -361,7 +371,7 @@ export function ResourceList({
                       ))}
                       <div />
                     </div>
-                  </RowMenu>
+                  </Wrap>
                 );
               })}
             </div>

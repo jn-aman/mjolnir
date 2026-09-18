@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { logger } from '@mjolnir/logger';
 import type { ClusterRegistry } from './clusters.ts';
+import { dockerClient } from './docker/contexts.ts';
 
 const log = logger.child('exec-socket');
 
@@ -16,6 +17,7 @@ const log = logger.child('exec-socket');
  */
 interface StartMessage {
   readonly type: 'start';
+  readonly source?: 'kubernetes' | 'docker';
   readonly context: string;
   readonly namespace: string;
   readonly pod: string;
@@ -63,6 +65,30 @@ export function attachExecSocket(registry: ClusterRegistry): WebSocketServer {
       started = true;
       size.cols = message.cols ?? 80;
       size.rows = message.rows ?? 24;
+      if (message.source === 'docker') {
+        const shell = message.command?.length ? message.command : ['/bin/sh', '-c', 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'];
+        const contextName = message.context;
+        void dockerClient(contextName)
+          .exec(message.pod, shell, { cols: size.cols, rows: size.rows })
+          .then(({ id, socket: stream }) => {
+            const client = dockerClient(contextName);
+            stream.on('data', (chunk: Buffer) => {
+              if (socket.readyState === socket.OPEN) socket.send(chunk, { binary: true });
+            });
+            stream.on('close', () => {
+              send({ type: 'exit', code: null });
+              socket.close();
+            });
+            stdin.on('data', (chunk: Buffer) => stream.write(chunk));
+            size.on('resize', () => void client.resizeExec(id, { cols: size.cols, rows: size.rows }));
+            handle = { close: () => stream.destroy() };
+          })
+          .catch((error: unknown) => {
+            send({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+            socket.close();
+          });
+        return;
+      }
       // bash when the image has it, sh otherwise: what kubectl users type by hand.
       const command = message.command?.length ? message.command : ['/bin/sh', '-c', 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'];
       void registry

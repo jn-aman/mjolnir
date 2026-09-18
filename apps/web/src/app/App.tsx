@@ -34,6 +34,8 @@ import { TaintDialog } from '../components/TaintDialog.tsx';
 import { CreateDialog } from '../components/CreateDialog.tsx';
 import { PortForwardDialog } from '../components/PortForwardDialog.tsx';
 import { ForwardsPanel } from '../components/ForwardsPanel.tsx';
+import { DockerModule, type DockerSection } from '../components/docker/DockerModule.tsx';
+import { ScanDialog } from '../components/ScanDialog.tsx';
 
 export function App() {
   const theme = useTheme();
@@ -67,6 +69,21 @@ export function App() {
   const [creating, setCreating] = useState(false);
   const [forwarding, setForwarding] = useState<KubeItem | null>(null);
   const [incomingAsk, setIncomingAsk] = useState<{ id: number; text: string } | null>(null);
+  const [scanningImage, setScanningImage] = useState<string | null>(null);
+  useEffect(() => {
+    const onScan = (event: Event) => setScanningImage((event as CustomEvent<string>).detail);
+    window.addEventListener('mjolnir:scan', onScan);
+    return () => window.removeEventListener('mjolnir:scan', onScan);
+  }, []);
+  const openDockerTab = useCallback((tab: { kind: 'logs' | 'terminal'; context: string; id: string; name: string }) => {
+    const id = `docker-${tab.kind}:${tab.context}:${tab.id}`;
+    setDockTabs((current) =>
+      current.some((t) => t.id === id)
+        ? current
+        : [...current, { id, kind: tab.kind, source: 'docker', title: tab.name, subtitle: tab.context, context: tab.context, namespace: '', pod: tab.id, container: tab.name, containers: [tab.name] }],
+    );
+    setDockActive(id);
+  }, []);
   const [lastSection, setLastSection] = useState<Record<string, string>>({});
 
   // "Ask the assistant" from any menu: open the assistant tab and hand it the prompt.
@@ -494,6 +511,8 @@ export function App() {
 
             {view === 'tool' && tool?.id === 'portforward' ? (
               <ForwardsPanel onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })} />
+            ) : view === 'workspace' && tool?.id === 'docker' ? (
+              <DockerModule tool={tool} section={(section ?? 'containers') as DockerSection} onOpenDock={openDockerTab} />
             ) : (view === 'tool' || view === 'workspace') && tool ? (
               <ToolPanel tool={tool} section={sectionLabel} />
             ) : null}
@@ -719,6 +738,7 @@ export function App() {
         />
 
         <PortForwardDialog context={context ?? ''} pod={forwarding} onClose={() => setForwarding(null)} />
+        <ScanDialog image={scanningImage} onClose={() => setScanningImage(null)} />
 
         <ScaleDialog
           item={scaling}

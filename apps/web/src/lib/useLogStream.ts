@@ -12,6 +12,8 @@ export interface StreamedLine {
 export type StreamState = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 
 interface Options {
+  /** `docker` tails a container by id; default tails a pod. */
+  readonly source?: 'kubernetes' | 'docker' | undefined;
   readonly context: string;
   readonly namespace: string;
   readonly pod: string;
@@ -94,6 +96,7 @@ export function useLogStream(options: Options | null) {
       socket.send(
         JSON.stringify({
           type: 'start',
+          ...(options.source ? { source: options.source } : {}),
           context: options.context,
           namespace: options.namespace,
           pods: [{ name: options.pod, ...(options.container ? { container: options.container } : {}) }],
