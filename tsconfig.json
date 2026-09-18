@@ -1,6 +1,14 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/schemas" }
+    {
+      "path": "./packages/schemas"
+    },
+    {
+      "path": "./packages/logger"
+    },
+    {
+      "path": "./packages/k8s"
+    }
   ]
 }

@@ -97,6 +97,30 @@ without the ceremony.
 **New: saved views.** Filter, sort and column configuration persisted per
 resource kind, so "the way I look at pods" survives a restart.
 
+## Menu bar extra
+
+A status item that answers "is anything wrong?" without opening the window.
+Built with Electron's `Tray`, so it costs nothing extra on the current stack and
+works identically on Windows and Linux where those platforms support it.
+
+| Element | Behaviour |
+|---|---|
+| Icon state | Reflects the worst state across pinned clusters — healthy, degraded, unreachable. A red icon is the whole point: you learn something is wrong without looking for it |
+| Cluster switcher | Pinned clusters with live reachability, switch in one click |
+| Active cloud session | Which session is active and a countdown to expiry, with refresh inline |
+| Quick actions | Open to a saved view, start a port-forward, open a terminal |
+| Alerts | Pods entering CrashLoopBackOff or a session about to expire, as native notifications |
+
+The design constraint: the menu bar is glanceable, not a second app. Anything
+needing more than one click belongs in the main window.
+
+## Platform
+
+Cross-platform Electron — macOS, Windows, Linux, plus the standalone Docker/web
+mode. Native feel is pursued through polish (real title bar, menu bar extra,
+native notifications, Keychain-backed secrets, window state restoration) rather
+than by giving up three platforms and the Node ecosystem the app depends on.
+
 ## Deliberately not doing yet
 
 - **An extension API.** A permanent public commitment that distorts every
