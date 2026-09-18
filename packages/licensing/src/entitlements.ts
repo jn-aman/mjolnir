@@ -3,14 +3,14 @@
  *
  * Everything gated lives in this one table. Scattering `if (isPro)` through the
  * UI is how a free tier ends up accidentally crippled in one screen and
- * accidentally generous in another — and how you discover it from a review
+ * accidentally generous in another, and how you discover it from a review
  * rather than a test.
  */
 
 export type Tier = 'free' | 'pro';
 
 export const FEATURES = [
-  // Free — a complete single-user Kubernetes client.
+  // Free, a complete single-user Kubernetes client.
   'clusters.unlimited',
   'resources.browse',
   'resources.edit',

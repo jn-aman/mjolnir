@@ -81,7 +81,7 @@ const checkoutWeb: Source = {
 };
 
 /**
- * The crashed worker. This is the *previous* container's output — the current
+ * The crashed worker. This is the *previous* container's output, the current
  * one has written nothing, which is the whole point of the fixture.
  */
 const ingestWorkerPrevious: Source = {
@@ -127,7 +127,7 @@ function sourceFor(namespace: string, pod: string, container: string, previous: 
   const key = `${namespace}/${pod}/${container}`;
   if (previous) return PREVIOUS_SOURCES[key] ?? EMPTY;
   // A crash-looping container that has not started has produced nothing. This
-  // is not an error state — it is the answer, and the UI should say so.
+  // is not an error state, it is the answer, and the UI should say so.
   return SOURCES[key] ?? EMPTY;
 }
 
@@ -146,7 +146,7 @@ function levelOf(message: string): string {
   return match?.[1] ?? 'INFO';
 }
 
-/** Strip a leading level word — the real API does not repeat it as a field. */
+/** Strip a leading level word, the real API does not repeat it as a field. */
 function render(message: string): string {
   return message;
 }

@@ -3,7 +3,7 @@
  *
  * CPU and memory are **two charts, never one with two y-axes**. A dual-axis
  * chart lets any pair of series be made to look correlated by choosing the
- * scales, which is the single most common way a chart misleads — and on an
+ * scales, which is the single most common way a chart misleads, and on an
  * infrastructure dashboard people make capacity decisions from it.
  */
 export interface NavigateTarget {
@@ -11,6 +11,8 @@ export interface NavigateTarget {
     readonly name?: string;
     readonly namespace?: string;
     readonly filter?: string;
+    /** Set when the target is a workspace rather than a kind. */
+    readonly workspace?: string;
 }
 interface OverviewProps {
     readonly context: string;

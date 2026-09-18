@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
-import { StatusChip } from './StatusChip.tsx';
+import { StatusChip, toneFor } from './StatusChip.tsx';
+import { tintFor } from '../lib/tint.ts';
+import { formatDateTime } from '../lib/time.ts';
 
 /**
  * The column registry.
  *
  * One declaration per column, ordered by priority, looked up by kind. This is
- * what lets 28 resource kinds share one list component — and it is the specific
+ * what lets 28 resource kinds share one list component, and it is the specific
  * thing whose absence produced a 704-line `ResourceViewer` in the app this
  * replaces. Adding a kind is a row in a table, not a screen.
  *
@@ -46,7 +48,7 @@ const name = <T extends KubeItem>(): Column<T> => ({
   width: 'minmax(260px, 2fr)',
   content: (item) => (
     <span className="truncate font-mono text-[12.5px] text-primary">
-      {item.metadata?.name ?? '—'}
+      {item.metadata?.name ?? '-'}
     </span>
   ),
   sortBy: (item) => item.metadata?.name ?? '',
@@ -59,7 +61,14 @@ const namespace = <T extends KubeItem>(): Column<T> => ({
   header: 'Namespace',
   width: 'minmax(120px, 1fr)',
   content: (item) => (
-    <span className="truncate text-[12.5px] text-secondary">{item.metadata?.namespace ?? '—'}</span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span
+        aria-hidden
+        className="h-[7px] w-[7px] shrink-0 rounded-full"
+        style={{ background: tintFor(item.metadata?.namespace) }}
+      />
+      <span className="truncate text-[12.5px] text-secondary">{item.metadata?.namespace ?? '-'}</span>
+    </span>
   ),
   sortBy: (item) => item.metadata?.namespace ?? '',
   searchText: (item) => item.metadata?.namespace,
@@ -72,9 +81,9 @@ const namespace = <T extends KubeItem>(): Column<T> => ({
  * precision invites reading meaning into noise.
  */
 export function age(timestamp: string | undefined): string {
-  if (!timestamp) return '—';
+  if (!timestamp) return '-';
   const created = new Date(timestamp).getTime();
-  if (Number.isNaN(created)) return '—';
+  if (Number.isNaN(created)) return '-';
 
   const seconds = Math.max(0, Math.floor((Date.now() - created) / 1000));
   if (seconds < 60) return `${seconds}s`;
@@ -92,7 +101,10 @@ const ageColumn = <T extends KubeItem>(): Column<T> => ({
   width: '72px',
   align: 'right',
   content: (item) => (
-    <span className="tabular-nums text-[12.5px] text-tertiary">
+    <span
+      className="tabular-nums text-[12.5px] text-tertiary"
+      title={item.metadata?.creationTimestamp ? `created ${formatDateTime(item.metadata.creationTimestamp)}` : undefined}
+    >
       {age(item.metadata?.creationTimestamp)}
     </span>
   ),
@@ -100,16 +112,22 @@ const ageColumn = <T extends KubeItem>(): Column<T> => ({
 });
 
 interface ContainerStatus {
+  name?: string;
   ready?: boolean;
   restartCount?: number;
-  state?: { waiting?: { reason?: string }; terminated?: { reason?: string } };
+  state?: {
+    waiting?: { reason?: string; message?: string };
+    terminated?: { reason?: string; exitCode?: number; message?: string };
+  };
+  lastState?: { terminated?: { reason?: string; exitCode?: number; finishedAt?: string } };
 }
 
 interface PodItem extends KubeItem {
   status?: {
     phase?: string;
+    message?: string;
     containerStatuses?: ContainerStatus[];
-    conditions?: Array<{ type?: string; reason?: string }>;
+    conditions?: Array<{ type?: string; status?: string; reason?: string; message?: string }>;
   };
   spec?: { nodeName?: string; containers?: Array<{ name?: string }> };
 }
@@ -131,6 +149,37 @@ export function podStatus(pod: PodItem): string {
   return pod.status?.phase ?? 'Unknown';
 }
 
+/**
+ * What is wrong, in one line.
+ *
+ * A status of CrashLoopBackOff says *that* something is wrong; this says
+ * *what*: the last exit reason and code, the scheduler's own sentence, the
+ * kubelet's waiting message. It is the sentence you would otherwise open the
+ * pod, scroll to the bottom of describe, and copy out by hand.
+ */
+export function podProblem(pod: PodItem): string | undefined {
+  const statuses = pod.status?.containerStatuses ?? [];
+  for (const status of statuses) {
+    const waiting = status.state?.waiting;
+    const last = status.lastState?.terminated;
+    if (waiting?.reason && waiting.reason !== 'ContainerCreating') {
+      const exit = last?.reason ? `${last.reason}${last.exitCode !== undefined ? ` (exit ${last.exitCode})` : ''}` : undefined;
+      const parts = [exit, waiting.message].filter(Boolean);
+      return `${statuses.length > 1 ? `${status.name}: ` : ''}${parts.length ? parts.join(', ') : waiting.reason}`;
+    }
+    const terminated = status.state?.terminated;
+    if (terminated?.reason && terminated.reason !== 'Completed') {
+      return `${statuses.length > 1 ? `${status.name}: ` : ''}${terminated.reason}${terminated.exitCode !== undefined ? ` (exit ${terminated.exitCode})` : ''}`;
+    }
+  }
+  const unschedulable = pod.status?.conditions?.find((c) => c.reason === 'Unschedulable');
+  if (unschedulable?.message) return unschedulable.message;
+  const notReady = pod.status?.conditions?.find((c) => c.type === 'Ready' && c.status === 'False' && c.message);
+  if (notReady?.message && pod.status?.phase !== 'Succeeded') return notReady.message;
+  if (pod.status?.phase === 'Failed' && pod.status.message) return pod.status.message;
+  return undefined;
+}
+
 const POD_COLUMNS: Array<Column<PodItem>> = [
   name<PodItem>(),
   namespace<PodItem>(),
@@ -143,7 +192,7 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
       const statuses = pod.status?.containerStatuses;
       // No container statuses at all means the pod was never scheduled. A dash
       // is the honest answer; "0/0" implies we looked and found nothing.
-      if (!statuses) return <span className="text-[12.5px] text-tertiary">—</span>;
+      if (!statuses) return <span className="text-[12.5px] text-tertiary">-</span>;
       const ready = statuses.filter((status) => status.ready).length;
       return (
         <span className="tabular-nums font-mono text-[12.5px] text-secondary">
@@ -163,6 +212,24 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
     searchText: (pod) => podStatus(pod),
   },
   {
+    id: 'problem',
+    priority: 45,
+    header: 'What’s wrong',
+    width: 'minmax(220px, 2fr)',
+    content: (pod) => {
+      const problem = podProblem(pod);
+      if (!problem) return <span className="text-[12.5px] text-tertiary">-</span>;
+      const tone = toneFor(podStatus(pod)) === 'error' ? 'text-error' : 'text-warn';
+      return (
+        <span title={problem} className={`truncate text-[12px] ${tone}`}>
+          {problem}
+        </span>
+      );
+    },
+    sortBy: (pod) => (podProblem(pod) ? 0 : 1),
+    searchText: (pod) => podProblem(pod),
+  },
+  {
     id: 'restarts',
     priority: 50,
     header: 'Restarts',
@@ -170,7 +237,7 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
     align: 'right',
     content: (pod) => {
       const statuses = pod.status?.containerStatuses;
-      if (!statuses) return <span className="text-[12.5px] text-tertiary">—</span>;
+      if (!statuses) return <span className="text-[12.5px] text-tertiary">-</span>;
       const restarts = statuses.reduce((total, status) => total + (status.restartCount ?? 0), 0);
       // Anything above a handful is worth the eye catching without being an alarm.
       const tone = restarts > 3 ? 'text-warn' : restarts > 0 ? 'text-secondary' : 'text-tertiary';
@@ -186,7 +253,7 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
     width: 'minmax(140px, 1fr)',
     content: (pod) => (
       <span className="truncate font-mono text-[12px] text-tertiary">
-        {pod.spec?.nodeName ?? '—'}
+        {pod.spec?.nodeName ?? '-'}
       </span>
     ),
     sortBy: (pod) => pod.spec?.nodeName ?? '',
@@ -197,7 +264,22 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
 
 interface DeploymentItem extends KubeItem {
   spec?: { replicas?: number };
-  status?: { replicas?: number; readyReplicas?: number; updatedReplicas?: number };
+  status?: {
+    replicas?: number;
+    readyReplicas?: number;
+    updatedReplicas?: number;
+    conditions?: Array<{ type?: string; status?: string; reason?: string; message?: string }>;
+  };
+}
+
+export function workloadProblem(item: DeploymentItem): string | undefined {
+  const desired = item.spec?.replicas ?? 0;
+  const ready = item.status?.readyReplicas ?? 0;
+  if (ready >= desired) return undefined;
+  const failing = item.status?.conditions?.find(
+    (c) => (c.type === 'Available' && c.status === 'False') || (c.type === 'Progressing' && c.status === 'False'),
+  );
+  return failing?.message ?? `${desired - ready} of ${desired} replicas not ready`;
 }
 
 const DEPLOYMENT_COLUMNS: Array<Column<DeploymentItem>> = [
@@ -221,6 +303,22 @@ const DEPLOYMENT_COLUMNS: Array<Column<DeploymentItem>> = [
     sortBy: (item) => item.status?.readyReplicas ?? -1,
   },
   {
+    id: 'problem',
+    priority: 35,
+    header: 'What’s wrong',
+    width: 'minmax(200px, 2fr)',
+    content: (item) => {
+      const problem = workloadProblem(item);
+      return problem ? (
+        <span title={problem} className="truncate text-[12px] text-warn">{problem}</span>
+      ) : (
+        <span className="text-[12.5px] text-tertiary">-</span>
+      );
+    },
+    sortBy: (item) => (workloadProblem(item) ? 0 : 1),
+    searchText: (item) => workloadProblem(item),
+  },
+  {
     id: 'updated',
     priority: 40,
     header: 'Up-to-date',
@@ -236,8 +334,9 @@ const DEPLOYMENT_COLUMNS: Array<Column<DeploymentItem>> = [
 ];
 
 interface NodeItem extends KubeItem {
+  spec?: { unschedulable?: boolean; taints?: Array<{ key?: string; effect?: string }> };
   status?: {
-    conditions?: Array<{ type?: string; status?: string }>;
+    conditions?: Array<{ type?: string; status?: string; message?: string }>;
     nodeInfo?: { kubeletVersion?: string; osImage?: string };
     capacity?: Record<string, string>;
   };
@@ -252,10 +351,36 @@ const NODE_COLUMNS: Array<Column<NodeItem>> = [
     width: 'minmax(120px, 1fr)',
     content: (node) => {
       const ready = node.status?.conditions?.find((c) => c.type === 'Ready');
-      return <StatusChip status={ready?.status === 'True' ? 'Ready' : 'NotReady'} />;
+      return (
+        <span className="flex items-center gap-1.5">
+          <StatusChip status={ready?.status === 'True' ? 'Ready' : 'NotReady'} />
+          {node.spec?.unschedulable ? (
+            <span className="rounded-xs bg-warn-bg px-1.5 py-[1px] text-[10.5px] font-medium text-warn">cordoned</span>
+          ) : null}
+        </span>
+      );
     },
     sortBy: (node) =>
       node.status?.conditions?.find((c) => c.type === 'Ready')?.status === 'True' ? 1 : 0,
+  },
+  {
+    id: 'problem',
+    priority: 45,
+    header: 'What’s wrong',
+    width: 'minmax(200px, 2fr)',
+    content: (node) => {
+      const pressure = node.status?.conditions?.find((c) => c.type !== 'Ready' && c.status === 'True');
+      const notReady = node.status?.conditions?.find((c) => c.type === 'Ready' && c.status !== 'True');
+      const taints = node.spec?.taints?.length ? `${node.spec.taints.length} taint${node.spec.taints.length > 1 ? 's' : ''}` : undefined;
+      const problem = notReady?.message ?? (pressure ? `${pressure.type}: ${pressure.message ?? ''}` : undefined) ?? (node.spec?.unschedulable ? 'Cordoned, no new pods will schedule' : undefined);
+      if (!problem) return <span className="text-[12.5px] text-tertiary">{taints ?? '-'}</span>;
+      return (
+        <span title={problem} className={`truncate text-[12px] ${notReady ? 'text-error' : 'text-warn'}`}>
+          {problem}
+          {taints ? <span className="text-tertiary"> · {taints}</span> : null}
+        </span>
+      );
+    },
   },
   {
     id: 'version',
@@ -264,7 +389,7 @@ const NODE_COLUMNS: Array<Column<NodeItem>> = [
     width: 'minmax(150px, 1fr)',
     content: (node) => (
       <span className="truncate font-mono text-[12px] text-tertiary">
-        {node.status?.nodeInfo?.kubeletVersion ?? '—'}
+        {node.status?.nodeInfo?.kubeletVersion ?? '-'}
       </span>
     ),
     searchText: (node) => node.status?.nodeInfo?.kubeletVersion,
@@ -277,7 +402,7 @@ const NODE_COLUMNS: Array<Column<NodeItem>> = [
     align: 'right',
     content: (node) => (
       <span className="tabular-nums font-mono text-[12.5px] text-tertiary">
-        {node.status?.capacity?.['cpu'] ?? '—'}
+        {node.status?.capacity?.['cpu'] ?? '-'}
       </span>
     ),
   },

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
  * The column registry.
  *
  * One declaration per column, ordered by priority, looked up by kind. This is
- * what lets 28 resource kinds share one list component — and it is the specific
+ * what lets 28 resource kinds share one list component, and it is the specific
  * thing whose absence produced a 704-line `ResourceViewer` in the app this
  * replaces. Adding a kind is a row in a table, not a screen.
  *
@@ -42,24 +42,38 @@ export interface KubeItem {
  */
 export declare function age(timestamp: string | undefined): string;
 interface ContainerStatus {
+    name?: string;
     ready?: boolean;
     restartCount?: number;
     state?: {
         waiting?: {
             reason?: string;
+            message?: string;
         };
         terminated?: {
             reason?: string;
+            exitCode?: number;
+            message?: string;
+        };
+    };
+    lastState?: {
+        terminated?: {
+            reason?: string;
+            exitCode?: number;
+            finishedAt?: string;
         };
     };
 }
 interface PodItem extends KubeItem {
     status?: {
         phase?: string;
+        message?: string;
         containerStatuses?: ContainerStatus[];
         conditions?: Array<{
             type?: string;
+            status?: string;
             reason?: string;
+            message?: string;
         }>;
     };
     spec?: {
@@ -77,6 +91,32 @@ interface PodItem extends KubeItem {
  * a dashboard tells you a broken pod is fine.
  */
 export declare function podStatus(pod: PodItem): string;
+/**
+ * What is wrong, in one line.
+ *
+ * A status of CrashLoopBackOff says *that* something is wrong; this says
+ * *what*: the last exit reason and code, the scheduler's own sentence, the
+ * kubelet's waiting message. It is the sentence you would otherwise open the
+ * pod, scroll to the bottom of describe, and copy out by hand.
+ */
+export declare function podProblem(pod: PodItem): string | undefined;
+interface DeploymentItem extends KubeItem {
+    spec?: {
+        replicas?: number;
+    };
+    status?: {
+        replicas?: number;
+        readyReplicas?: number;
+        updatedReplicas?: number;
+        conditions?: Array<{
+            type?: string;
+            status?: string;
+            reason?: string;
+            message?: string;
+        }>;
+    };
+}
+export declare function workloadProblem(item: DeploymentItem): string | undefined;
 /** Columns for a kind, priority-ordered, falling back to name/namespace/age. */
 export declare function columnsFor(kind: string): Array<Column<KubeItem>>;
 export {};

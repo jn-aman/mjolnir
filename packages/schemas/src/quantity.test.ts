@@ -71,8 +71,8 @@ describe('formatBytes', () => {
 
   it('handles negatives and null without producing NaN', () => {
     expect(formatBytes(-1024)).toBe('-1.0 KiB');
-    expect(formatBytes(null)).toBe('—');
-    expect(formatBytes(Number.NaN)).toBe('—');
+    expect(formatBytes(null)).toBe('-');
+    expect(formatBytes(Number.NaN)).toBe('-');
   });
 });
 
@@ -90,7 +90,7 @@ describe('formatCpu', () => {
   });
 
   it('returns a dash for null', () => {
-    expect(formatCpu(null)).toBe('—');
-    expect(formatCpu(Number.NaN)).toBe('—');
+    expect(formatCpu(null)).toBe('-');
+    expect(formatCpu(Number.NaN)).toBe('-');
   });
 });

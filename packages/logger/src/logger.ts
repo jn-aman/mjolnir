@@ -75,7 +75,7 @@ export class Logger {
     };
 
     for (const transport of this.#transports) {
-      // A failing transport must never take down the caller — a full disk is
+      // A failing transport must never take down the caller, a full disk is
       // not a reason for the app to stop working.
       try {
         transport(record);

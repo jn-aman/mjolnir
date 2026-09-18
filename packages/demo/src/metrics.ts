@@ -79,10 +79,10 @@ export function demoNodeMetrics(): MetricSeries[] {
       'ip-10-0-1-14',
       'node',
       (fraction, _index, jitter) => {
-        const incident = fraction > 0.68 && fraction < 0.78 ? 1.35 : 0;
+        const incident = fraction > 0.93 && fraction < 0.985 ? 1.35 : 0;
         return {
-          cpu: 1.4 + Math.sin(fraction * 6) * 0.25 + incident + jitter * 0.18,
-          memory: 7.2 * GiB + Math.sin(fraction * 4) * 0.4 * GiB + jitter * 0.25 * GiB,
+          cpu: 1.4 + Math.sin(fraction * 6) * 0.25 + incident + jitter * 0.07,
+          memory: 7.2 * GiB + Math.sin(fraction * 4) * 0.4 * GiB + jitter * 0.08 * GiB,
         };
       },
       11,
@@ -92,9 +92,9 @@ export function demoNodeMetrics(): MetricSeries[] {
       'ip-10-0-2-31',
       'node',
       (fraction, _index, jitter) => ({
-        cpu: 2.1 + Math.sin(fraction * 5 + 1) * 0.3 + jitter * 0.2,
-        // Climbs steadily — this is the node the ingest worker is OOMing on.
-        memory: 9.4 * GiB + fraction * 2.6 * GiB + jitter * 0.2 * GiB,
+        cpu: 2.1 + Math.sin(fraction * 5 + 1) * 0.3 + jitter * 0.07,
+        // Climbs steadily, this is the node the ingest worker is OOMing on.
+        memory: 9.4 * GiB + fraction * 2.6 * GiB + jitter * 0.06 * GiB,
       }),
       22,
       { cpu: 4, memory: 16 * GiB },
@@ -103,8 +103,8 @@ export function demoNodeMetrics(): MetricSeries[] {
       'ip-10-0-3-8',
       'node',
       (fraction, _index, jitter) => ({
-        cpu: 0.42 + Math.sin(fraction * 7 + 2) * 0.1 + jitter * 0.08,
-        memory: 2.9 * GiB + Math.sin(fraction * 3) * 0.2 * GiB + jitter * 0.12 * GiB,
+        cpu: 0.42 + Math.sin(fraction * 7 + 2) * 0.1 + jitter * 0.03,
+        memory: 2.9 * GiB + Math.sin(fraction * 3) * 0.2 * GiB + jitter * 0.04 * GiB,
       }),
       33,
       { cpu: 2, memory: 8 * GiB },
@@ -118,7 +118,7 @@ export function demoPodMetrics(): MetricSeries[] {
       'api-7d9f4b8c6-x2mqz',
       'pod',
       (fraction, _index, jitter) => {
-        const incident = fraction > 0.68 && fraction < 0.78 ? 0.55 : 0;
+        const incident = fraction > 0.93 && fraction < 0.985 ? 0.55 : 0;
         return {
           cpu: 0.32 + Math.sin(fraction * 6) * 0.08 + incident + jitter * 0.05,
           memory: 210 * MiB + Math.sin(fraction * 4) * 18 * MiB + jitter * 12 * MiB,

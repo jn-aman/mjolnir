@@ -1,4 +1,4 @@
-import { createPublicKey, verify as verifySignature } from 'node:crypto';
+import { createPrivateKey, sign as signBytes, createPublicKey, verify as verifySignature } from 'node:crypto';
 import { z } from 'zod';
 import { logger } from '@mjolnir/logger';
 import type { Tier } from './entitlements.ts';
@@ -12,7 +12,7 @@ export type Plan = 'monthly' | 'annual' | 'lifetime';
  *
  * `updatesUntil` and `expiresAt` are deliberately separate, because the two
  * plans fail differently. A subscription that lapses stops granting Pro. A
- * lifetime licence never stops granting Pro — it stops granting *new versions*.
+ * lifetime licence never stops granting Pro, it stops granting *new versions*.
  * Collapsing them into one field is how perpetual licences accidentally expire.
  */
 export const LicenseClaimsSchema = z.object({
@@ -160,4 +160,14 @@ export function coversRelease(claims: LicenseClaims, releasedAt: Date): boolean 
 
 export function tierOf(status: LicenseStatus): Tier {
   return status.tier;
+}
+
+/**
+ * Issues a key: `<base64url(claims)>.<base64url(ed25519 signature)>`. Used by
+ * the licence service and by the owner's grant CLI, never by the app.
+ */
+export function signLicense(claims: LicenseClaims, privateKeyPem: string): string {
+  const payload = Buffer.from(JSON.stringify(LicenseClaimsSchema.parse(claims)));
+  const signature = signBytes(null, payload, createPrivateKey(privateKeyPem));
+  return `${payload.toString('base64url')}.${signature.toString('base64url')}`;
 }

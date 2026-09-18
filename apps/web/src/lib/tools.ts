@@ -1,0 +1,323 @@
+import {
+  Archive,
+  ArrowLeftRight,
+  BadgeCheck,
+  Cloud,
+  Coins,
+  Database,
+  GitBranch,
+  GitCompare,
+  History,
+  Package,
+  Radio,
+  Route,
+  Ship,
+  ShieldAlert,
+  Siren,
+  Terminal,
+  Waypoints,
+  type LucideIcon,
+} from 'lucide-react';
+
+/**
+ * Everything the shell will hold, declared before it is built.
+ *
+ * The navigation, the command palette and the rail all read this list, so a
+ * feature arrives by filling in a panel, not by finding a place for it. Until
+ * a panel exists, the entry opens an honest page: what it will do, and the
+ * command that does the same thing today. A slot that says "planned" is a
+ * promise the layout keeps; a slot that does not exist is a redesign later.
+ *
+ * `tools` live in the cluster's own navigation because they act on the cluster
+ * you are looking at. `workspace` entries are not about one cluster (cloud
+ * identities, local containers, buckets, databases, brokers, certificates,
+ * image provenance) and live in the Toolbox, behind one tile on the rail.
+ */
+
+export interface ToolCommand {
+  readonly label: string;
+  readonly command: string;
+}
+
+export interface ToolDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: LucideIcon;
+  readonly tint: string;
+  readonly area: 'tools' | 'workspace';
+  /** One sentence: what it is for. */
+  readonly summary: string;
+  /** What it will do, concretely, once built. */
+  readonly detail: readonly string[];
+  /** What does the job today, so the page is useful before the feature is. */
+  readonly today: readonly ToolCommand[];
+}
+
+export const TOOLS: readonly ToolDefinition[] = [
+  {
+    id: 'helm',
+    label: 'Helm',
+    icon: Package,
+    tint: 'var(--series-1)',
+    area: 'tools',
+    summary: 'Every release in the cluster with its history, and upgrades you can read before you run them.',
+    detail: [
+      'Releases per namespace with chart, version, status and when they last deployed',
+      'Values side by side with the chart defaults, edited in place',
+      'A diff of what an upgrade would change, then one click to apply or roll back to any revision',
+      'Repositories added once and kept per profile',
+    ],
+    today: [{ label: 'List releases', command: 'helm list -A' }],
+  },
+  {
+    id: 'argocd',
+    label: 'Argo CD',
+    icon: GitBranch,
+    tint: 'var(--series-2)',
+    area: 'tools',
+    summary: 'Applications with sync and health state, and the live diff against Git.',
+    detail: [
+      'Every Application with sync status, health and the revision it points at',
+      'The diff between the cluster and the desired state, per resource',
+      'Sync, refresh and rollback, run through the Argo CD API so its RBAC still applies',
+    ],
+    today: [{ label: 'List applications', command: 'argocd app list' }],
+  },
+  {
+    id: 'portforward',
+    label: 'Port forwards',
+    icon: ArrowLeftRight,
+    tint: 'var(--series-3)',
+    area: 'tools',
+    summary: 'Forward a pod port to localhost and keep it alive while the app runs. Services and reconnect-survival next.',
+    detail: [
+      'Start a forward from any pod or service row, with the local port chosen for you',
+      'Every active forward in one list, with traffic, and restarted for you when the pod moves',
+      'Open the forwarded port in your browser in one click',
+    ],
+    today: [{ label: 'Forward a service', command: 'kubectl -n <namespace> port-forward svc/<service> 8080:80' }],
+  },
+  {
+    id: 'terminal',
+    label: 'Terminal',
+    icon: Terminal,
+    tint: 'var(--series-4)',
+    area: 'tools',
+    summary: 'A shell into any container, and a local terminal already pointed at this cluster.',
+    detail: [
+      'Container shells and node shells in the dock, so they stay open while you browse',
+      'A local terminal with KUBECONFIG and the namespace preset',
+      'Tabs that survive a reconnect and remember their history per cluster',
+    ],
+    today: [{ label: 'Shell into a pod', command: 'kubectl -n <namespace> exec -it <pod> -- sh' }],
+  },
+  {
+    id: 'trivy',
+    label: 'Vulnerabilities',
+    icon: ShieldAlert,
+    tint: 'var(--status-error)',
+    area: 'tools',
+    summary: 'Every image running in the cluster, scanned with Trivy and grouped by workload.',
+    detail: [
+      'Findings by severity with the fixed version where one exists',
+      'Grouped by the workload that runs the image, not by the image alone',
+      'SBOM export, and a scan on the image of any pod from its menu',
+    ],
+    today: [{ label: 'Scan an image', command: 'trivy image <image>' }],
+  },
+  {
+    id: 'whatbroke',
+    label: 'What broke?',
+    icon: Siren,
+    tint: 'var(--status-warn)',
+    area: 'tools',
+    summary: 'A timeline of every change and warning in the cluster, correlated so the first cause is on top.',
+    detail: [
+      'Rollouts, restarts, evictions, failed probes and scaling on one timeline',
+      'Warnings linked to the change that preceded them',
+      'Jump from any entry to the object, its logs or its YAML at that moment',
+    ],
+    today: [{ label: 'Recent events', command: 'kubectl get events -A --sort-by=.lastTimestamp' }],
+  },
+  {
+    id: 'cloud',
+    label: 'Cloud access',
+    icon: Cloud,
+    tint: 'var(--series-1)',
+    area: 'workspace',
+    summary: 'Every AWS, Azure and Google identity you use, with sessions that obtain and rotate credentials for you.',
+    detail: [
+      'AWS: IAM users (with MFA), IAM roles chained from any session, federated roles via SAML, IAM Identity Center (SSO) sessions with device-code login',
+      'Azure: tenants and subscriptions via device-code or browser login; GCP: user and service-account sessions',
+      'Named profiles written to the credential file or served through credential_process, so every CLI and SDK just works',
+      'Sessions start, refresh and expire visibly; keys rotate on a schedule you set; nothing long-lived sits on disk',
+      'Regions, default namespaces and role chains remembered per session; integrations with EKS, AKS and GKE clusters light the rail',
+      'Secrets in the OS keychain (Keychain, Credential Manager, libsecret); an audit log of every session started',
+      'Team sync of session definitions, never of credentials, through a shared file or a Git repo',
+    ],
+    today: [{ label: 'Who am I', command: 'aws sts get-caller-identity' }],
+  },
+  {
+    id: 'docker',
+    label: 'Containers',
+    icon: Ship,
+    tint: 'var(--series-3)',
+    area: 'workspace',
+    summary: 'Everything the Docker CLI and Desktop do, containers, images, volumes, networks, Compose, builds, registries, from the same window as your clusters.',
+    detail: [
+      'Containers: run, start, stop, restart, pause, kill, rename, logs, exec, attach, stats, inspect, copy files in and out, commit, export',
+      'Images: pull, push, tag, build (with BuildKit and build args), history, inspect, save/load, prune, and which containers use each layer',
+      'Volumes and networks: create, inspect, attach, prune; bind mounts and named volumes shown on every container',
+      'Compose: projects as one unit, up, down, restart, scale, per-service logs, config view, env files',
+      'Registries and contexts: log in, browse tags, switch between local, remote and rootless engines; Docker Hub, GHCR, ECR, ACR, GAR',
+      'System: disk usage, prune, events stream, resource limits of the engine; Kubernetes-in-Docker clusters (kind, k3d, OrbStack) appear in the rail',
+    ],
+    today: [{ label: 'Running containers', command: 'docker ps' }],
+  },
+  {
+    id: 'storage',
+    label: 'Object storage',
+    icon: Archive,
+    tint: 'var(--log-pod-b)',
+    area: 'workspace',
+    summary: 'Browse buckets in MinIO, RustFS, SeaweedFS, Garage, Ceph RGW and any S3-compatible store, in the cluster or outside it.',
+    detail: [
+      'Stores detected from the pods that run them: the pod overview shows the endpoint and where the keys are, a literal env value, or a Secret decoded on request',
+      'Connect with a port-forward the app opens for you, or to an external endpoint with keys you paste or a profile from Cloud access',
+      'Buckets and prefixes as folders with size and last modified; preview text, JSON, images, Parquet and logs in place',
+      'Upload, download, rename, delete, copy between buckets; presigned links with the expiry you choose',
+      'Bucket policies, versioning, lifecycle and replication shown and editable where the store supports them',
+    ],
+    today: [{ label: 'List a bucket', command: 'mc ls <alias>/<bucket>' }],
+  },
+  {
+    id: 'database',
+    label: 'Database browser',
+    icon: Database,
+    tint: 'var(--series-1)',
+    area: 'workspace',
+    summary: 'Postgres, MySQL, Redis and Mongo pods recognised and opened, with credentials read the way the object store card reads them.',
+    detail: [
+      'Detected from the image and port; the pod overview shows the connection string and where the password lives',
+      'Tables, rows and a query editor over a port-forward the app opens; Redis keys by pattern; Mongo collections',
+      'Read-only by default; writes need a switch you flip per session',
+    ],
+    today: [{ label: 'Connect through a forward', command: 'kubectl -n <namespace> port-forward svc/<db> 5432:5432' }],
+  },
+  {
+    id: 'kafka',
+    label: 'Kafka consumer lag',
+    icon: Radio,
+    tint: 'var(--series-2)',
+    area: 'workspace',
+    summary: 'Topics, partitions, consumer groups and their lag, from the brokers in the cluster.',
+    detail: [
+      'Consumer groups with lag per partition and a trend, so a stuck consumer is visible before an alert fires',
+      'Topics with partition count, retention and message rate; peek at recent messages',
+      'Jump from a lagging group to the pods that make it up',
+    ],
+    today: [{ label: 'Group lag', command: 'kafka-consumer-groups.sh --bootstrap-server <broker> --describe --group <group>' }],
+  },
+  {
+    id: 'drift',
+    label: 'Diff & drift',
+    icon: GitCompare,
+    tint: 'var(--series-3)',
+    area: 'tools',
+    summary: 'What differs between the cluster and Git, between two clusters, or between an object now and an hour ago.',
+    detail: [
+      'Live object against its source manifest, Helm values or Argo desired state, a real diff, not two YAMLs',
+      'The same kind across two clusters: what staging has that production does not',
+      'Drift alerts on objects that changed outside the pipeline, with who and when from the audit log',
+    ],
+    today: [{ label: 'Diff a manifest', command: 'kubectl diff -f manifest.yaml' }],
+  },
+  {
+    id: 'timetravel',
+    label: 'Time travel',
+    icon: History,
+    tint: 'var(--series-4)',
+    area: 'tools',
+    summary: 'The watch streams already carry every change; keep a window of them and scrub backwards.',
+    detail: [
+      'A slider over the last hours: the pod list, the overview and any object as they were at that moment',
+      'Every change to an object as a diff on a timeline, image, replicas, labels, conditions',
+      'Pairs with What broke?: pick the moment a warning fired and see the cluster then',
+    ],
+    today: [{ label: 'Watch changes as they happen', command: 'kubectl get pods -A --watch --output-watch-events' }],
+  },
+  {
+    id: 'cost',
+    label: 'Cost per workload',
+    icon: Coins,
+    tint: 'var(--status-warn)',
+    area: 'tools',
+    summary: 'What each namespace, workload and pod costs, from node prices and what it actually requests and uses.',
+    detail: [
+      'Node prices from the cloud provider (EKS, AKS, GKE) or a price you set for on-prem',
+      'Cost by namespace, workload and label; idle cost from requests that are never used',
+      'Rightsizing suggestions with the exact request change, applied from the drawer',
+    ],
+    today: [{ label: 'Requests by namespace', command: 'kubectl describe nodes | grep -A5 "Allocated resources"' }],
+  },
+  {
+    id: 'certs',
+    label: 'Certificate expiry',
+    icon: BadgeCheck,
+    tint: 'var(--status-ok)',
+    area: 'workspace',
+    summary: 'Every TLS certificate in the cluster and in your kubeconfigs, with days left, the soonest one in the menu bar.',
+    detail: [
+      'TLS Secrets, Ingress certificates, cert-manager Certificates, the API server and kubelet certs, and your client certs',
+      'Days left, issuer, SANs; expiry in the menu bar extra so it is seen without opening the app',
+      'Renew through cert-manager where it manages the cert; otherwise the command that does',
+    ],
+    today: [{ label: 'Check a TLS secret', command: 'kubectl get secret <name> -o jsonpath="{.data.tls\\.crt}" | base64 -d | openssl x509 -noout -enddate' }],
+  },
+  {
+    id: 'netpath',
+    label: 'Network path',
+    icon: Route,
+    tint: 'var(--series-1)',
+    area: 'tools',
+    summary: 'Can this pod reach that service? Which policy, port or DNS name is in the way?',
+    detail: [
+      'Pick a source pod and a destination (pod, service, ingress, external host) and get the answer with the reason',
+      'Evaluates NetworkPolicies, service selectors, ports and DNS; runs a real probe from an ephemeral container to confirm',
+      'The blocking policy is one click away, and editable',
+    ],
+    today: [{ label: 'Probe from a pod', command: 'kubectl -n <namespace> exec <pod> -- nc -zv <service> <port>' }],
+  },
+  {
+    id: 'provenance',
+    label: 'Image provenance',
+    icon: ShieldAlert,
+    tint: 'var(--log-pod-b)',
+    area: 'workspace',
+    summary: 'Where every running image came from: signature, SBOM, build attestation, base image and age.',
+    detail: [
+      'Cosign signatures and SLSA attestations verified against the keys and identities you trust',
+      'SBOM per image, searchable across the cluster: "which pods run log4j 2.14"',
+      'Base image and its age; images pulled by tag rather than digest called out',
+    ],
+    today: [{ label: 'Verify a signature', command: 'cosign verify <image>' }],
+  },
+  {
+    id: 'traffic',
+    label: 'Traffic graph',
+    icon: Waypoints,
+    tint: 'var(--series-2)',
+    area: 'tools',
+    summary: 'Who talks to whom, as a graph: services, their callers, and the rates and errors between them.',
+    detail: [
+      'From the service mesh (Istio, Linkerd), Cilium Hubble or eBPF where none is installed',
+      'Request rate, error rate and latency on every edge; a red edge is the incident',
+      'Click an edge for the pods behind it, their logs and the network path check',
+    ],
+    today: [{ label: 'Observe flows with Hubble', command: 'hubble observe --namespace <namespace>' }],
+  },
+];
+
+export function toolById(id: string): ToolDefinition | undefined {
+  return TOOLS.find((tool) => tool.id === id);
+}

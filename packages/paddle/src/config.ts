@@ -8,7 +8,7 @@ export type PaddleEnvironment = 'sandbox' | 'production';
  * Checked in deliberately: sandbox ids are not secrets, they identify test
  * objects that cannot take real money, and having them in the repo means a
  * fresh clone can run the checkout flow without a setup ritual. Production ids
- * come from the environment — not because they are secret either, but because
+ * come from the environment, not because they are secret either, but because
  * shipping a build that charges the wrong price is worse than a missing
  * variable that fails loudly at startup.
  */
@@ -25,7 +25,7 @@ export interface PaddleConfig {
   readonly catalogue: PriceCatalogue;
   /** Client-side token for Paddle.js. Public by design. */
   readonly clientToken: string;
-  /** Notification destination secret. Server-side only — never bundled. */
+  /** Notification destination secret. Server-side only, never bundled. */
   readonly webhookSecret: string;
 }
 

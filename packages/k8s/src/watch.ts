@@ -40,7 +40,7 @@ interface KubeList<T> {
  *
  * Notifications are coalesced. A rolling deployment can produce hundreds of
  * events in a second, and re-rendering a table on each one is how a cluster
- * view locks up — so listeners are told "something changed" on a frame-ish
+ * view locks up, so listeners are told "something changed" on a frame-ish
  * cadence rather than per event.
  */
 export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
@@ -78,7 +78,7 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
     return this.#state;
   }
 
-  /** Current contents of the cache. Synchronous — that is the point. */
+  /** Current contents of the cache. Synchronous, that is the point. */
   items(): readonly T[] {
     return this.#informer?.list() ?? [];
   }
@@ -128,7 +128,7 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
     });
 
     informer.on('error', (error?: unknown) => {
-      // A watch ending is routine — the API server closes idle watches, and
+      // A watch ending is routine, the API server closes idle watches, and
       // resourceVersion expiry is normal on a busy cluster. Reconnect with
       // backoff rather than surfacing every disconnect to the user.
       const message = error instanceof Error ? error.message : String(error ?? 'watch failed');

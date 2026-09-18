@@ -4,7 +4,7 @@ import type { ClusterContext, ResourceDefinition, WatchState } from '@mjolnir/k8
  * Client for the local API.
  *
  * The server binds to loopback and the desktop shell injects its port, so there
- * is no base URL to configure and no auth to carry — the only thing that can
+ * is no base URL to configure and no auth to carry, the only thing that can
  * reach it is this window.
  */
 
@@ -54,6 +54,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface ClustersResponse {
+  readonly hidden?: string[];
   readonly contexts: ClusterContext[];
   readonly currentContext: string | null;
   readonly failures: Array<{ path: string; error: string }>;
@@ -83,6 +84,35 @@ export interface LogLineWire {
   readonly container: string;
 }
 
+export interface AppSettings {
+  general: { showSystemNamespaces: boolean; defaultNamespace: string };
+  clusters: { hidden: string[]; perContext: Record<string, { namespace?: string; label?: string; color?: string }> };
+  ai: { provider: 'anthropic' | 'openai'; preset: string; baseUrl: string; apiKey: string; model: string; allowWrites: boolean; instructions: string };
+  mcp: { http: boolean; token: string; allowWrites: boolean };
+  licence: { key: string };
+}
+
+export interface LicenceStatus {
+  kind: 'none' | 'valid' | 'grace' | 'expired' | 'invalid' | 'unconfigured';
+  tier: 'free' | 'pro';
+  email?: string;
+  plan?: string;
+  expiresAt?: string | null;
+  reason?: string;
+}
+
+export interface ForwardRecord {
+  readonly id: string;
+  readonly context: string;
+  readonly namespace: string;
+  readonly pod: string;
+  readonly port: number;
+  readonly localPort: number;
+  readonly startedAt: string;
+  readonly connections: number;
+  readonly lastError: string | null;
+}
+
 export const api = {
   clusters: () => request<ClustersResponse>('/api/clusters'),
 
@@ -109,6 +139,72 @@ export const api = {
     const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
     return request<T>(
       `/api/resources/${encodeURIComponent(context)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`,
+    );
+  },
+
+  /** Replaces an object with the YAML given. The server parses and PUTs it. */
+  apply: (context: string, kind: string, name: string, yamlText: string, namespace?: string) => {
+    const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    return request<unknown>(
+      `/api/resources/${encodeURIComponent(context)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`,
+      { method: 'PUT', body: JSON.stringify({ yaml: yamlText }) },
+    );
+  },
+
+  settings: {
+    get: () => request<{ settings: AppSettings; path: string; mcpCommand?: string }>('/api/settings'),
+    update: (patch: unknown) => request<{ settings: AppSettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+    mcpToken: () => request<{ token: string }>('/api/settings/mcp-token', { method: 'POST', body: '{}' }),
+  },
+  ai: {
+    tools: () => request<{ tools: Array<{ name: string; description: string; kind: 'read' | 'write' }> }>('/api/ai/tools'),
+  },
+  licence: {
+    get: () => request<LicenceStatus>('/api/licence'),
+    activate: (key: string) => request<LicenceStatus>('/api/licence', { method: 'POST', body: JSON.stringify({ key }) }),
+    deactivate: () => request<LicenceStatus>('/api/licence', { method: 'DELETE' }),
+  },
+  removeCluster: (name: string, scope: 'hide' | 'kubeconfig') =>
+    request<unknown>(`/api/clusters/${encodeURIComponent(name)}?scope=${scope}`, { method: 'DELETE' }),
+  unhideCluster: (name: string) => request<unknown>(`/api/clusters/${encodeURIComponent(name)}/unhide`, { method: 'POST', body: '{}' }),
+
+  forwards: {
+    list: () => request<{ forwards: ForwardRecord[] }>('/api/forwards'),
+    start: (body: { context: string; namespace: string; pod: string; port: number; localPort?: number }) =>
+      request<ForwardRecord>('/api/forwards', { method: 'POST', body: JSON.stringify(body) }),
+    stop: (id: string) => request<{ ok: boolean }>(`/api/forwards/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  },
+
+  /** Creates an object from YAML, `kubectl create -f`. */
+  create: (context: string, kind: string, yamlText: string, namespace?: string) => {
+    const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    return request<unknown>(`/api/resources/${encodeURIComponent(context)}/${encodeURIComponent(kind)}${query}`, {
+      method: 'POST',
+      body: JSON.stringify({ yaml: yamlText }),
+    });
+  },
+
+  /** Evicts a pod through the Eviction API, so disruption budgets apply. */
+  evict: (context: string, namespace: string, pod: string) =>
+    request<unknown>(
+      `/api/resources/${encodeURIComponent(context)}/Pod/${encodeURIComponent(pod)}/evict?namespace=${encodeURIComponent(namespace)}`,
+      { method: 'POST', body: '{}' },
+    ),
+
+  /** JSON merge patch: send only what changes; null removes a key. */
+  patch: (context: string, kind: string, name: string, patch: unknown, namespace?: string) => {
+    const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    return request<unknown>(
+      `/api/resources/${encodeURIComponent(context)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+  },
+
+  remove: (context: string, kind: string, name: string, namespace?: string) => {
+    const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    return request<unknown>(
+      `/api/resources/${encodeURIComponent(context)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`,
+      { method: 'DELETE' },
     );
   },
 

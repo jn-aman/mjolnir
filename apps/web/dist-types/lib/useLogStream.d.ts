@@ -20,7 +20,7 @@ interface Options {
 /**
  * Live container logs.
  *
- * Batched frames from the server are appended in one state update — one update
+ * Batched frames from the server are appended in one state update, one update
  * per frame rather than per line, because a React render per log line is
  * precisely how a viewer freezes on a chatty pod.
  *

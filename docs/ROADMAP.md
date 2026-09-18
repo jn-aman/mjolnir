@@ -22,20 +22,20 @@ exactly why they are dangerous.
 
 ---
 
-## Phase 0 — Foundation · *in progress*
+## Phase 0, Foundation · *in progress*
 
 | Item | State |
 |---|---|
-| `@mjolnir/schemas` — lenient validation, quantities | done |
-| `@mjolnir/logger` — structured logging, redaction | done |
-| `@mjolnir/k8s` — kubeconfig, transport, log streaming, watch cache | done |
-| `@mjolnir/licensing` — Ed25519 keys, tier gating | done |
-| `@mjolnir/paddle` — webhook verification, licence decisions | done |
-| `@mjolnir/server` — cluster registry, resource routes, log socket | done |
-| Storm design system — tokens, components, motion | done |
-| **Demo mode** — synthetic cluster | **next** |
-| Web app shell — routing, layout, dock | next |
-| Electron shell — window, menu, IPC, URL scheme | next |
+| `@mjolnir/schemas`, lenient validation, quantities | done |
+| `@mjolnir/logger`, structured logging, redaction | done |
+| `@mjolnir/k8s`, kubeconfig, transport, log streaming, watch cache | done |
+| `@mjolnir/licensing`, Ed25519 keys, tier gating | done |
+| `@mjolnir/paddle`, webhook verification, licence decisions | done |
+| `@mjolnir/server`, cluster registry, resource routes, log socket | done |
+| Storm design system, tokens, components, motion | done |
+| **Demo mode**, synthetic cluster | **next** |
+| Web app shell, routing, layout, dock | next |
+| Electron shell, window, menu, IPC, URL scheme | next |
 
 **Demo mode is next and it is not optional.** Without it the Playwright suite
 cannot run at all, no screenshot can be taken without a live cluster, and
@@ -44,7 +44,7 @@ thing on this page with the highest leverage.
 
 ---
 
-## Phase 1 — Ship v1, free · *the only thing that matters until it is out*
+## Phase 1, Ship v1, free · *the only thing that matters until it is out*
 
 The minimum that is genuinely better than Lens for one developer and their own
 clusters.
@@ -55,12 +55,12 @@ clusters.
 - Events, node view, namespace filtering, custom resources
 - Command palette, pinned clusters with reachability
 
-**The log viewer** — the reason to switch
+**The log viewer**, the reason to switch
 - Streaming follow with scroll-to-pause, virtualized
 - Previous container, ANSI, time ranges, download
 - Structured table with discovered fields
 - Highlight vs filter, regex, pinned lines
-- Patterns (clustering) — client-side over the buffer
+- Patterns (clustering), client-side over the buffer
 
 **Operate**
 - Terminal into a pod, node shell, local terminal with shell-sync
@@ -81,24 +81,24 @@ reads logs without help.
 
 ---
 
-## Phase 2 — First revenue
+## Phase 2, First revenue
 
 Only after v1 is out and people are using it.
 
 - **Cloud access**: sessions, SSO and Azure integrations, role chaining, named
   profiles, keychain, real expiry with countdown
-- **Sessions bound to clusters** — the differentiator; selecting an EKS cluster
+- **Sessions bound to clusters**, the differentiator; selecting an EKS cluster
   activates its credentials
 - **AWS web console handoff** and **SSM shell into EC2** (both from Leapp)
 - Multi-pod log aggregation, Stern-style
 - Licence service, `mjolnir://` activation, in-app upgrade, Paddle live
-- `mjolnir.sh` — buy page, licence portal
+- `mjolnir.sh`, buy page, licence portal
 
 Exit criterion: someone who is not you has paid, activated, and kept using it.
 
 ---
 
-## Phase 3 — Depth
+## Phase 3, Depth
 
 Ranked by value over effort, which is not the same as by how interesting they
 are.
@@ -106,7 +106,7 @@ are.
 ### 1. "What broke?"
 One button on a failing workload that assembles recent events, the previous
 container's logs, the last rollout, node pressure, and whether a config change
-preceded it. **Highest value on this page and it needs no new integration** —
+preceded it. **Highest value on this page and it needs no new integration** -
 every input is already in hand. It is also the clearest expression of what a
 desktop app can do that a dashboard cannot: hold everything at once and be
 opinionated about what to show.
@@ -133,13 +133,13 @@ Small, and they make everything before them stickier.
 
 ---
 
-## Phase 4 — Expand
+## Phase 4, Expand
 
 ### 7. Time travel
 Watch events are already streaming through the app. Keep a rolling window and
 let people scrub backwards: what did this Deployment look like twenty minutes
 ago, and which field changed when the pods started failing? **Nothing else in
-the category does this**, and the data is already passing through us — the cost
+the category does this**, and the data is already passing through us, the cost
 is storage and UI, not integration.
 
 ### 8. Database browser
@@ -157,7 +157,7 @@ Live object against its Helm chart, Argo desired state, or last-applied
 annotation.
 
 ### 11. Network path checker
-"Can this pod reach that service?" Genuinely useful and genuinely hard —
+"Can this pod reach that service?" Genuinely useful and genuinely hard -
 NetworkPolicy evaluation has enough subtleties that a wrong answer is worse than
 none. Needs care, so it waits for time to give it.
 

@@ -17,6 +17,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
+    "licence": "node --experimental-strip-types scripts/licence-grant.ts",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc --build",
     "typecheck:clean": "tsc --build --clean",

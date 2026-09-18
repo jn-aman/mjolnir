@@ -35,7 +35,7 @@ export function Button({
     <button
       type="button"
       {...rest}
-      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border text-[13px] font-medium outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
+      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border text-[13px] font-medium outline-none transition-[transform,background-color,border-color,color] duration-[90ms] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 ${
         iconOnly ? 'h-[30px] w-[30px]' : 'h-[30px] px-3'
       } ${VARIANT[variant]} ${className}`}
       style={{

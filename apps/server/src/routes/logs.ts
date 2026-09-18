@@ -9,7 +9,7 @@ export function logRoutes(registry: ClusterRegistry): Router {
    * A finite slice of logs.
    *
    * The streaming path is a WebSocket; this exists for the initial render and
-   * for anything that wants a bounded read — a download, a crash-log peek, a
+   * for anything that wants a bounded read, a download, a crash-log peek, a
    * copy to clipboard.
    */
   router.get(

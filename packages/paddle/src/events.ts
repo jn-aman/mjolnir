@@ -52,7 +52,7 @@ export const TransactionDataSchema = z.looseObject({
 /**
  * Maps a Paddle price id to a plan.
  *
- * Price ids are environment-specific — sandbox and production differ — so this
+ * Price ids are environment-specific, sandbox and production differ, so this
  * is configuration, not a constant. Getting it wrong means selling a lifetime
  * licence and issuing a monthly one.
  */
@@ -170,7 +170,7 @@ export function actionFor(
       if (!endsAt) return { kind: 'ignore', reason: 'no billing period end' };
 
       // A scheduled cancellation is not an immediate one. The user paid for the
-      // current period and keeps Pro until it ends — cutting access at the
+      // current period and keeps Pro until it ends, cutting access at the
       // cancel click is the single most common way to earn a chargeback.
       return { kind: 'extend', customerId, expiresAt: endsAt };
     }

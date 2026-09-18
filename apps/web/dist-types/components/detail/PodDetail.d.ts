@@ -1,3 +1,4 @@
+import type { ContainerChange } from '../../lib/edits.ts';
 /**
  * Everything the API says about a pod, laid out the way someone debugging one
  * reads it: what is wrong first, then what it is, then what it is made of.
@@ -143,7 +144,22 @@ interface PodDetailProps {
         }>;
     } | undefined;
     readonly onOpenLogs: (container: string, previous: boolean) => void;
+    readonly onNavigate?: ((target: {
+        kind: string;
+        name?: string;
+        namespace?: string;
+        workspace?: string;
+    }) => void) | undefined;
+    /** Merge-patches `metadata`. Present when the object can be edited from here. */
+    readonly onPatchMetadata?: ((patch: Record<string, unknown>) => Promise<void>) | undefined;
+    /** Changes a container's image, env or resources, on the owning workload. */
+    readonly onEditContainer?: ((container: string, change: ContainerChange) => Promise<void>) | undefined;
+    /** Decodes a key of a Secret in the pod's namespace, on request. */
+    readonly onRevealSecret?: ((secret: string, key: string) => Promise<string>) | undefined;
+    readonly onOpenWorkspace?: ((id: string) => void) | undefined;
+    /** Opens the port-forward dialog, on this port. */
+    readonly onForward?: ((port: number) => void) | undefined;
 }
-export declare function PodDetail({ pod, metrics, onOpenLogs }: PodDetailProps): import("react").JSX.Element;
+export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward }: PodDetailProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=PodDetail.d.ts.map

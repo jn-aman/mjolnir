@@ -12,6 +12,13 @@ import { clusterRoutes } from './routes/clusters.ts';
 import { logRoutes } from './routes/logs.ts';
 import { metricRoutes } from './routes/metrics.ts';
 import { resourceRoutes } from './routes/resources.ts';
+import { forwardRoutes } from './routes/forwards.ts';
+import { settingsRoutes } from './routes/settings.ts';
+import { aiRoutes } from './routes/ai.ts';
+import { mcpRoutes } from './routes/mcp.ts';
+import { licenceRoutes } from './routes/licence.ts';
+import { SettingsStore } from './settings.ts';
+import { ForwardManager } from './forwards.ts';
 
 const log = logger.child('server');
 
@@ -27,6 +34,12 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   });
 
   const registry = new ClusterRegistry();
+
+  const forwards = new ForwardManager(registry);
+
+  const settings = new SettingsStore();
+
+  const toolContext = { registry, forwards, settings };
   await registry.reload();
 
   const app = express();
@@ -36,8 +49,13 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
     res.json({ ok: true, contexts: registry.contexts.length });
   });
 
-  app.use('/api/clusters', clusterRoutes(registry));
+  app.use('/api/clusters', clusterRoutes(registry, settings));
+  app.use('/api/settings', settingsRoutes(settings));
+  app.use('/api/licence', licenceRoutes(settings));
+  app.use('/api/ai', aiRoutes(toolContext));
+  app.use('/mcp', mcpRoutes(toolContext));
   app.use('/api/resources', resourceRoutes(registry));
+  app.use('/api/forwards', forwardRoutes(forwards));
   app.use('/api/logs', logRoutes(registry));
   app.use('/api/metrics', metricRoutes(registry));
   app.use(errorHandler);

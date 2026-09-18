@@ -122,7 +122,7 @@ export interface AggregateTarget {
  *
  * Emission is arrival-ordered, not timestamp-ordered. Ordering across sources
  * would mean holding a reorder window, which trades latency for a tidiness
- * nobody watching a live tail actually wants — a line should appear when it
+ * nobody watching a live tail actually wants, a line should appear when it
  * arrives. Each line carries its own timestamp, so a caller that wants
  * chronological order for a finite range can sort it.
  *

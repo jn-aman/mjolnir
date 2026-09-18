@@ -23,7 +23,7 @@ export interface Series {
     readonly name: string;
     readonly points: readonly Point[];
 }
-/** A period worth calling out — an incident, a deploy, a restart. */
+/** A period worth calling out, an incident, a deploy, a restart. */
 export interface Band {
     readonly from: number;
     readonly to: number;

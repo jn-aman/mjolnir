@@ -104,7 +104,7 @@ export const EventSchema = z.looseObject({
     .optional(),
 });
 
-/** metrics.k8s.io — absent on clusters without metrics-server, so always optional upstream. */
+/** metrics.k8s.io, absent on clusters without metrics-server, so always optional upstream. */
 export const PodMetricsSchema = z.looseObject({
   metadata: ObjectMetaSchema.optional(),
   timestamp: z.string().optional(),

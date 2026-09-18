@@ -3,7 +3,7 @@
  *
  * Streaming introduces a problem the source app never had: a chunk from the
  * socket can end mid-line, and the next chunk continues it. Splitting each
- * chunk on newlines independently corrupts exactly those lines — usually the
+ * chunk on newlines independently corrupts exactly those lines, usually the
  * long ones, which are usually the stack traces. `LineSplitter` holds the
  * remainder between chunks so that never happens.
  */
@@ -47,8 +47,8 @@ const RFC3339_PREFIX = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]
  * Split a `timestamps: true` line into its timestamp and message.
  *
  * The API prepends an RFC3339 timestamp and a single space. If the line does
- * not start with one — which happens when a container writes a partial line
- * before its first newline — the whole line is the message.
+ * not start with one, which happens when a container writes a partial line
+ * before its first newline, the whole line is the message.
  */
 export function parseLogLine(
   raw: string,
@@ -104,7 +104,7 @@ export function hasAnsi(input: string): boolean {
  *
  * Most services log JSON, and both Lens and Freelens render it as an
  * undifferentiated wall of text. Recognising it is what lets the viewer offer
- * real columns. Only objects count — a bare array or number on its own line is
+ * real columns. Only objects count, a bare array or number on its own line is
  * far more likely to be application output than a structured record.
  */
 export function parseStructured(message: string): Record<string, unknown> | null {

@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
  * amount of styling the closed state fixes the open one, because the menu is
  * drawn by the OS and not by us.
  *
- * Radix gives us the menu as real DOM — so it inherits the tokens — while
+ * Radix gives us the menu as real DOM, so it inherits the tokens, while
  * keeping the keyboard and screen-reader behaviour a native select has and a
  * hand-rolled div never does: typeahead, arrow keys, Home/End, Escape, focus
  * return, and a correct `aria` tree.
@@ -16,7 +16,7 @@ import type { ReactNode } from 'react';
 export interface SelectOption {
     readonly value: string;
     readonly label: string;
-    /** Rendered to the right of the label — a count, a status, a hint. */
+    /** Rendered to the right of the label, a count, a status, a hint. */
     readonly hint?: string | undefined;
     readonly icon?: ReactNode;
 }

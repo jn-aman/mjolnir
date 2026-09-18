@@ -5,14 +5,25 @@ export type NavSelection = {
     value: string;
 } | {
     kind: 'page';
-    value: 'overview' | 'settings';
+    value: 'overview' | 'settings' | 'app-settings';
+}
+/** A cluster tool from the TOOLS registry: Helm, port forwards, … */
+ | {
+    kind: 'tool';
+    value: string;
+}
+/** Something that is not about one cluster: cloud access, containers, buckets. */
+ | {
+    kind: 'workspace';
+    value: string;
 };
 interface SidebarProps {
     readonly kinds: ResourceDefinition[];
     readonly selection: NavSelection;
     readonly counts: Record<string, number>;
     readonly onSelect: (selection: NavSelection) => void;
+    readonly width: number;
 }
-export declare function Sidebar({ kinds, selection, counts, onSelect }: SidebarProps): import("react").JSX.Element;
+export declare function Sidebar({ kinds, selection, counts, onSelect, width }: SidebarProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Sidebar.d.ts.map

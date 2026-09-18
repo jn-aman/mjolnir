@@ -8,7 +8,7 @@ interface CardProps {
   readonly className?: string;
 }
 
-/** A panel. Border and surface only — no shadow at rest, no gradient, ever. */
+/** A panel. Border and surface only, no shadow at rest, no gradient, ever. */
 export function Card({ title, subtitle, actions, children, className = '' }: CardProps) {
   return (
     <section className={`rounded-lg border border-line bg-raised ${className}`}>

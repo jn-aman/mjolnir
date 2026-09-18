@@ -4,7 +4,7 @@ Thanks for looking. A few things worth knowing before you spend time.
 
 ## Licence
 
-Mjolnir is under the [Elastic License 2.0](LICENSE) — source-available, not OSI
+Mjolnir is under the [Elastic License 2.0](LICENSE), source-available, not OSI
 open source. You can read, modify and build it. You may not offer it as a hosted
 service or circumvent its licence key.
 
@@ -12,7 +12,7 @@ By contributing you agree your contribution is licensed the same way.
 
 ## The rules the codebase keeps
 
-**TypeScript only.** No `.js`, `.cjs` or `.mjs` source files anywhere —
+**TypeScript only.** No `.js`, `.cjs` or `.mjs` source files anywhere -
 `npm run verify` fails the build if one appears. Imports use `.ts` specifiers;
 TypeScript rewrites them on emit.
 
@@ -22,7 +22,7 @@ is parsed through a Zod schema in `@mjolnir/schemas`. Parsing is lenient but
 exception or a blank screen.
 
 **Playwright over unit tests.** End-to-end specs drive the real Electron app
-against the built-in demo cluster. Unit tests are reserved for pure logic —
+against the built-in demo cluster. Unit tests are reserved for pure logic -
 quantity parsing, redaction, line splitting, licence verification.
 
 **Comments say why, not what.** If a line needs explaining, explain the reason
@@ -39,7 +39,7 @@ npm run dev          # server + web client
 
 You do not need a Kubernetes cluster. The demo cluster is always present and
 contains a CrashLoopBackOff pod, a Pending pod, and pods that emit both plain
-and JSON logs — which is most of what the test suite needs.
+and JSON logs, which is most of what the test suite needs.
 
 ## Before you open a pull request
 

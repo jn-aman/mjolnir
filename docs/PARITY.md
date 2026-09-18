@@ -8,7 +8,7 @@ Status key: **done** · **planned** · **new** (nobody in this category has it)
 
 ---
 
-## Part 0 — The source app, so nothing is lost
+## Part 0, The source app, so nothing is lost
 
 Audited from the k8sight source tree. Everything here exists today and must
 survive the migration.
@@ -17,11 +17,11 @@ survive the migration.
 
 | Feature | Why it matters |
 |---|---|
-| **MCP server, 28 tools** | The app doubles as an MCP server (`list_resources`, `get_pod_logs`, `get_topology`, `get_cluster_summary`, `list_argocd_apps`, `get_rbac`, `list_helm_releases`, `list_custom_resources` and twenty more) over stdio and HTTP. External agents — Claude Code included — can inspect the cluster through it. **Nothing else in this category does this**, and it should be a headline feature rather than a footnote. Free. |
+| **MCP server, 28 tools** | The app doubles as an MCP server (`list_resources`, `get_pod_logs`, `get_topology`, `get_cluster_summary`, `list_argocd_apps`, `get_rbac`, `list_helm_releases`, `list_custom_resources` and twenty more) over stdio and HTTP. External agents, Claude Code included, can inspect the cluster through it. **Nothing else in this category does this**, and it should be a headline feature rather than a footnote. Free. |
 | **Docked coding agents** | Detects Claude Code, GitHub Copilot CLI, Gemini CLI, Codex CLI and OpenCode on `PATH` and runs them in the dock, in the cluster's context. Distinctive and cheap to keep. |
-| **Native EKS and AKS token helpers** | `eks-token.js` and `azure-token.js` generate auth tokens in-process, so an imported cluster works with **no `aws`, `az` or `kubelogin` installed**. This is a large and invisible UX win — it is the difference between "import and go" and "first install three CLIs". Must be carried over, and it becomes the foundation of `@mjolnir/cloud`. |
+| **Native EKS and AKS token helpers** | `eks-token.js` and `azure-token.js` generate auth tokens in-process, so an imported cluster works with **no `aws`, `az` or `kubelogin` installed**. This is a large and invisible UX win, it is the difference between "import and go" and "first install three CLIs". Must be carried over, and it becomes the foundation of `@mjolnir/cloud`. |
 | **Bundled Trivy** | Scanning works with nothing installed in-cluster. Downloaded at build time. |
-| **Demo mode** | 25+ kinds including Argo CD Applications and AppProjects, cert-manager Certificates and ClusterIssuers, Trivy ConfigAuditReports — plus a deliberately Pending pod and a CrashLoopBackOff pod. Richer than expected and the foundation of the whole test strategy. |
+| **Demo mode** | 25+ kinds including Argo CD Applications and AppProjects, cert-manager Certificates and ClusterIssuers, Trivy ConfigAuditReports, plus a deliberately Pending pod and a CrashLoopBackOff pod. Richer than expected and the foundation of the whole test strategy. |
 
 ### The rest of the inventory
 
@@ -63,7 +63,7 @@ standalone web mode.
 
 ---
 
-## Part 1 — Logs, measured against Datadog
+## Part 1, Logs, measured against Datadog
 
 Datadog is the high-water mark for log tooling. Most of it assumes an ingestion
 pipeline and an index, which a desktop client reading the Kubernetes API does
@@ -74,13 +74,13 @@ what people assume does.
 
 | Datadog feature | Mjolnir | Notes |
 |---|---|---|
-| **Live Tail** | planned | Datadog *samples* live tail when volume is high, so you are not seeing every line. We stream the real thing from the API — no sampling, because we are tailing one workload, not a fleet. |
+| **Live Tail** | planned | Datadog *samples* live tail when volume is high, so you are not seeing every line. We stream the real thing from the API, no sampling, because we are tailing one workload, not a fleet. |
 | **Search syntax** | planned | A real query language, not a substring box: `level:error service:api duration_ms:>1000`, with `AND`/`OR`/`NOT` and `-` negation. Free-text still works for people who just want to find a string. |
 | **Facets** | new | Datadog makes you *define* facets. We discover them: every JSON key in the buffer becomes a filterable field automatically, with value counts. Nothing to configure. |
-| **Measures** | planned | Numeric fields get range filters and sparklines — `duration_ms`, `status`, `bytes`. |
+| **Measures** | planned | Numeric fields get range filters and sparklines, `duration_ms`, `status`, `bytes`. |
 | **Side panel** | planned | Click a line: full record, formatted; the pod, node, namespace, owner and image it came from; and the container's CPU/memory around that instant. |
 | **"View in context"** | planned | From a filtered view, open the surrounding lines unfiltered. The single most useful button in Datadog and the one people miss most elsewhere. |
-| **Patterns** | new | Cluster similar lines and collapse them: "1,204 lines matching `GET /v1/health 200 in <N>ms`". Turns a wall of noise into a dozen rows. Done client-side over the buffer — no index needed. |
+| **Patterns** | new | Cluster similar lines and collapse them: "1,204 lines matching `GET /v1/health 200 in <N>ms`". Turns a wall of noise into a dozen rows. Done client-side over the buffer, no index needed. |
 | **Visualisations** | planned | A volume histogram above the stream, split by level. Brushing it sets the time range. |
 | **Saved views** | planned | Query, columns, filters and time range, saved per workload. |
 | **Grouping / aggregation** | planned | Group by any discovered field with counts; "top 10 `trace_id` by error count" without leaving the viewer. |
@@ -107,7 +107,7 @@ what people assume does.
 
 ---
 
-## Part 2 — Freelens, feature by feature
+## Part 2, Freelens, feature by feature
 
 Read from the source tree, not the marketing page.
 
@@ -124,7 +124,7 @@ ClusterRoles, ClusterRoleBindings, PodSecurityPolicies, CRDs and custom
 resources.
 
 **Mjolnir**: the registry in `@mjolnir/k8s` covers 28 kinds today; the rest are
-table rows, not code. **Planned — complete parity.**
+table rows, not code. **Planned, complete parity.**
 
 ### Application features
 
@@ -141,7 +141,7 @@ table rows, not code. **Planned — complete parity.**
 | Helm: charts, releases, install, upgrade, rollback | planned | |
 | Custom resources + CRD tree | planned | |
 | Metrics (built-in + **custom Prometheus**) | planned | Freelens lets you point at your own Prometheus; so will we. |
-| Cluster settings: rename, **custom icon**, accessible namespaces, namespace auth check, node shell config, metrics source | planned | The custom icon matters more than it sounds — it is how people tell prod from staging at a glance. |
+| Cluster settings: rename, **custom icon**, accessible namespaces, namespace auth check, node shell config, metrics source | planned | The custom icon matters more than it sounds, it is how people tell prod from staging at a glance. |
 | **kubectl version per cluster** | planned | Bundled, selectable. Fixes a whole class of old-cluster failures. |
 | Kubeconfig editing in-app | planned | |
 | Command palette | planned | |
@@ -149,7 +149,7 @@ table rows, not code. **Planned — complete parity.**
 | Tray / menu bar | planned | Ours does more: health at a glance, session expiry, alerts. |
 | Preferences, weblinks, favorites | planned | |
 | Entity settings | planned | |
-| **Extensions API** | deferred | A permanent public commitment. Revisit once the core is stable — and say so openly rather than pretending it is coming next month. |
+| **Extensions API** | deferred | A permanent public commitment. Revisit once the core is stable, and say so openly rather than pretending it is coming next month. |
 
 ### Where we beat Freelens
 
@@ -162,7 +162,7 @@ table rows, not code. **Planned — complete parity.**
 
 ---
 
-## Part 3 — Leapp, feature by feature
+## Part 3, Leapp, feature by feature
 
 Read from the source tree. MPL-2.0, so all of this is reimplemented, never
 copied.
@@ -170,11 +170,11 @@ copied.
 | Leapp | Mjolnir | Notes |
 |---|---|---|
 | **Session types**: IAM user, IAM role federated (SAML), IAM role chained, AWS SSO role, Azure | planned | Chaining via parent pointer, arbitrary depth. |
-| **Integrations**: AWS SSO, Azure tenant — create, login, logout, **sync** | planned | One integration provisions many sessions. |
+| **Integrations**: AWS SSO, Azure tenant, create, login, logout, **sync** | planned | One integration provisions many sessions. |
 | Session start / stop / current / list | planned | |
 | **Named profile management** | planned | Sessions materialise into `~/.aws/credentials`, so the rest of your terminal keeps working. |
 | Change profile, change region | planned | |
-| **Open AWS web console** from a session | planned | Federation-token handoff — one click from a session to a signed-in browser console. Genuinely excellent and easy to miss. |
+| **Open AWS web console** from a session | planned | Federation-token handoff, one click from a session to a signed-in browser console. Genuinely excellent and easy to miss. |
 | **SSM session into EC2** | planned | Shell onto an instance without a bastion or a key. |
 | Credential rotation | planned | On the **real token expiry**, not Leapp's fixed constant. |
 | OS keychain storage | planned | |
@@ -190,7 +190,7 @@ copied.
    credentials. Leapp cannot know what a cluster is.
 2. **Real expiry.** Their `expired()` compares elapsed time to a global
    constant while `sessionTokenExpiration` sits unused on the model.
-3. **Expiry surfaced before it bites** — a countdown and a proactive refresh,
+3. **Expiry surfaced before it bites**, a countdown and a proactive refresh,
    not an error you discover mid-request.
 4. **Typed credentials.** Theirs is `{ sessionToken: any }`.
 5. **Keyed state transitions**, not read-mutate-write over the whole session
@@ -199,7 +199,7 @@ copied.
 
 ---
 
-## Part 4 — Ideas in the same vein as object storage
+## Part 4, Ideas in the same vein as object storage
 
 The pattern that produced the object browser: *Mjolnir already has an
 authenticated path into the cluster and the ability to port-forward. Anything
@@ -208,7 +208,7 @@ already standing there.*
 
 Ranked by payoff over effort.
 
-### 1. Database browser — **new**
+### 1. Database browser, **new**
 
 Detect Postgres, MySQL, Redis, MongoDB from workload images and ports. Read
 credentials from the Secret the workload already references. Port-forward,
@@ -217,37 +217,37 @@ open next to every cluster UI.
 
 *Free*: browse schema, read-only queries. *Pro*: writes, saved queries, export.
 
-### 2. Kafka / queue browser — **new**
+### 2. Kafka / queue browser, **new**
 
 Topics, partitions, consumer-group lag, peek at messages with Avro/Protobuf
 decoding. Consumer lag is the single most-asked-for number in any event-driven
 system and it is invisible in every cluster UI.
 
-### 3. Resource diff and drift — **new**
+### 3. Resource diff and drift, **new**
 
 Diff a live object against its Helm chart, its Argo CD desired state, or its
 last-applied annotation. "What changed, when, and who did it" answered from data
 already on the cluster.
 
-### 4. Time-travel for a resource — **new**
+### 4. Time-travel for a resource, **new**
 
 Every watch event is already streaming through Mjolnir. Keep a rolling window
 and let people scrub backwards: what did this Deployment look like twenty
 minutes ago, and which field changed when the pods started failing?
 
-### 5. Cost per workload — **new**
+### 5. Cost per workload, **new**
 
 Node instance types and prices are knowable; requests and limits are on every
 pod. "This namespace is costing roughly $840/month, and 60% of it is requested
 and unused." Kubecost as a feature rather than a cluster install.
 
-### 6. Certificate and secret expiry — **new**
+### 6. Certificate and secret expiry, **new**
 
 Scan TLS Secrets, cert-manager Certificates and Ingress certs for expiry.
 Surface it in the menu bar before something goes down at 2am. Cheap to build,
 saves an outage.
 
-### 7. Network path checker — **new**
+### 7. Network path checker, **new**
 
 "Can this pod reach that service?" Evaluate NetworkPolicies, Services, endpoints
 and DNS and show where the path breaks. People currently debug this with
@@ -264,7 +264,7 @@ the provenance angle is distinct.
 Which services call which, from NetworkPolicies, Service selectors and Istio
 config. Freelens's topology shows ownership; this shows traffic.
 
-### 10. "What broke?" — **new**
+### 10. "What broke?", **new**
 
 One button on a failing workload that assembles the answer: recent events, the
 previous container's logs, the last rollout, resource pressure on the node, and

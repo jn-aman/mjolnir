@@ -6,7 +6,7 @@ import type { ZodType } from 'zod';
  * The API server returns objects whose shape drifts across versions, across
  * distributions, and across CRD authors. A viewer must therefore never treat a
  * schema mismatch as fatal: one malformed Pod in a list of 500 should cost you
- * that row, not the whole screen. Every parse here is total — it returns a
+ * that row, not the whole screen. Every parse here is total, it returns a
  * result, it does not throw.
  */
 
@@ -47,7 +47,7 @@ export function parse<T>(schema: ZodType<T>, input: unknown, context: string): P
  * Parse a list, dropping only the entries that fail.
  *
  * This is the difference between "the Pods tab is empty" and "498 of 500 Pods,
- * 2 could not be read" — the second is a usable screen and an actionable bug
+ * 2 could not be read", the second is a usable screen and an actionable bug
  * report, so it is what we always produce.
  */
 export function parseList<T>(

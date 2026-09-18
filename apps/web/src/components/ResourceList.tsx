@@ -11,7 +11,7 @@ import { useTablePrefs } from '../lib/tablePrefs.ts';
 /**
  * One table for every resource kind.
  *
- * Columns can be resized, reordered by dragging a header, and hidden — stored
+ * Columns can be resized, reordered by dragging a header, and hidden, stored
  * per kind, because the columns that matter for Pods are not the ones that
  * matter for Secrets and one shared layout would be wrong for both.
  *
@@ -26,6 +26,9 @@ interface ResourceListProps {
   readonly state: WatchState;
   readonly error: string | null;
   readonly filter: string;
+  /** The kind's label as people say it: "Role bindings", not "rolebindings". */
+  readonly label?: string | undefined;
+  readonly namespace?: string | undefined;
   readonly selectedName?: string | undefined;
   readonly onSelect?: (item: KubeItem) => void;
   readonly onAction?: (action: string, item: KubeItem) => void;
@@ -44,12 +47,38 @@ function defaultWidth(track: string): number {
   return fixed?.[1] ? Number(fixed[1]) : 140;
 }
 
+const deepTextCache = new WeakMap<object, string>();
+/** Every string and number in the object, lowercased, once per object. */
+function deepText(item: object): string {
+  const cached = deepTextCache.get(item);
+  if (cached !== undefined) return cached;
+  const parts: string[] = [];
+  const walk = (value: unknown) => {
+    if (value === null || value === undefined) return;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') parts.push(String(value));
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (typeof value === 'object') {
+      for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+        if (key === 'managedFields') continue;
+        parts.push(key);
+        walk(inner);
+      }
+    }
+  };
+  walk(item);
+  const text = parts.join(' ').toLowerCase();
+  deepTextCache.set(item, text);
+  return text;
+}
+
 export function ResourceList({
   kind,
   items,
   state,
   error,
   filter,
+  label,
+  namespace,
   selectedName,
   onSelect,
   onAction,
@@ -83,20 +112,36 @@ export function ResourceList({
   // Fixed pixel tracks once a width is known, so a resize moves one edge rather
   // than re-flowing every other column at the same time.
   const template = useMemo(
-    () => columns.map((column) => `${widthOf(column)}px`).join(' '),
-    [columns, widthOf],
+    () =>
+      columns
+        .map((column) => {
+          const px = widthOf(column);
+          // The name column soaks up whatever is left, unless the user has
+          // dragged it to a size, a chosen width is a chosen width.
+          if (column.id === 'name' && prefs.widths[column.id] === undefined) {
+            return `minmax(${Math.min(px, 220)}px, 340px)`;
+          }
+          return `${px}px`;
+        })
+        .join(' '),
+    [columns, widthOf, prefs.widths],
   );
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    const filtered = needle
-      ? items.filter((item) =>
-          [
-            item.metadata?.name,
-            item.metadata?.namespace,
-            ...columns.map((column) => column.searchText?.(item)),
-          ].some((value) => value?.toLowerCase().includes(needle)),
-        )
+    // Column text first because it is what the eye compared against; then the
+    // whole object, so an image tag, a label, an env value or an IP finds the
+    // row even when no column shows it. Multiple words all have to match.
+    const words = needle.split(/\s+/).filter(Boolean);
+    const filtered = words.length
+      ? items.filter((item) => {
+          const shown = [item.metadata?.name, item.metadata?.namespace, ...columns.map((column) => column.searchText?.(item))]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          const whole = deepText(item);
+          return words.every((word) => shown.includes(word) || whole.includes(word));
+        })
       : items;
 
     if (!sort) return filtered;
@@ -180,7 +225,7 @@ export function ResourceList({
         <div
           role="row"
           className="sticky top-0 z-10 grid h-[32px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.05em] text-tertiary"
-          style={{ gridTemplateColumns: `${template} 1fr` }}
+          style={{ gridTemplateColumns: `${template} minmax(40px, 1fr)` }}
         >
           {columns.map((column) => (
             <div
@@ -259,7 +304,9 @@ export function ResourceList({
 
         {visible.length === 0 ? (
           <ListMessage testId="resource-empty">
-            {filter ? `Nothing matches “${filter}”.` : `No ${kind.toLowerCase()}s here.`}
+            {filter
+              ? `Nothing matches “${filter}”.`
+              : `No ${(label ?? kind).toLowerCase()} ${namespace ? `in ${namespace}` : 'in this cluster'}.`}
           </ListMessage>
         ) : (
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
@@ -275,13 +322,7 @@ export function ResourceList({
                     key={item.metadata?.name ?? row.index}
                     item={item}
                     kind={kind}
-                    onOpen={() => onSelect?.(item)}
-                    onLogs={() => act('logs')}
-                    onShell={() => act('shell')}
-                    onYaml={() => act('yaml')}
-                    onRestart={() => act('restart')}
-                    onScale={() => act('scale')}
-                    onDelete={() => act('delete')}
+                    act={act}
                   >
                     <div
                       data-testid="resource-row"
@@ -299,7 +340,7 @@ export function ResourceList({
                         selected ? 'bg-pressed' : 'hover:bg-hover'
                       }`}
                       style={{
-                        gridTemplateColumns: `${template} 1fr`,
+                        gridTemplateColumns: `${template} minmax(40px, 1fr)`,
                         height: row.size,
                         transform: `translateY(${row.start}px)`,
                       }}

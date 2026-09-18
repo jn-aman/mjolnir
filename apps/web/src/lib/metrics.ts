@@ -23,6 +23,7 @@ const GiB = 1024 * MiB;
 
 /** Cores, shown the way kubectl shows them: millicores below one. */
 export function formatCpu(cores: number): string {
+  if (cores === 0) return '0';
   if (cores < 1) return `${Math.round(cores * 1000)}m`;
   return cores.toFixed(2).replace(/\.?0+$/, '');
 }

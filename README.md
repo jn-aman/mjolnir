@@ -4,7 +4,7 @@
 
 **See your whole cluster in one window.**
 
-A desktop app for Kubernetes — browse and operate any cluster from your local
+A desktop app for Kubernetes, browse and operate any cluster from your local
 kubeconfig, manage cloud access across accounts, and read the data inside the
 cluster, without leaving the window.
 
@@ -15,7 +15,7 @@ cluster, without leaving the window.
 ---
 
 > **Status: early.** Nothing is released yet. The foundation is built and the
-> app is being assembled on top of it — see [the roadmap](docs/ROADMAP.md) for
+> app is being assembled on top of it, see [the roadmap](docs/ROADMAP.md) for
 > what lands when, and why in that order.
 
 ## What makes it different
@@ -31,7 +31,7 @@ two concepts.
 
 **Logs that understand what they are reading.** A streaming tail that pauses
 when you scroll and resumes when you ask. The previous container's output when
-the current one is crash-looping — the first thing anyone wants, and absent from
+the current one is crash-looping, the first thing anyone wants, and absent from
 most tools. JSON log lines detected automatically and given real columns,
 discovered from the keys rather than configured by hand.
 
@@ -42,7 +42,7 @@ answer "what is actually in that bucket?" without a context switch.
 
 ## Try it without a cluster
 
-The app ships with a **demo cluster** — real-shaped resources including a
+The app ships with a **demo cluster**, real-shaped resources including a
 CrashLoopBackOff pod, an unschedulable Pending pod, and workloads emitting both
 plain and JSON logs. No kubeconfig, no network, nothing to set up.
 
@@ -74,7 +74,7 @@ npm run dev          # server + web client
 
 **TypeScript, strictly, end to end.** No JavaScript source anywhere; the build
 fails if any appears. Every Kubernetes API response is validated at the boundary
-by a Zod schema, leniently but *totally* — a malformed object costs one row and
+by a Zod schema, leniently but *totally*, a malformed object costs one row and
 gets reported, never a blank screen.
 
 **Watch-backed, not polling.** A local cache kept in sync by the API server, so
@@ -87,17 +87,17 @@ difference between a UI that feels instant and one that feels laggy.
 
 `docs/` is where decisions live, with the reasoning attached:
 
-- [ROADMAP.md](docs/ROADMAP.md) — what gets built when, and why in that order
-- [FEATURES.md](docs/FEATURES.md) — the feature plan
-- [PARITY.md](docs/PARITY.md) — every feature of Freelens, Leapp and Datadog's
+- [ROADMAP.md](docs/ROADMAP.md), what gets built when, and why in that order
+- [FEATURES.md](docs/FEATURES.md), the feature plan
+- [PARITY.md](docs/PARITY.md), every feature of Freelens, Leapp and Datadog's
   log explorer, and what Mjolnir does about each
-- [RESEARCH.md](docs/RESEARCH.md) — what was worth taking from the reference apps
-- [ACTIVATION.md](docs/ACTIVATION.md) — how buying and licensing work
-- [DISTRIBUTION.md](docs/DISTRIBUTION.md) — packaging, signing, the paid tier
-- [MIGRATION.md](docs/MIGRATION.md) — the migration plan
+- [RESEARCH.md](docs/RESEARCH.md), what was worth taking from the reference apps
+- [ACTIVATION.md](docs/ACTIVATION.md), how buying and licensing work
+- [DISTRIBUTION.md](docs/DISTRIBUTION.md), packaging, signing, the paid tier
+- [MIGRATION.md](docs/MIGRATION.md), the migration plan
 
 ## Licence
 
-[Elastic License 2.0](LICENSE) — source-available. You can read, modify and
+[Elastic License 2.0](LICENSE), source-available. You can read, modify and
 build Mjolnir. You may not offer it as a hosted service or circumvent its
 licence key. See [DISTRIBUTION.md](docs/DISTRIBUTION.md) for the free/Pro split.

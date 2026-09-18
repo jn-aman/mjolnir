@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test';
  * End-to-end tests drive the packaged Electron app, not a browser.
  *
  * Every spec runs against Mjolnir's built-in demo cluster, which is synthetic and
- * deterministic — no kubeconfig, no network, no flake from a real cluster
+ * deterministic, no kubeconfig, no network, no flake from a real cluster
  * rescheduling a pod mid-assertion. That is the whole reason demo mode is
  * worth keeping: it is the only way to assert on a CrashLoopBackOff pod at a
  * known moment in time.

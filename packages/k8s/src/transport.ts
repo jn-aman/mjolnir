@@ -21,7 +21,7 @@ export class ApiError extends Error {
     return this.status === 404;
   }
 
-  /** Credentials are missing, expired or insufficient — the cue to offer a session refresh. */
+  /** Credentials are missing, expired or insufficient, the cue to offer a session refresh. */
   get isAuthFailure(): boolean {
     return this.status === 401 || this.status === 403;
   }

@@ -18,7 +18,7 @@ test.describe('workloads', () => {
     const pending = window.getByTestId('pod-row').filter({ hasText: 'Pending' }).first();
     await expect(pending).toBeVisible();
     // A pod with no node and no metrics must render a dash, never NaN or blank.
-    await expect(pending.getByTestId('pod-cpu')).toHaveText(/—|\d/);
+    await expect(pending.getByTestId('pod-cpu')).toHaveText(/-|\d/);
   });
 
   test('command palette jumps to a resource', async ({ window }) => {

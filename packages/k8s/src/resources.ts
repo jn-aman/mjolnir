@@ -133,7 +133,7 @@ export function resourcesByCategory(category: ResourceCategory): ResourceDefinit
   return RESOURCES.filter((resource) => resource.category === category);
 }
 
-/** The `apiVersion` string for a manifest — "v1" for core, "group/version" otherwise. */
+/** The `apiVersion` string for a manifest, "v1" for core, "group/version" otherwise. */
 export function apiVersionOf(resource: ResourceDefinition): string {
   return resource.group ? `${resource.group}/${resource.version}` : resource.version;
 }

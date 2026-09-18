@@ -2,7 +2,7 @@
  * Kubernetes resource quantities.
  *
  * The API expresses CPU and memory as suffixed strings ("100m", "1.5", "128Mi",
- * "1e3"). Reading them with parseFloat — which is what most dashboards do —
+ * "1e3"). Reading them with parseFloat, which is what most dashboards do -
  * silently turns "128Mi" into 128 and "100m" into 100, so a pod using a tenth
  * of a core renders as using a hundred. These functions implement the actual
  * grammar from apimachinery.
@@ -37,7 +37,7 @@ const DECIMAL_SI: Record<string, number> = {
 const QUANTITY = /^([+-]?(?:\d+\.?\d*|\.\d+))(?:([eE][+-]?\d+)|([KMGTPE]i)|([numkKMGTPE]))?$/;
 
 /**
- * Parse a quantity into a plain number in its base unit — cores for CPU,
+ * Parse a quantity into a plain number in its base unit, cores for CPU,
  * bytes for memory. Returns null for anything unparseable rather than NaN,
  * so callers must decide what to show instead of rendering "NaN".
  */
@@ -86,7 +86,7 @@ const BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] as const;
 
 /** Human-readable bytes. Returns the em dash for null, never "NaN". */
 export function formatBytes(bytes: number | null, fractionDigits = 1): string {
-  if (bytes === null || !Number.isFinite(bytes)) return '—';
+  if (bytes === null || !Number.isFinite(bytes)) return '-';
   if (bytes === 0) return '0 B';
 
   const negative = bytes < 0;
@@ -102,7 +102,7 @@ export function formatBytes(bytes: number | null, fractionDigits = 1): string {
 
 /** Human-readable CPU. Sub-core values render as millicores, as kubectl does. */
 export function formatCpu(cores: number | null): string {
-  if (cores === null || !Number.isFinite(cores)) return '—';
+  if (cores === null || !Number.isFinite(cores)) return '-';
   if (cores === 0) return '0';
   if (Math.abs(cores) < 1) return `${Math.round(cores * 1000)}m`;
   return cores.toFixed(2).replace(/\.?0+$/, '');

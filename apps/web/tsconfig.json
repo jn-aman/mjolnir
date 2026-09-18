@@ -5,11 +5,29 @@
     "outDir": "./dist-types",
     "noEmit": false,
     "emitDeclarationOnly": true,
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "vite/client"
+    ],
     "jsx": "react-jsx",
     "moduleResolution": "bundler"
   },
-  "include": ["src/**/*"],
-  "references": [{ "path": "../../packages/k8s" }, { "path": "../../packages/licensing" }]
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../../packages/schemas"
+    },
+    {
+      "path": "../../packages/k8s"
+    },
+    {
+      "path": "../../packages/licensing"
+    }
+  ]
 }

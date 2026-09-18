@@ -25,7 +25,7 @@ export type Provider = 'eks' | 'aks' | 'gke' | 'kind' | 'minikube' | 'k3s' | 'op
 /**
  * Infer the provider from a context.
  *
- * Purely cosmetic — it drives an icon and, for EKS, which cloud session Mjolnir
+ * Purely cosmetic, it drives an icon and, for EKS, which cloud session Mjolnir
  * offers to bind. It must never gate functionality, because the heuristics are
  * guesses and a wrong guess should cost an icon, not access to a cluster.
  */
@@ -128,7 +128,7 @@ export async function loadKubeconfig(env: NodeJS.ProcessEnv = process.env): Prom
  *
  * Every cluster connection gets its own instance rather than mutating a shared
  * one. Switching the current context on a shared config is a data race the
- * moment two clusters are open at once — which is the normal case here.
+ * moment two clusters are open at once, which is the normal case here.
  */
 export function configForContext(config: KubeConfig, contextName: string): KubeConfig {
   const found = config.getContexts().find((context) => context.name === contextName);

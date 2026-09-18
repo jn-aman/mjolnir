@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Download, Maximize2, Minimize2, Regex, Search, WrapText } from 'lucide-react';
 import { useLogStream } from '../lib/useLogStream.ts';
 import { Button } from './ui/Button.tsx';
+import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
+import { formatClock, formatDateTime, useTimezone } from '../lib/time.ts';
 import { Select } from './ui/Select.tsx';
 
 /**
@@ -19,7 +21,7 @@ import { Select } from './ui/Select.tsx';
  * 3. **Previous-container logs.** When the current container has written
  *    nothing because it is crash-looping, the dead one explains why.
  *
- * Rows are virtualized and never animated — easing a log line into view
+ * Rows are virtualized and never animated, easing a log line into view
  * misstates when it arrived.
  */
 
@@ -66,6 +68,7 @@ export function LogViewer({
   initialContainer,
   initialPrevious,
 }: LogViewerProps) {
+  const zone = useTimezone((state) => state.zone);
   const [container, setContainer] = useState(initialContainer ?? containers[0] ?? '');
   const [previous, setPrevious] = useState(initialPrevious ?? false);
   const [query, setQuery] = useState('');
@@ -92,7 +95,7 @@ export function LogViewer({
     try {
       return new RegExp(useRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     } catch {
-      // A half-typed regex is not an error state — it just matches nothing yet.
+      // A half-typed regex is not an error state, it just matches nothing yet.
       return null;
     }
   }, [query, useRegex]);
@@ -116,7 +119,7 @@ export function LogViewer({
   });
 
   // A wrapped line is taller than one row, so rows must be measured rather than
-  // estimated — otherwise long lines draw on top of each other, which is
+  // estimated, otherwise long lines draw on top of each other, which is
   // exactly what happens to stack traces, the lines you most need to read.
   // TanStack's own measureElement reads data-index off the node; a replacement
   // that returns only a height cannot associate the measurement with a row.
@@ -157,7 +160,7 @@ export function LogViewer({
     const text = rows
       .map((line) => `${line.timestamp?.toISOString() ?? ''} ${line.message}`)
       .join('\n');
-    // A Blob, not a data: URI — the URI form silently truncates past a few MB,
+    // A Blob, not a data: URI, the URI form silently truncates past a few MB,
     // which is exactly the size of log anyone bothers to download.
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
     const anchor = document.createElement('a');
@@ -215,8 +218,8 @@ export function LogViewer({
           value={mode}
           onChange={(value) => setMode(value as 'highlight' | 'filter')}
           options={[
-            { value: 'highlight', label: 'Highlight' },
-            { value: 'filter', label: 'Filter' },
+            { value: 'highlight', label: 'Mark matches' },
+            { value: 'filter', label: 'Only matches' },
           ]}
         />
 
@@ -332,19 +335,32 @@ export function LogViewer({
               const line = rows[item.index];
               if (!line) return null;
               const level = LEVEL.exec(line.message)?.[1];
-              // The level gets its own column, so strip it from the message —
+              // The level gets its own column, so strip it from the message -
               // otherwise every warning reads "WARN WARN ...".
               const body = level
                 ? line.message.replace(new RegExp(`^\\s*${level}\\s+`), '')
                 : line.message;
               const hit = mode === 'highlight' && matcher?.test(line.message);
-              // A continuation line — a stack frame — dims so the eye lands on
+              // A continuation line, a stack frame, dims so the eye lands on
               // the error above it rather than five equally loud frames.
               const continuation = /^\s{4,}at\s/.test(line.message);
 
+              const json = body.trimStart().startsWith('{') ? body.trim() : undefined;
+              const lineMenu: MenuEntry[] = [
+                askEntry('Explain this log line', `Explain this log line from pod ${pod} in namespace ${namespace} and whether it matters:\n\n${line.message.slice(0, 1500)}`),
+                SEPARATOR,
+                ...copyEntry('copy-line', 'Copy line', line.message),
+                ...copyEntry('copy-json', 'Copy as JSON', json),
+                ...copyEntry('copy-time', 'Copy timestamp', line.timestamp?.toISOString()),
+                SEPARATOR,
+                ...(onToggleExpand && !expanded
+                  ? [{ id: 'expand', label: 'Open full screen', onSelect: onToggleExpand }]
+                  : []),
+              ];
+
               return (
+                <Menu key={line.seq} entries={lineMenu} testId="log-menu">
                 <div
-                  key={line.seq}
                   data-index={item.index}
                   ref={virtualizer.measureElement}
                   data-testid="log-line"
@@ -357,8 +373,11 @@ export function LogViewer({
                     background: hit ? 'var(--log-highlight)' : undefined,
                   }}
                 >
-                  <span className="w-[86px] shrink-0 select-none text-[var(--log-time)]">
-                    {line.timestamp?.toTimeString().slice(0, 8) ?? ''}
+                  <span
+                    className="w-[86px] shrink-0 select-none text-[var(--log-time)]"
+                    title={line.timestamp ? formatDateTime(line.timestamp, zone) : undefined}
+                  >
+                    {line.timestamp ? formatClock(line.timestamp, zone) : ''}
                   </span>
                   <span
                     className="w-[52px] shrink-0 font-medium"
@@ -375,6 +394,7 @@ export function LogViewer({
                     {body}
                   </span>
                 </div>
+                </Menu>
               );
             })}
           </div>

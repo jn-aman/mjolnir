@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { ResourceDefinition } from '@mjolnir/k8s';
+import { CATEGORY_TINT } from '../lib/tint.ts';
+import { TOOLS } from '../lib/tools.ts';
+import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import {
   Boxes,
   ChevronDown,
@@ -33,7 +36,7 @@ import {
  *
  * Overview is an entry in this list, not a separate mode. It is the cluster's
  * own page; putting it in a top-level tab implies it is a different kind of
- * thing, and it is not — it is simply the first thing you look at.
+ * thing, and it is not, it is simply the first thing you look at.
  *
  * Every kind carries its own icon. That is not decoration: this is a list of
  * thirty near-identical words, and shape is what the eye finds before it reads.
@@ -84,16 +87,21 @@ const CATEGORY_LABEL: Record<string, string> = {
 /** What the sidebar can select: a resource kind, or one of the app's own pages. */
 export type NavSelection =
   | { kind: 'resource'; value: string }
-  | { kind: 'page'; value: 'overview' | 'settings' };
+  | { kind: 'page'; value: 'overview' | 'settings' | 'app-settings' }
+  /** A cluster tool from the TOOLS registry: Helm, port forwards, … */
+  | { kind: 'tool'; value: string }
+  /** Something that is not about one cluster: cloud access, containers, buckets. */
+  | { kind: 'workspace'; value: string };
 
 interface SidebarProps {
   readonly kinds: ResourceDefinition[];
   readonly selection: NavSelection;
   readonly counts: Record<string, number>;
   readonly onSelect: (selection: NavSelection) => void;
+  readonly width: number;
 }
 
-export function Sidebar({ kinds, selection, counts, onSelect }: SidebarProps) {
+export function Sidebar({ kinds, selection, counts, onSelect, width }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const grouped = new Map<string, ResourceDefinition[]>();
@@ -114,10 +122,48 @@ export function Sidebar({ kinds, selection, counts, onSelect }: SidebarProps) {
   const isActive = (candidate: NavSelection) =>
     candidate.kind === selection.kind && candidate.value === selection.value;
 
+  const allSections = [...CATEGORY_ORDER, 'tools'];
+  const sectionMenu = (category: string): MenuEntry[] => [
+    { id: 'collapse-others', label: 'Collapse other sections', onSelect: () => setCollapsed(new Set(allSections.filter((c) => c !== category))) },
+    { id: 'expand-all', label: 'Expand all sections', onSelect: () => setCollapsed(new Set()) },
+  ];
+  const tools = TOOLS.filter((tool) => tool.area === 'tools');
+  const workspaces = TOOLS.filter((tool) => tool.area === 'workspace');
+
+  if (selection.kind === 'workspace') {
+    return (
+      <nav data-testid="sidebar" className="flex shrink-0 flex-col overflow-y-auto border-r border-line bg-raised py-2" style={{ width }}>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">
+          <span aria-hidden className="h-[6px] w-[6px] rounded-full bg-accent" />
+          Toolbox
+        </div>
+        <ul>
+          {workspaces.map((space) => (
+            <li key={space.id}>
+              <Entry
+                icon={space.icon}
+                label={space.label}
+                testId={`nav-workspace-${space.id}`}
+                active={selection.value === space.id}
+                tint={space.tint}
+                menu={[{ id: 'open', label: `Open ${space.label}`, onSelect: () => onSelect({ kind: 'workspace', value: space.id }) }]}
+                onSelect={() => onSelect({ kind: 'workspace', value: space.id })}
+              />
+            </li>
+          ))}
+        </ul>
+        <div className="flex-1" />
+        <div className="mx-3 my-1.5 h-px bg-[var(--border-subtle)]" />
+        <Entry icon={Settings} label="Mjolnir settings" testId="nav-app-settings" active={false} onSelect={() => onSelect({ kind: 'page', value: 'app-settings' })} />
+      </nav>
+    );
+  }
+
   return (
     <nav
       data-testid="sidebar"
-      className="flex w-[212px] shrink-0 flex-col overflow-y-auto border-r border-line bg-raised py-2"
+      className="flex shrink-0 flex-col overflow-y-auto border-r border-line bg-raised py-2"
+      style={{ width }}
     >
       <Entry
         icon={LayoutDashboard}
@@ -136,6 +182,7 @@ export function Sidebar({ kinds, selection, counts, onSelect }: SidebarProps) {
 
         return (
           <section key={category} className="mb-0.5">
+            <Menu entries={sectionMenu(category)}>
             <button
               type="button"
               onClick={() => toggle(category)}
@@ -149,11 +196,21 @@ export function Sidebar({ kinds, selection, counts, onSelect }: SidebarProps) {
               >
                 <ChevronDown size={11} strokeWidth={2.4} />
               </motion.span>
+              <span aria-hidden className="h-[6px] w-[6px] rounded-full" style={{ background: CATEGORY_TINT[category] }} />
               {CATEGORY_LABEL[category]}
             </button>
+            </Menu>
 
+            <AnimatePresence initial={false}>
             {isCollapsed ? null : (
-              <ul>
+              <motion.ul
+                key="list"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                className="overflow-hidden"
+              >
                 {entries.map((entry) => (
                   <li key={entry.kind}>
                     <Entry
@@ -162,21 +219,65 @@ export function Sidebar({ kinds, selection, counts, onSelect }: SidebarProps) {
                       testId={`nav-${entry.plural}`}
                       active={isActive({ kind: 'resource', value: entry.kind })}
                       count={counts[entry.kind]}
+                      tint={CATEGORY_TINT[category]}
+                      menu={[
+                        { id: 'open', label: `Open ${entry.label.toLowerCase()}`, onSelect: () => onSelect({ kind: 'resource', value: entry.kind }) },
+                        ...copyEntry('copy-kubectl', 'Copy kubectl command', `kubectl get ${entry.plural}${entry.namespaced ? ' -A' : ''}`),
+                      ]}
                       onSelect={() => onSelect({ kind: 'resource', value: entry.kind })}
                     />
                   </li>
                 ))}
-              </ul>
+              </motion.ul>
             )}
+            </AnimatePresence>
           </section>
         );
       })}
+
+      <section className="mb-0.5" data-testid="nav-tools">
+        <Menu entries={sectionMenu('tools')}>
+        <button
+          type="button"
+          onClick={() => toggle('tools')}
+          aria-expanded={!collapsed.has('tools')}
+          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary transition-colors duration-100 hover:text-secondary"
+        >
+          <motion.span
+            animate={{ rotate: collapsed.has('tools') ? -90 : 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+            className="flex shrink-0"
+          >
+            <ChevronDown size={11} strokeWidth={2.4} />
+          </motion.span>
+          <span aria-hidden className="h-[6px] w-[6px] rounded-full bg-accent" />
+          Tools
+        </button>
+        </Menu>
+        {collapsed.has('tools') ? null : (
+          <ul>
+            {tools.map((tool) => (
+              <li key={tool.id}>
+                <Entry
+                  icon={tool.icon}
+                  label={tool.label}
+                  testId={`nav-tool-${tool.id}`}
+                  active={isActive({ kind: 'tool', value: tool.id })}
+                  tint={tool.tint}
+                  menu={[{ id: 'open', label: `Open ${tool.label}`, onSelect: () => onSelect({ kind: 'tool', value: tool.id }) }]}
+                  onSelect={() => onSelect({ kind: 'tool', value: tool.id })}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="flex-1" />
       <div className="mx-3 my-1.5 h-px bg-[var(--border-subtle)]" />
       <Entry
         icon={Settings}
-        label="Settings"
+        label="Kubernetes settings"
         testId="nav-settings"
         active={isActive({ kind: 'page', value: 'settings' })}
         onSelect={() => onSelect({ kind: 'page', value: 'settings' })}
@@ -191,6 +292,8 @@ function Entry({
   testId,
   active,
   count,
+  tint,
+  menu = [],
   onSelect,
 }: {
   icon: typeof Boxes;
@@ -198,9 +301,12 @@ function Entry({
   testId: string;
   active: boolean;
   count?: number | undefined;
+  tint?: string | undefined;
+  menu?: readonly MenuEntry[];
   onSelect: () => void;
 }) {
   return (
+    <Menu label={label} entries={menu} testId="nav-menu">
     <button
       type="button"
       data-testid={testId}
@@ -230,7 +336,10 @@ function Entry({
       <Icon
         size={14}
         strokeWidth={1.8}
-        className={`relative shrink-0 ${active ? 'text-accent' : 'text-tertiary group-hover:text-secondary'}`}
+        className={`relative shrink-0 transition-colors duration-100 ${
+          active ? 'text-accent' : tint ? '' : 'text-tertiary group-hover:text-secondary'
+        }`}
+        style={!active && tint ? { color: tint, opacity: 0.85 } : undefined}
       />
       <span className="relative min-w-0 flex-1 truncate">{label}</span>
       {count !== undefined && count > 0 ? (
@@ -239,5 +348,6 @@ function Entry({
         </span>
       ) : null}
     </button>
+    </Menu>
   );
 }

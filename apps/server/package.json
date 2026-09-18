@@ -4,21 +4,27 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
+  "bin": { "mjolnir-mcp": "./dist/mcp/stdio.js" },
   "scripts": {
     "build": "tsc -b",
     "dev": "node --experimental-strip-types src/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
     "@mjolnir/k8s": "*",
+    "@mjolnir/demo": "*",
     "@mjolnir/licensing": "*",
     "@mjolnir/logger": "*",
     "@mjolnir/schemas": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.2.1",
+    "js-yaml": "^4.1.0",
     "ws": "^8.21.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/js-yaml": "^4.0.9",
     "@types/ws": "^8.5.13"
   }
 }

@@ -10,8 +10,8 @@ import type { KubeObject } from '@mjolnir/schemas';
  * 2. **Nobody should have to point a new tool at production to try it.**
  * 3. Screenshots and demos need a cluster that is not somebody's real one.
  *
- * It is deliberately *alive* — metrics jitter, logs accumulate, the crash-looper
- * restarts — because a frozen fixture hides every bug that only appears when
+ * It is deliberately *alive*, metrics jitter, logs accumulate, the crash-looper
+ * restarts, because a frozen fixture hides every bug that only appears when
  * data changes underneath the UI.
  */
 
@@ -51,7 +51,7 @@ interface PodOptions {
   readonly name: string;
   readonly app: string;
   readonly node: string;
-  readonly containers: Array<{ name: string; image: string }>;
+  readonly containers: Array<{ name: string; image: string; env?: unknown[]; ports?: unknown[] }>;
   readonly phase?: 'Running' | 'Pending' | 'Succeeded' | 'Failed';
   readonly restarts?: number;
   readonly waiting?: { reason: string; message: string };
@@ -90,6 +90,8 @@ function makePod(options: PodOptions): KubeObject {
       containers: options.containers.map((container) => ({
         name: container.name,
         image: container.image,
+        ...(container.env ? { env: container.env } : {}),
+        ...(container.ports ? { ports: container.ports } : {}),
         resources: {
           requests: { cpu: '100m', memory: '128Mi' },
           limits: { cpu: '1', memory: '512Mi' },
@@ -116,7 +118,7 @@ function makePod(options: PodOptions): KubeObject {
             ]
           : [{ type: 'PodScheduled', status: 'True', lastTransitionTime: iso(ageMs) }]),
       ],
-      // A pod that was never scheduled has no container statuses at all — not
+      // A pod that was never scheduled has no container statuses at all, not
       // empty ones. This is the null path the UI must render as dashes rather
       // than NaN, so the fixture has to get it right.
       containerStatuses: options.unschedulable ? undefined : options.containers.map((container) => ({
@@ -203,7 +205,7 @@ export const DEMO_PODS: readonly KubeObject[] = [
     lastTerminated: { exitCode: 137, reason: 'OOMKilled', finishedAgoMs: 42_000 },
     ageMs: hours(2),
   }),
-  // The Pending pod. Unschedulable, so it has no node, no IP and no metrics —
+  // The Pending pod. Unschedulable, so it has no node, no IP and no metrics -
   // every one of which is a null the UI must render as a dash rather than NaN.
   makePod({
     namespace: 'ingest',
@@ -227,7 +229,19 @@ export const DEMO_PODS: readonly KubeObject[] = [
     name: 'minio-0',
     app: 'minio',
     node: 'ip-10-0-3-8',
-    containers: [{ name: 'minio', image: 'quay.io/minio/minio:RELEASE.2026-08-14T00-00-00Z' }],
+    containers: [{
+        name: 'minio',
+        image: 'quay.io/minio/minio:RELEASE.2026-08-14T00-00-00Z',
+        ports: [
+          { name: 'api', containerPort: 9000, protocol: 'TCP' },
+          { name: 'console', containerPort: 9001, protocol: 'TCP' },
+        ],
+        env: [
+          { name: 'MINIO_ROOT_USER', valueFrom: { secretKeyRef: { name: 'minio-root', key: 'MINIO_ROOT_USER' } } },
+          { name: 'MINIO_ROOT_PASSWORD', valueFrom: { secretKeyRef: { name: 'minio-root', key: 'MINIO_ROOT_PASSWORD' } } },
+          { name: 'MINIO_BROWSER_REDIRECT_URL', value: 'https://minio.platform.internal' },
+        ],
+      }],
   }),
   makePod({
     namespace: 'kube-system',
@@ -285,6 +299,17 @@ export const DEMO_NAMESPACES: readonly KubeObject[] = NAMESPACES.map((name) => (
   status: { phase: 'Active' },
 }));
 
+/** The pod template a workload would carry, taken from the pods it runs. */
+function podTemplateFor(app: string): Record<string, unknown> {
+  const pod = DEMO_PODS.find((candidate) => candidate.metadata?.labels?.['app'] === app) as
+    | { spec?: { containers?: unknown[] } }
+    | undefined;
+  return {
+    metadata: { labels: { app, 'app.kubernetes.io/name': app } },
+    spec: { containers: pod?.spec?.containers ?? [] },
+  };
+}
+
 export const DEMO_DEPLOYMENTS: readonly KubeObject[] = (
   [
     ['payments', 'api', 2, 2],
@@ -302,11 +327,13 @@ export const DEMO_DEPLOYMENTS: readonly KubeObject[] = (
     uid: uid(),
     creationTimestamp: iso(hours(48)),
     labels: { app: name },
+    annotations: { 'deployment.kubernetes.io/revision': '3' },
   },
   spec: {
     replicas,
     selector: { matchLabels: { app: name } },
     strategy: { type: 'RollingUpdate' },
+    template: podTemplateFor(name),
   },
   status: {
     replicas,
@@ -407,9 +434,56 @@ export const DEMO_SECRETS: readonly KubeObject[] = [
   },
 ];
 
+/**
+ * ReplicaSets: the current one per workload, owned by its Deployment, and an
+ * older revision for two of them so "undo rollout" has somewhere to go.
+ */
+export const DEMO_REPLICASETS: readonly KubeObject[] = (() => {
+  type Owned = KubeObject & { metadata?: { ownerReferences?: Array<{ name?: string }>; labels?: Record<string, string> } };
+  const seen = new Map<string, { namespace: string; app: string; hash: string }>();
+  for (const pod of DEMO_PODS as readonly Owned[]) {
+    const rs = pod.metadata?.ownerReferences?.[0]?.name;
+    const app = pod.metadata?.labels?.['app'];
+    const namespace = pod.metadata?.namespace;
+    if (rs && app && namespace && !seen.has(rs)) seen.set(rs, { namespace, app, hash: rs.slice(app.length + 1) });
+  }
+  const make = (name: string, meta: { namespace: string; app: string; hash: string }, revision: string, replicas: number, image?: string) => {
+    const template = podTemplateFor(meta.app) as { spec: { containers: Array<Record<string, unknown>> } };
+    return {
+      apiVersion: 'apps/v1',
+      kind: 'ReplicaSet',
+      metadata: {
+        name,
+        namespace: meta.namespace,
+        uid: uid(),
+        creationTimestamp: iso(hours(revision === '3' ? 6 : 30)),
+        labels: { app: meta.app, 'pod-template-hash': meta.hash },
+        annotations: { 'deployment.kubernetes.io/revision': revision },
+        ownerReferences: [{ apiVersion: 'apps/v1', kind: 'Deployment', name: meta.app, controller: true }],
+      },
+      spec: {
+        replicas,
+        selector: { matchLabels: { app: meta.app, 'pod-template-hash': meta.hash } },
+        template: image
+          ? { ...template, spec: { ...template.spec, containers: template.spec.containers.map((c, i) => (i === 0 ? { ...c, image } : c)) } }
+          : template,
+      },
+      status: { replicas, readyReplicas: replicas, availableReplicas: replicas },
+    } as KubeObject;
+  };
+  const out: KubeObject[] = [];
+  for (const [name, meta] of seen) {
+    out.push(make(name, meta, '3', DEMO_PODS.filter((pod) => (pod as Owned).metadata?.ownerReferences?.[0]?.name === name).length));
+    if (meta.app === 'api') out.push(make('api-5c7d8e9f0', { ...meta, hash: '5c7d8e9f0' }, '2', 0, 'ghcr.io/mjolnir/api:1.4.1'));
+    if (meta.app === 'worker') out.push(make('worker-58f0a1b2c', { ...meta, hash: '58f0a1b2c' }, '2', 0, 'ghcr.io/mjolnir/worker:2.0.9'));
+  }
+  return out;
+})();
+
 /** Every kind the demo cluster answers for, keyed by lowercase plural. */
 export const DEMO_RESOURCES: Readonly<Record<string, readonly KubeObject[]>> = {
   pods: DEMO_PODS,
+  replicasets: DEMO_REPLICASETS,
   nodes: DEMO_NODES,
   namespaces: DEMO_NAMESPACES,
   deployments: DEMO_DEPLOYMENTS,

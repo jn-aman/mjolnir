@@ -2,7 +2,7 @@
 
 Research notes feeding stage 2 of [MIGRATION.md](MIGRATION.md).
 
-## Licensing — read this first
+## Licensing, read this first
 
 | Project | License | What that means for Mjolnir |
 |---|---|---|
@@ -12,7 +12,7 @@ Research notes feeding stage 2 of [MIGRATION.md](MIGRATION.md).
 MPL-2.0 is file-level copyleft: any file containing Leapp code stays MPL-2.0 and
 carries source-disclosure obligations, even inside an otherwise-MIT project.
 Architecture and concepts are not copyrightable, so we can learn from the model
-freely — but every line in `@mjolnir/cloud` must be ours.
+freely, but every line in `@mjolnir/cloud` must be ours.
 
 ## Freelens
 
@@ -29,19 +29,19 @@ reassuring, and sharpens it in three places:
 | Freelens package | Lesson for Mjolnir |
 |---|---|
 | `kube-object` | Object modelling lives in its own package, isolated from UI. Matches `@mjolnir/schemas`. |
-| `list-layout` | **The important one.** One generic resource-list abstraction drives every resource type. It is how they support 40+ kinds without 40 components — and the reason the source app has a 704-line `ResourceViewer`. |
+| `list-layout` | **The important one.** One generic resource-list abstraction drives every resource type. It is how they support 40+ kinds without 40 components, and the reason the source app has a 704-line `ResourceViewer`. |
 | `metrics` | Metrics is its own package, not a field on each resource. Worth splitting out of `@mjolnir/k8s`. |
 | `logger` | Structured logging as a first-class package, not `console.log` scattered through routes. |
 | `routing` | Routes as data, which is what makes their command palette and deep links cheap. |
 
 ### Features worth taking
 
-1. **Hotbar / pinned clusters** — pin frequently used clusters for one-click switching. Directly useful given Mjolnir targets multi-account users.
-2. **kubectl version management per cluster** — bundle and select a kubectl matching the cluster version. Solves a real class of "works on my machine" bugs with older clusters.
-3. **Shell sync** — inherit the user's actual shell environment in the embedded terminal. A constant source of complaints in every tool that gets it wrong.
-4. **Download logs to file** — they treat it as a distinct feature with its own tests, not a `data:` URI afterthought.
+1. **Hotbar / pinned clusters**, pin frequently used clusters for one-click switching. Directly useful given Mjolnir targets multi-account users.
+2. **kubectl version management per cluster**, bundle and select a kubectl matching the cluster version. Solves a real class of "works on my machine" bugs with older clusters.
+3. **Shell sync**, inherit the user's actual shell environment in the embedded terminal. A constant source of complaints in every tool that gets it wrong.
+4. **Download logs to file**, they treat it as a distinct feature with its own tests, not a `data:` URI afterthought.
 5. **Namespace filtering as a global concern** rather than per-screen state.
-6. **Resource templates** — scaffolds for creating new objects from the UI.
+6. **Resource templates**, scaffolds for creating new objects from the UI.
 
 ### What to skip
 
@@ -60,7 +60,7 @@ MPL-2.0 · 1,774 stars · last push 2026-05-16 · TypeScript · Electron
 Noovolari, the company behind it, [shut down](https://blog.leapp.cloud/noovolari-has-officially-come-to-an-end);
 the commercial Pro and Team products went offline on 30 June 2024. The OSS repo
 is still maintained but the cadence has slowed. Their users need a new home, and
-nobody has combined cluster viewing with cloud access management in one app —
+nobody has combined cluster viewing with cloud access management in one app -
 which is the clearest differentiator Mjolnir has against Lens, Freelens and k9s.
 
 ### The domain model to learn from
@@ -71,11 +71,11 @@ a cloud account. It carries `sessionId`, `status`, `type`, `startDateTime`,
 
 Session types observed in their model:
 
-- `awsIamUser` — long-lived keys, exchanged for short-lived credentials
-- `awsIamRoleFederated` — SAML assertion against an IdP URL
-- `awsIamRoleChained` — assume a role *using another session's credentials*
-- `awsSsoRole` — provisioned automatically from an AWS SSO integration
-- `azure` — subscription and tenant based
+- `awsIamUser`, long-lived keys, exchanged for short-lived credentials
+- `awsIamRoleFederated`, SAML assertion against an IdP URL
+- `awsIamRoleChained`, assume a role *using another session's credentials*
+- `awsSsoRole`, provisioned automatically from an AWS SSO integration
+- `azure`, subscription and tenant based
 - plus `google`, `alibaba`, `localstack`
 
 ### The three ideas worth adopting
@@ -90,7 +90,7 @@ Session types observed in their model:
    generate fifty sessions without fifty pieces of configuration.
 3. **Named profiles as the write target.** Sessions materialise into
    `~/.aws/credentials` profiles. Every other tool in the user's terminal keeps
-   working, because the integration point is the file AWS already reads —
+   working, because the integration point is the file AWS already reads -
    no shell wrapper, no environment injection.
 
 ### Security model to match or beat
@@ -105,11 +105,11 @@ call fails*, rather than letting the user discover it through an error.
 
 ## Effect on the plan
 
-- `@mjolnir/schemas` stays as designed — Freelens validates isolating object
+- `@mjolnir/schemas` stays as designed, Freelens validates isolating object
   modelling from UI.
 - **Add `@mjolnir/metrics` and `@mjolnir/logger`** as separate packages in stage 2.
 - **Build the generic list-layout abstraction early**, before porting resource
   screens. Porting first and abstracting later reproduces the 704-line component
   we are trying to escape.
 - `@mjolnir/cloud` models `Session` and `Integration` as distinct concepts from day
-  one, with chaining as a parent pointer — written from scratch, MPL-clean.
+  one, with chaining as a parent pointer, written from scratch, MPL-clean.

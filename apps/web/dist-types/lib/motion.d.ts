@@ -4,7 +4,7 @@ import type { Variants } from 'motion/react';
  *
  * **The rule: animate the container, never the content.** Panels, dialogs, tabs
  * and toasts animate, because their movement tells you where they came from.
- * Rows in a log, a table or a resource list do not — they appear.
+ * Rows in a log, a table or a resource list do not, they appear.
  *
  * That is not a taste call. Easing data into view misrepresents when it
  * arrived, and this is a tool people use to establish what happened when. There

@@ -95,7 +95,7 @@ export function verifyWebhookSignature(options: VerifyWebhookOptions): VerifyRes
     .update(`${parsed.timestamp}:${body}`, 'utf8')
     .digest('hex');
 
-  // Check every h1 — during a secret rotation Paddle sends more than one.
+  // Check every h1, during a secret rotation Paddle sends more than one.
   for (const hash of parsed.hashes) {
     if (equalsConstantTime(expected, hash)) return { ok: true };
   }

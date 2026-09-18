@@ -69,7 +69,7 @@ export function redactString(input: string): string {
  *
  * Cycles are replaced with a marker rather than throwing, because a logger that
  * can crash the caller is worse than one that loses detail. Depth is capped for
- * the same reason — Kubernetes objects nest deeply and a managed-fields blob is
+ * the same reason, Kubernetes objects nest deeply and a managed-fields blob is
  * never what anyone wanted in a log.
  */
 export function redact(value: unknown, maxDepth = 8): unknown {

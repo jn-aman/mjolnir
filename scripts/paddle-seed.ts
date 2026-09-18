@@ -5,7 +5,7 @@
  * this twice does not leave two products competing for the same customers.
  *
  * The catalogue was first created through an interactive session, which is fine
- * for sandbox and unacceptable for production — a price that exists only
+ * for sandbox and unacceptable for production, a price that exists only
  * because someone once ran a command by hand is a price nobody can recreate
  * after an accident. This script is the reproducible version.
  *
@@ -23,7 +23,7 @@ interface PlanSpec {
   readonly plan: 'monthly' | 'annual' | 'lifetime';
   readonly name: string;
   readonly description: string;
-  /** Lowest denomination — cents for USD. */
+  /** Lowest denomination, cents for USD. */
   readonly amount: string;
   readonly billingCycle: { interval: 'month' | 'year'; frequency: number } | null;
   readonly customData: Record<string, unknown>;
@@ -135,7 +135,7 @@ async function upsertPrices(productId: string): Promise<Record<string, string>> 
     const match = existing.find((price) => price.custom_data?.plan === spec.plan);
 
     if (match) {
-      // Paddle does not allow changing the amount of a live price — doing so
+      // Paddle does not allow changing the amount of a live price, doing so
       // would silently rewrite what existing subscribers pay. Only the safe
       // fields are patched; a price change means creating a new price.
       await call<Price>(`/prices/${match.id}`, {
@@ -169,7 +169,7 @@ async function main(): Promise<void> {
   console.log(`Seeding Paddle catalogue in ${environment} (${BASE_URL})`);
 
   const product = await upsertProduct();
-  console.log(`product ${product.id} — ${product.name}`);
+  console.log(`product ${product.id}, ${product.name}`);
 
   const ids = await upsertPrices(product.id);
   console.log('\nPrice ids:');

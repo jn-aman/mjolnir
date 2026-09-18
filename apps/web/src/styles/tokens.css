@@ -54,7 +54,7 @@
   --log-pod-c: #4ed493;
   --log-pod-d: #f0a84e;
 
-  /* Chart series. Fixed order, never cycled — a filtered chart must not
+  /* Chart series. Fixed order, never cycled, a filtered chart must not
      repaint the series that survive. Validated for CVD separation against
      this surface; adjacent pairs sit in the warn band, so every series also
      carries a direct label. */
@@ -144,6 +144,6 @@
   --radius-xl: 16px;
   --radius-full: 999px;
 
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: 'Geist Variable', 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }

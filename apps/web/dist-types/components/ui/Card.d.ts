@@ -6,7 +6,7 @@ interface CardProps {
     readonly children: ReactNode;
     readonly className?: string;
 }
-/** A panel. Border and surface only — no shadow at rest, no gradient, ever. */
+/** A panel. Border and surface only, no shadow at rest, no gradient, ever. */
 export declare function Card({ title, subtitle, actions, children, className }: CardProps): import("react").JSX.Element;
 interface StatProps {
     readonly label: string;

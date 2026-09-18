@@ -1,3 +1,5 @@
+import { copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
+import { formatDateTime, formatHourMinute, useTimezone } from '../lib/time.ts';
 import { bisector, extent, max as d3max } from 'd3-array';
 import { scaleLinear, scaleTime } from 'd3-scale';
 import { area, curveMonotoneX, line } from 'd3-shape';
@@ -31,7 +33,7 @@ export interface Series {
   readonly points: readonly Point[];
 }
 
-/** A period worth calling out — an incident, a deploy, a restart. */
+/** A period worth calling out, an incident, a deploy, a restart. */
 export interface Band {
   readonly from: number;
   readonly to: number;
@@ -65,6 +67,7 @@ export function TimeSeries({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
+  const zone = useTimezone((state) => state.zone);
   const [focused, setFocused] = useState<string | null>(null);
 
   const attach = useCallback((node: HTMLDivElement | null) => {
@@ -119,19 +122,30 @@ export function TimeSeries({
     };
   }, [series, width, height]);
 
-  const onMove = (event: React.PointerEvent<SVGSVGElement>) => {
+  const onMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     const points = series[0]?.points;
     if (!points?.length) return;
-    const t = x.invert(event.clientX - box.left).getTime();
+    const px = event.clientX - box.left;
+    // Outside the plot area there is nothing to point at; clear rather than
+    // pinning the crosshair to an edge.
+    if (px < PADDING.left || px > width - PADDING.right) {
+      setHover(null);
+      return;
+    }
+    const t = x.invert(px).getTime();
     setHover(Math.min(Math.max(bisect([...points], t), 0), points.length - 1));
   };
+
+  // Time ticks along the bottom: a chart of the last hour with no clock on it
+  // cannot answer "when", which is the only question a time chart is for.
+  const timeTicks = x.ticks(4);
 
   /**
    * Overlapping bands are merged.
    *
    * Two warnings a few seconds apart produce two bands in almost the same
-   * place, and their labels then draw on top of each other — unreadable, and
+   * place, and their labels then draw on top of each other, unreadable, and
    * worse than showing nothing. Merged bands carry a combined label instead.
    */
   const mergedBands = useMemo(() => {
@@ -158,14 +172,17 @@ export function TimeSeries({
   const id = useMemo(() => `ts-${Math.random().toString(36).slice(2, 8)}`, []);
 
   return (
-    <div ref={attach} className="relative w-full">
+    <div
+      ref={attach}
+      className="relative w-full"
+      onPointerMove={onMove}
+      onPointerLeave={() => setHover(null)}
+    >
       <svg
         width={width}
         height={height}
         role="img"
         aria-label={ariaLabel}
-        onPointerMove={onMove}
-        onPointerLeave={() => setHover(null)}
         className="block touch-none select-none"
       >
         <defs>
@@ -224,6 +241,18 @@ export function TimeSeries({
           );
         })}
 
+        {timeTicks.map((tick) => (
+          <text
+            key={tick.getTime()}
+            x={x(tick)}
+            y={height - 6}
+            textAnchor="middle"
+            className="fill-[var(--text-tertiary)] font-mono text-[9.5px] tabular-nums"
+          >
+            {formatHourMinute(tick, zone)}
+          </text>
+        ))}
+
         {ticks.map((tick) => (
           <g key={tick}>
             <line
@@ -246,16 +275,17 @@ export function TimeSeries({
           </g>
         ))}
 
-        {areas.map((entry, index) => (
-          <path
-            key={entry.name}
-            d={entry.d}
-            fill={`url(#${id}-${index})`}
-            opacity={focused && focused !== entry.name ? 0.25 : 1}
-            className="mjolnir-fade-in"
-            style={{ transition: 'opacity 160ms linear', animationDelay: `${180 + index * 70}ms` }}
-          />
-        ))}
+        {series.length === 1
+          ? areas.map((entry, index) => (
+              <path
+                key={entry.name}
+                d={entry.d}
+                fill={`url(#${id}-${index})`}
+                className="mjolnir-fade-in"
+                style={{ animationDelay: `${180 + index * 70}ms` }}
+              />
+            ))
+          : null}
 
         {hover !== null && hovered ? (
           <line
@@ -301,7 +331,7 @@ export function TimeSeries({
           </g>
         ))}
 
-        {/* Direct labels — the secondary encoding these hues require, and the
+        {/* Direct labels, the secondary encoding these hues require, and the
             easiest thing to click when you want the node behind a line. */}
         {paths.map((path) =>
           path.last ? (
@@ -341,26 +371,62 @@ export function TimeSeries({
           : null}
       </svg>
 
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 px-1" data-testid="chart-legend">
+        {series.map((entry, index) => {
+          const latest = entry.points.at(-1);
+          const dim = focused !== null && focused !== entry.name;
+          const legendMenu: MenuEntry[] = [
+            ...(onSelect ? [{ id: 'open', label: `Open ${entry.name}`, onSelect: () => onSelect(entry.name) }] : []),
+            { id: 'solo', label: focused === entry.name ? 'Show all series' : 'Focus this series', onSelect: () => setFocused(focused === entry.name ? null : entry.name) },
+            SEPARATOR,
+            ...copyEntry('copy-name', 'Copy series name', entry.name),
+            ...copyEntry('copy-value', 'Copy latest value', latest ? format(latest.v) : undefined),
+          ];
+          return (
+            <Menu key={entry.name} label={entry.name} entries={legendMenu} testId="legend-menu">
+            <button
+              type="button"
+              disabled={!onSelect}
+              onPointerEnter={() => setFocused(entry.name)}
+              onPointerLeave={() => setFocused(null)}
+              onClick={() => onSelect?.(entry.name)}
+              className={`flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-opacity duration-150 ${
+                onSelect ? 'cursor-pointer hover:bg-hover' : 'cursor-default'
+              }`}
+              style={{ opacity: dim ? 0.4 : 1 }}
+            >
+              <span
+                aria-hidden
+                className="h-[3px] w-[14px] shrink-0 rounded-full"
+                style={{ background: `var(${SERIES_VARS[index % SERIES_VARS.length]})` }}
+              />
+              <span className="font-mono text-[11px] text-secondary">{entry.name}</span>
+              {latest ? (
+                <span className="font-mono text-[11px] tabular-nums text-primary">{format(latest.v)}</span>
+              ) : null}
+            </button>
+            </Menu>
+          );
+        })}
+      </div>
+
       {hover !== null && hovered ? (
         <div
           role="status"
-          className="absolute top-3 z-10 rounded-lg border border-line bg-overlay p-2 shadow-[var(--shadow-lg)]"
+          className="pointer-events-none absolute top-3 z-10 rounded-lg border border-line bg-overlay p-2 shadow-[var(--shadow-lg)]"
           style={{ left: Math.min(Math.max(x(hovered.t) + 12, 8), Math.max(8, width - 210)) }}
         >
           <div className="mb-1.5 px-1 font-mono text-[10px] text-tertiary">
-            {new Date(hovered.t).toLocaleTimeString()}
+            {formatDateTime(hovered.t, zone)}
           </div>
           {[...series]
             .map((entry, index) => ({ entry, index, point: entry.points[hover] }))
             .sort((a, b) => (b.point?.v ?? 0) - (a.point?.v ?? 0))
             .map(({ entry, index, point }) =>
               point ? (
-                <button
+                <div
                   key={entry.name}
-                  type="button"
-                  onClick={() => onSelect?.(entry.name)}
-                  disabled={!onSelect}
-                  className="flex w-full items-center gap-2 whitespace-nowrap rounded-sm px-1 py-0.5 text-left hover:bg-hover disabled:hover:bg-transparent"
+                  className="flex w-full items-center gap-2 whitespace-nowrap px-1 py-0.5"
                 >
                   <span
                     aria-hidden
@@ -371,7 +437,7 @@ export function TimeSeries({
                   <span className="font-mono text-[11px] tabular-nums text-primary">
                     {format(point.v)}
                   </span>
-                </button>
+                </div>
               ) : null,
             )}
         </div>
@@ -412,7 +478,7 @@ export function Sparkline({
       .curve(curveMonotoneX)([...points]);
   }, [points, width, height]);
 
-  if (!d) return <span className="text-[12.5px] text-tertiary">—</span>;
+  if (!d) return <span className="text-[12.5px] text-tertiary">-</span>;
 
   return (
     <svg width={width} height={height} aria-hidden className="block overflow-visible">

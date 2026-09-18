@@ -14,7 +14,7 @@ interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
 /**
  * A labelled input.
  *
- * The label is never optional — a placeholder disappears exactly when someone
+ * The label is never optional, a placeholder disappears exactly when someone
  * needs it, which is while they are typing. `hideLabel` hides it visually and
  * keeps it in the accessibility tree.
  */

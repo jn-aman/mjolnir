@@ -1,3 +1,5 @@
+import type { Duplex } from 'node:stream';
+import { PortForward } from '@kubernetes/client-node';
 import type { KubeConfig } from '@kubernetes/client-node';
 import {
   ClusterTransport,
@@ -28,6 +30,16 @@ const log = logger.child('clusters');
 export interface ClusterConnection {
   readonly context: ClusterContext;
   json<T = unknown>(path: string): Promise<T>;
+  /** PUT a whole object. Returns what the API server stored. */
+  replace<T = unknown>(path: string, body: unknown): Promise<T>;
+  /** DELETE an object. The API server answers with a Status or the object. */
+  remove<T = unknown>(path: string): Promise<T>;
+  /** JSON merge patch (RFC 7386): only the fields given change. */
+  patch<T = unknown>(path: string, body: unknown): Promise<T>;
+  /** POST: a new object into a collection, or a subresource such as eviction. */
+  create<T = unknown>(path: string, body: unknown): Promise<T>;
+  /** Pipes one TCP connection to a pod port, the wire behind `kubectl port-forward`. */
+  forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void>;
   watch(resource: ResourceDefinition, namespace?: string): ResourceSource;
   streamLogs(options: LogStreamOptions): AsyncGenerator<LogLine, void, undefined>;
   readLogs(options: Omit<LogStreamOptions, 'follow'>): Promise<LogLine[]>;
@@ -54,6 +66,35 @@ class LiveConnection implements ClusterConnection {
 
   json<T = unknown>(path: string): Promise<T> {
     return this.#transport.json<T>(path);
+  }
+
+  replace<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.#transport.json<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  remove<T = unknown>(path: string): Promise<T> {
+    return this.#transport.json<T>(path, { method: 'DELETE' });
+  }
+
+  patch<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.#transport.json<T>(path, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      contentType: 'application/merge-patch+json',
+    });
+  }
+
+  create<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.#transport.json<T>(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      contentType: 'application/json',
+    });
+  }
+
+  async forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void> {
+    const forwarder = new PortForward(this.config);
+    await forwarder.portForward(namespace, pod, [port], socket, null, socket);
   }
 
   /**
@@ -111,6 +152,32 @@ class DemoConnection implements ClusterConnection {
     return this.#transport.json<T>(path);
   }
 
+  // Writes land in the demo store, so what you did is what you see next.
+  replace<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.#transport.replace<T>(path, body);
+  }
+
+  remove<T = unknown>(path: string): Promise<T> {
+    return this.#transport.remove<T>(path);
+  }
+
+  patch<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.#transport.patch<T>(path, body);
+  }
+
+  create<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.#transport.create<T>(path, body);
+  }
+
+  async forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void> {
+    // The demo pod answers every request with one page, so the forward can be
+    // opened in a browser and seen to work.
+    socket.once('data', () => {
+      const body = `<!doctype html><title>${pod}</title><body style="font:14px system-ui;padding:32px"><h1>${pod}:${port}</h1><p>Forwarded from the Mjolnir demo cluster (${namespace}).</p></body>`;
+      socket.end(`HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`);
+    });
+  }
+
   watch(resource: ResourceDefinition, namespace?: string): ResourceSource {
     const key = `${resource.kind}/${namespace ?? '*'}`;
     const existing = this.#watches.get(key);
@@ -150,7 +217,7 @@ class DemoConnection implements ClusterConnection {
 /**
  * Every cluster the user has open.
  *
- * Connections are lazy — a kubeconfig with forty contexts must not open forty
+ * Connections are lazy, a kubeconfig with forty contexts must not open forty
  * connections, because most are clusters nobody is looking at and some are
  * VPN-only endpoints that would each cost a timeout.
  */

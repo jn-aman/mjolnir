@@ -1,7 +1,9 @@
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { motion } from 'motion/react';
-import { Plus } from 'lucide-react';
+import { Plus, Settings, Wrench } from 'lucide-react';
 import type { ClusterContext } from '@mjolnir/k8s';
+import { TOOLS } from '../lib/tools.ts';
+import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 
 /**
  * The cluster rail.
@@ -9,7 +11,7 @@ import type { ClusterContext } from '@mjolnir/k8s';
  * Every cluster you have is one tile, always visible, so switching is one click
  * from anywhere rather than a dropdown you have to open first. The selection
  * marker is a single element that *moves* between tiles rather than one bar
- * fading out while another fades in — which is what makes the switch read as a
+ * fading out while another fades in, which is what makes the switch read as a
  * movement rather than a repaint.
  */
 
@@ -24,7 +26,7 @@ const PROVIDER_TINT: Record<string, string> = {
   other: 'var(--text-tertiary)',
 };
 
-/** Two letters from the context name — "prod-eu-west" becomes "PE". */
+/** Two letters from the context name, "prod-eu-west" becomes "PE". */
 function initials(name: string): string {
   const parts = name.split(/[-_./]/).filter(Boolean);
   if (parts.length === 1) return (parts[0] ?? '').slice(0, 2).toUpperCase();
@@ -34,11 +36,18 @@ function initials(name: string): string {
 interface ClusterRailProps {
   readonly contexts: readonly ClusterContext[];
   readonly current: string | null;
+  /** The open workspace, if one is; the cluster marker steps aside for it. */
+  readonly workspace: string | null;
   readonly onSelect: (name: string) => void;
+  readonly onWorkspace: (id: string) => void;
   readonly onAdd: () => void;
+  readonly onSettings: () => void;
+  readonly settingsActive: boolean;
 }
 
-export function ClusterRail({ contexts, current, onSelect, onAdd }: ClusterRailProps) {
+const WORKSPACES = TOOLS.filter((tool) => tool.area === 'workspace');
+
+export function ClusterRail({ contexts, current, workspace, onSelect, onWorkspace, onAdd, onSettings, settingsActive }: ClusterRailProps) {
   return (
     <nav
       data-testid="cluster-rail"
@@ -46,9 +55,20 @@ export function ClusterRail({ contexts, current, onSelect, onAdd }: ClusterRailP
       className="flex w-[56px] shrink-0 flex-col items-center gap-1.5 border-r border-line bg-sunken py-3"
     >
       {contexts.map((context) => {
-        const active = context.name === current;
+        const active = context.name === current && workspace === null;
+        const menu: MenuEntry[] = [
+          { id: 'connect', label: active ? 'Connected' : 'Switch to this cluster', disabled: active, onSelect: () => onSelect(context.name) },
+          askEntry('Ask what is wrong here', `Use context ${context.name}. What is wrong in this cluster right now? Start with whats_wrong, then dig into the worst thing.`),
+          SEPARATOR,
+          ...copyEntry('copy-context', 'Copy context name', context.name),
+          ...copyEntry('copy-server', 'Copy server URL', context.server),
+          ...copyEntry('copy-kubectl', 'Copy kubectl --context', `kubectl --context ${context.name}`),
+          SEPARATOR,
+          { id: 'settings', label: 'Kubeconfig settings…', onSelect: onAdd },
+        ];
         return (
           <Tooltip.Root key={context.name}>
+            <Menu label={context.name} entries={menu} testId="cluster-menu">
             <Tooltip.Trigger asChild>
               <button
                 type="button"
@@ -87,6 +107,7 @@ export function ClusterRail({ contexts, current, onSelect, onAdd }: ClusterRailP
                 />
               </button>
             </Tooltip.Trigger>
+            </Menu>
             <Tooltip.Portal>
               <Tooltip.Content
                 side="right"
@@ -126,6 +147,71 @@ export function ClusterRail({ contexts, current, onSelect, onAdd }: ClusterRailP
           >
             Add a kubeconfig
           </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+
+      <div className="flex-1" />
+      <div className="my-1 h-px w-[28px] bg-[var(--border-default)]" />
+
+      {/* The Toolbox: everything that is not about one cluster. */}
+      <Tooltip.Root>
+        <Menu label="Toolbox" entries={WORKSPACES.map((space) => ({ id: space.id, label: `Open ${space.label}`, onSelect: () => onWorkspace(space.id) }))} testId="workspace-menu">
+        <Tooltip.Trigger asChild>
+          <button
+            type="button"
+            data-testid="workspace-toolbox"
+            data-active={workspace !== null}
+            onClick={() => onWorkspace(workspace ?? 'cloud')}
+            aria-label="Toolbox"
+            aria-current={workspace !== null ? 'true' : undefined}
+            className="group relative flex h-[36px] w-[36px] items-center justify-center"
+          >
+            {workspace !== null ? (
+              <motion.span
+                layoutId="cluster-rail-marker"
+                aria-hidden
+                className="absolute -left-3 h-[20px] w-[3px] rounded-r-full bg-accent"
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+              />
+            ) : null}
+            <motion.span
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+              className={`flex h-full w-full items-center justify-center rounded-lg border ${
+                workspace !== null ? 'border-transparent bg-pressed text-accent' : 'border-line bg-raised text-tertiary group-hover:border-strong group-hover:text-secondary'
+              }`}
+            >
+              <Wrench size={16} strokeWidth={1.8} aria-hidden />
+            </motion.span>
+          </button>
+        </Tooltip.Trigger>
+        </Menu>
+        <Tooltip.Portal>
+          <Tooltip.Content side="right" sideOffset={8} className="rounded-md border border-line bg-overlay px-2 py-1 shadow-[var(--shadow-md)]">
+            <div className="text-[11.5px] text-primary">Toolbox</div>
+            <div className="text-[10.5px] text-tertiary">cloud access, containers, storage, databases…</div>
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <motion.button
+            type="button"
+            data-testid="rail-settings"
+            onClick={onSettings}
+            aria-label="Mjolnir settings"
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+            className={`mt-1 flex h-[36px] w-[36px] items-center justify-center rounded-lg ${settingsActive ? 'bg-pressed text-accent' : 'text-tertiary hover:bg-hover hover:text-secondary'}`}
+          >
+            <Settings size={16} strokeWidth={1.8} />
+          </motion.button>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content side="right" sideOffset={8} className="rounded-md border border-line bg-overlay px-2 py-1 text-[11.5px] text-primary shadow-[var(--shadow-md)]">Mjolnir settings</Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>
     </nav>

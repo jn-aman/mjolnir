@@ -1,5 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Check, ChevronDown } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /**
@@ -11,7 +12,7 @@ import type { ReactNode } from 'react';
  * amount of styling the closed state fixes the open one, because the menu is
  * drawn by the OS and not by us.
  *
- * Radix gives us the menu as real DOM — so it inherits the tokens — while
+ * Radix gives us the menu as real DOM, so it inherits the tokens, while
  * keeping the keyboard and screen-reader behaviour a native select has and a
  * hand-rolled div never does: typeahead, arrow keys, Home/End, Escape, focus
  * return, and a correct `aria` tree.
@@ -20,7 +21,7 @@ import type { ReactNode } from 'react';
 export interface SelectOption {
   readonly value: string;
   readonly label: string;
-  /** Rendered to the right of the label — a count, a status, a hint. */
+  /** Rendered to the right of the label, a count, a status, a hint. */
   readonly hint?: string | undefined;
   readonly icon?: ReactNode;
 }
@@ -48,9 +49,23 @@ export function Select({
   mono = false,
 }: SelectProps) {
   const selected = options.find((option) => option.value === value);
+  // Every list gets a search box, however short: typing is the one gesture
+  // that works the same on a 3-item list and a 400-item one.
+  const searchable = true;
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? options.filter((option) => `${option.label} ${option.value} ${option.hint ?? ''}`.toLowerCase().includes(needle)) : options;
 
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root
+      onOpenChange={(open) => {
+        if (!open) setQuery('');
+        // Radix focuses the first item on open; the search box takes over a tick later.
+        else if (searchable) setTimeout(() => searchRef.current?.focus(), 0);
+      }}
+    >
       <DropdownMenu.Trigger asChild>
         {trigger ?? (
           <button
@@ -76,6 +91,7 @@ export function Select({
 
       <DropdownMenu.Portal>
         <DropdownMenu.Content
+          ref={contentRef}
           align={align}
           sideOffset={5}
           collisionPadding={8}
@@ -84,10 +100,35 @@ export function Select({
           style={{
             // Grows from the trigger it belongs to, so the eye keeps its place.
             transformOrigin: 'var(--radix-dropdown-menu-content-transform-origin)',
-            animation: 'mjolnir-menu-in 160ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          {options.map((option) => {
+          {searchable ? (
+            <div className="sticky -top-1 z-10 -mx-1 -mt-1 mb-1 border-b border-line bg-overlay p-1.5">
+              <div className="flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2">
+                <Search size={12} strokeWidth={2} aria-hidden className="shrink-0 text-tertiary" />
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Typing must not trigger the menu's typeahead; arrows hand off to the list.
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      contentRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+                      return;
+                    }
+                    if (event.key !== 'Escape' && event.key !== 'Tab') event.stopPropagation();
+                  }}
+                  placeholder={`Search ${options.length}…`}
+                  aria-label={`Search ${label}`}
+                  data-testid={testId ? `${testId}-search` : undefined}
+                  className="h-[28px] w-full bg-transparent text-[12.5px] text-primary outline-none placeholder:text-tertiary"
+                />
+              </div>
+            </div>
+          ) : null}
+          {shown.length === 0 ? <div className="px-2 py-2 text-[12px] text-tertiary">Nothing matches.</div> : null}
+          {shown.map((option) => {
             const active = option.value === value;
             return (
               <DropdownMenu.Item
