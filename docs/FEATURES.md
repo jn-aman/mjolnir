@@ -97,6 +97,42 @@ without the ceremony.
 **New: saved views.** Filter, sort and column configuration persisted per
 resource kind, so "the way I look at pods" survives a restart.
 
+## In-cluster data browsers
+
+Nobody in this category lets you see the *data* — Lens, Freelens and k9s all
+stop at the control plane. You can see that a MinIO pod is running and read its
+logs, but to look at what is actually in a bucket you leave the app, port-forward
+by hand, and reach for `mc` or a browser.
+
+**Object storage first**, because it is the most common and the easiest to do
+well. Detect S3-compatible services in the cluster — MinIO, RustFS, SeaweedFS,
+Ceph RGW — from their images, ports and labels, then offer to open them.
+
+| Step | How it works |
+|---|---|
+| Detection | Known images and container ports, plus an explicit annotation for anything unusual. Never a guess that costs the user anything if wrong. |
+| Credentials | Read from the Secret the workload already references (`MINIO_ROOT_USER` and friends), with a manual override. Never stored by Mjolnir — resolved per session and held in the keychain if the user asks. |
+| Transport | Port-forward the service, speak S3 over the forward. No ingress required, no credentials leaving the machine. |
+| Browsing | Buckets, prefixes as folders, object metadata, sizes and modified times. |
+| Preview | Text, JSON, CSV, images and Parquet headers inline. Anything else offers download. |
+| Actions | Download, upload, delete, copy an object's `s3://` path or a presigned URL. |
+
+**Why this is worth building.** The reason people keep a terminal open next to a
+cluster UI is that the UI stops at the edge of the data. Every time Mjolnir can
+answer "what is actually in there?" without a context switch, it replaces a tool
+rather than sitting beside one.
+
+**Where the line goes.** Read-only browsing and preview are free — it is the
+part that makes people switch. Writes, deletes, uploads and credential
+management are Pro, on the same principle as Argo CD: looking is free, acting on
+production is not.
+
+**The pattern generalises.** Postgres, Redis, Kafka and Elasticsearch all have
+the same shape — a service in the cluster, credentials in a Secret, a protocol
+worth a viewer. Object storage is first because the payoff is highest and the
+protocol is simplest. The detection and port-forward machinery is built once and
+reused.
+
 ## Menu bar extra
 
 A status item that answers "is anything wrong?" without opening the window.
