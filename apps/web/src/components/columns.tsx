@@ -560,6 +560,27 @@ const DOCKER_NETWORK_COLUMNS: Array<Column<DockerNetworkItem>> = [
   ageColumn<DockerNetworkItem>(),
 ];
 
+interface HelmItem extends KubeItem {
+  spec?: { chart?: { name?: string; version?: string; appVersion?: string }; revision?: number };
+  status?: { status?: string; description?: string };
+}
+const HELM_COLUMNS: Array<Column<HelmItem>> = [
+  name<HelmItem>(),
+  namespace<HelmItem>(),
+  {
+    id: 'status',
+    priority: 30,
+    header: 'Status',
+    width: 'minmax(110px, 1fr)',
+    content: (r) => <StatusChip status={r.status?.status ?? 'unknown'} tone={r.status?.status === 'deployed' ? 'ok' : r.status?.status === 'failed' ? 'error' : r.status?.status === 'superseded' ? 'neutral' : 'warn'} />,
+    sortBy: (r) => r.status?.status ?? '',
+  },
+  { id: 'chart', priority: 40, header: 'Chart', width: 'minmax(180px, 2fr)', content: (r) => <span className="truncate font-mono text-[12px] text-secondary">{r.spec?.chart?.name}-{r.spec?.chart?.version}</span>, sortBy: (r) => r.spec?.chart?.name ?? '', searchText: (r) => r.spec?.chart?.name },
+  { id: 'app', priority: 50, header: 'App version', width: 'minmax(110px, 1fr)', content: (r) => <span className="truncate font-mono text-[12px] text-tertiary">{r.spec?.chart?.appVersion ?? '-'}</span> },
+  { id: 'revision', priority: 60, header: 'Revision', width: '84px', align: 'right', content: (r) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{r.spec?.revision ?? '-'}</span>, sortBy: (r) => r.spec?.revision ?? 0 },
+  { ...ageColumn<HelmItem>(), header: 'Updated' },
+];
+
 const GENERIC_COLUMNS: Array<Column<KubeItem>> = [name(), namespace(), ageColumn()];
 
 const BY_KIND: Record<string, Array<Column<never>>> = {
@@ -568,6 +589,7 @@ const BY_KIND: Record<string, Array<Column<never>>> = {
   StatefulSet: DEPLOYMENT_COLUMNS as Array<Column<never>>,
   DaemonSet: DEPLOYMENT_COLUMNS as Array<Column<never>>,
   Node: NODE_COLUMNS as Array<Column<never>>,
+  HelmRelease: HELM_COLUMNS as Array<Column<never>>,
   DockerContainer: DOCKER_CONTAINER_COLUMNS as Array<Column<never>>,
   DockerImage: DOCKER_IMAGE_COLUMNS as Array<Column<never>>,
   DockerVolume: DOCKER_VOLUME_COLUMNS as Array<Column<never>>,

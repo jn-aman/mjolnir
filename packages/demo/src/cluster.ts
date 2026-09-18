@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib';
 import type { KubeObject } from '@mjolnir/schemas';
 
 /**
@@ -423,6 +424,47 @@ export const DEMO_CONFIGMAPS: readonly KubeObject[] = [
   },
 ];
 
+/** A Helm 3 release Secret, encoded the way Helm encodes it: gzip, base64, then the Secret's base64. */
+function helmReleaseSecret(namespace: string, name: string, revision: number, status: string, chart: { name: string; version: string; appVersion: string }, values: Record<string, unknown>, deployedAgoMs: number): KubeObject {
+  const release = {
+    name,
+    namespace,
+    version: revision,
+    info: {
+      status,
+      first_deployed: iso(deployedAgoMs + hours(72)),
+      last_deployed: iso(deployedAgoMs),
+      description: status === 'deployed' ? 'Upgrade complete' : 'Superseded',
+      notes: `Get the application URL by running:\n  kubectl -n ${namespace} port-forward svc/${name} 8080:80\n`,
+    },
+    chart: { metadata: { name: chart.name, version: chart.version, appVersion: chart.appVersion, description: `${chart.name} chart` } },
+    config: values,
+    manifest: `---\n# Source: ${chart.name}/templates/deployment.yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${name}\n  namespace: ${namespace}\nspec:\n  replicas: ${String(values['replicaCount'] ?? 1)}\n`,
+  };
+  const encoded = Buffer.from(gzipSync(Buffer.from(JSON.stringify(release))).toString('base64')).toString('base64');
+  return {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    type: 'helm.sh/release.v1',
+    metadata: {
+      name: `sh.helm.release.v1.${name}.v${revision}`,
+      namespace,
+      uid: uid(),
+      creationTimestamp: iso(deployedAgoMs),
+      labels: { owner: 'helm', name, version: String(revision), status, modifiedAt: String(Math.floor((Date.now() - deployedAgoMs) / 1000)) },
+    },
+    data: { release: encoded },
+  } as KubeObject;
+}
+
+export const DEMO_HELM_SECRETS: readonly KubeObject[] = [
+  helmReleaseSecret('platform', 'grafana', 1, 'superseded', { name: 'grafana', version: '8.4.2', appVersion: '11.1.0' }, { replicaCount: 1, adminPassword: 'not-a-real-secret' }, hours(40)),
+  helmReleaseSecret('platform', 'grafana', 2, 'superseded', { name: 'grafana', version: '8.5.0', appVersion: '11.2.0' }, { replicaCount: 1, persistence: { enabled: true, size: '10Gi' } }, hours(20)),
+  helmReleaseSecret('platform', 'grafana', 3, 'deployed', { name: 'grafana', version: '8.5.1', appVersion: '11.2.2' }, { replicaCount: 1, persistence: { enabled: true, size: '10Gi' }, ingress: { enabled: true, hosts: ['grafana.platform.internal'] } }, hours(4)),
+  helmReleaseSecret('platform', 'minio', 1, 'deployed', { name: 'minio', version: '5.2.0', appVersion: 'RELEASE.2026-08-14T00-00-00Z' }, { mode: 'standalone', persistence: { size: '50Gi' } }, hours(30)),
+  helmReleaseSecret('payments', 'api', 5, 'deployed', { name: 'mjolnir-service', version: '1.9.0', appVersion: '1.5.0' }, { image: { tag: '1.5.0' }, replicaCount: 2 }, hours(6)),
+];
+
 export const DEMO_SECRETS: readonly KubeObject[] = [
   {
     apiVersion: 'v1',
@@ -490,5 +532,5 @@ export const DEMO_RESOURCES: Readonly<Record<string, readonly KubeObject[]>> = {
   services: DEMO_SERVICES,
   events: DEMO_EVENTS,
   configmaps: DEMO_CONFIGMAPS,
-  secrets: DEMO_SECRETS,
+  secrets: [...DEMO_SECRETS, ...DEMO_HELM_SECRETS],
 };

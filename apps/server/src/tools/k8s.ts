@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { load as parseYaml } from 'js-yaml';
-import { RESOURCES, collectionPath, resolveResource } from '@mjolnir/k8s';
+import { RESOURCES, collectionPath, resolveResource, decodeHelmReleases, latestHelmReleases, type HelmSecretShape } from '@mjolnir/k8s';
 import { demoNodeMetrics, demoPodMetrics, latest } from '@mjolnir/demo';
 import type { ToolContext, ToolDefinition } from './index.ts';
 
@@ -268,6 +268,25 @@ export const K8S_TOOLS = [
   tool('list_storage', 'PersistentVolumeClaims with their bound volumes, size and storage class.', 'read', { context: ctx, namespace: ns }, async (input, context) =>
     (await list(context, input.context, 'PersistentVolumeClaim', input.namespace)).map((pvc) => ({ name: pvc.metadata?.name, namespace: pvc.metadata?.namespace, phase: pvc.status?.['phase'], volume: pvc.spec?.['volumeName'], storageClass: pvc.spec?.['storageClassName'], capacity: (pvc.status?.['capacity'] as Record<string, string> | undefined)?.['storage'] })),
   ),
+
+  tool('list_helm_releases', 'Helm releases (current revision each) read from their release Secrets: chart, versions, status, when deployed.', 'read', { context: ctx, namespace: ns }, async (input, context) => {
+    const secrets = (await list(context, input.context, 'Secret', input.namespace)) as unknown as HelmSecretShape[];
+    return latestHelmReleases(secrets).map((r) => ({ name: r.name, namespace: r.namespace, revision: r.revision, status: r.status, chart: `${r.chart.name}-${r.chart.version}`, appVersion: r.chart.appVersion, lastDeployed: r.lastDeployed, description: r.description }));
+  }),
+
+  tool('get_helm_release', 'One Helm release: history of revisions, the values the user set, the rendered manifest and the notes. Like helm get all plus helm history.', 'read', { context: ctx, namespace: z.string(), name: z.string(), revision: z.number().int().optional() }, async (input, context) => {
+    const secrets = (await list(context, input.context, 'Secret', input.namespace)) as unknown as HelmSecretShape[];
+    const revisions = decodeHelmReleases(secrets).filter((r) => r.name === input.name && r.namespace === input.namespace);
+    if (!revisions.length) throw new Error(`no Helm release ${input.namespace}/${input.name}`);
+    const chosen = input.revision ? revisions.find((r) => r.revision === input.revision) : revisions[0];
+    if (!chosen) throw new Error(`no revision ${input.revision} of ${input.name}`);
+    return {
+      release: { name: chosen.name, namespace: chosen.namespace, revision: chosen.revision, status: chosen.status, chart: chosen.chart, lastDeployed: chosen.lastDeployed, description: chosen.description, notes: chosen.notes },
+      history: revisions.map((r) => ({ revision: r.revision, status: r.status, chart: `${r.chart.name}-${r.chart.version}`, appVersion: r.chart.appVersion, updated: r.lastDeployed, description: r.description })),
+      values: chosen.values,
+      manifest: chosen.manifest,
+    };
+  }),
 
   tool('list_crds', 'CustomResourceDefinitions installed in the cluster.', 'read', { context: ctx }, async (input, context) => {
     const connection = context.registry.connect(input.context);

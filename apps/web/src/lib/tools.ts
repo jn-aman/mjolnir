@@ -74,7 +74,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     icon: Package,
     tint: 'var(--series-1)',
     area: 'tools',
-    summary: 'Every release in the cluster with its history, and upgrades you can read before you run them.',
+    summary: 'Every release in the cluster with its history, values, manifest and notes, read from the release Secrets. Upgrades and rollbacks arrive with the Helm engine.',
     detail: [
       'Releases per namespace with chart, version, status and when they last deployed',
       'Values side by side with the chart defaults, edited in place',

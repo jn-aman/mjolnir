@@ -178,6 +178,23 @@ export interface ScanReport {
   findings: ScanFinding[];
 }
 
+export interface HelmReleaseSummary {
+  name: string;
+  namespace: string;
+  revision: number;
+  status: string;
+  chart: { name: string; version: string; appVersion?: string; description?: string };
+  firstDeployed?: string;
+  lastDeployed?: string;
+  description?: string;
+  secret: string;
+}
+export interface HelmReleaseFull extends HelmReleaseSummary {
+  notes?: string;
+  values: Record<string, unknown>;
+  manifest: string;
+}
+
 export interface ForwardRecord {
   readonly id: string;
   readonly context: string;
@@ -267,6 +284,11 @@ export const api = {
     removeNetwork: (ctx: string, id: string) => request<unknown>(`/api/docker/${encodeURIComponent(ctx)}/networks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     system: (ctx: string) => request<{ info: Record<string, unknown>; df: Record<string, unknown>; version: Record<string, unknown> }>(`/api/docker/${encodeURIComponent(ctx)}/system`),
     prune: (ctx: string, what: string) => request<{ ok: boolean; reclaimed: number }>(`/api/docker/${encodeURIComponent(ctx)}/prune/${what}`, { method: 'POST', body: '{}' }),
+  },
+  helm: {
+    releases: (context: string, namespace?: string) => request<{ releases: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`),
+    release: (context: string, namespace: string, name: string, revision?: number) =>
+      request<{ release: HelmReleaseFull; history: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${revision ? `?revision=${revision}` : ''}`),
   },
   scan: {
     status: () => request<{ available: boolean; path: string | null; install: string }>('/api/scan'),

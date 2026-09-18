@@ -99,3 +99,13 @@ the slot exists (menu entry, page or dock tab) and the operation is scheduled.
 - **Eviction, not delete, for drain.** Disruption budgets apply.
 - **Destructive verbs confirm; everything else just happens** and says what
   it did in a toast, with the failure message from the API server verbatim.
+
+## Helm
+
+| helm | Mjolnir | Status |
+|---|---|---|
+| `helm list` | Tools › Helm: every release with chart, app version, revision, status, updated | done (from release Secrets, no binary) |
+| `helm history` | release › History, click a revision to view it | done |
+| `helm get values` / `get manifest` / `get notes` | release › Values, Manifest, Overview | done |
+| `helm rollback` / `upgrade` / `uninstall` / `install` | copy the exact command from the row menu; in-app with the Helm engine | next |
+| `helm repo` / search | Tools › Helm › Repositories | next |

@@ -37,6 +37,7 @@ import { PortForwardDialog } from '../components/PortForwardDialog.tsx';
 import { ForwardsPanel } from '../components/ForwardsPanel.tsx';
 import { DockerModule, type DockerSection } from '../components/docker/DockerModule.tsx';
 import { ScanDialog } from '../components/ScanDialog.tsx';
+import { HelmPanel } from '../components/HelmPanel.tsx';
 
 export function App() {
   const theme = useTheme();
@@ -549,7 +550,9 @@ export function App() {
               <Overview context={context} onNavigate={navigate} />
             ) : null}
 
-            {view === 'tool' && tool?.id === 'portforward' ? (
+            {view === 'tool' && tool?.id === 'helm' && context ? (
+              <HelmPanel context={context} namespace={namespace || undefined} onNavigate={navigate} />
+            ) : view === 'tool' && tool?.id === 'portforward' ? (
               <ForwardsPanel onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })} />
             ) : view === 'workspace' && tool?.id === 'docker' ? (
               <DockerModule tool={tool} section={(section ?? 'containers') as DockerSection} onOpenDock={openDockerTab} />

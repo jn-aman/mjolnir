@@ -169,6 +169,27 @@ export interface ScanReport {
     fixable: number;
     findings: ScanFinding[];
 }
+export interface HelmReleaseSummary {
+    name: string;
+    namespace: string;
+    revision: number;
+    status: string;
+    chart: {
+        name: string;
+        version: string;
+        appVersion?: string;
+        description?: string;
+    };
+    firstDeployed?: string;
+    lastDeployed?: string;
+    description?: string;
+    secret: string;
+}
+export interface HelmReleaseFull extends HelmReleaseSummary {
+    notes?: string;
+    values: Record<string, unknown>;
+    manifest: string;
+}
 export interface ForwardRecord {
     readonly id: string;
     readonly context: string;
@@ -277,6 +298,15 @@ export declare const api: {
         prune: (ctx: string, what: string) => Promise<{
             ok: boolean;
             reclaimed: number;
+        }>;
+    };
+    helm: {
+        releases: (context: string, namespace?: string) => Promise<{
+            releases: HelmReleaseSummary[];
+        }>;
+        release: (context: string, namespace: string, name: string, revision?: number) => Promise<{
+            release: HelmReleaseFull;
+            history: HelmReleaseSummary[];
         }>;
     };
     scan: {
