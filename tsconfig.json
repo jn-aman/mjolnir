@@ -9,6 +9,9 @@
     },
     {
       "path": "./packages/k8s"
+    },
+    {
+      "path": "./packages/licensing"
     }
   ]
 }

@@ -7,7 +7,7 @@
     "name": "Aman Jain",
     "email": "jain.aman1497@gmail.com"
   },
-  "license": "MIT",
+  "license": "LicenseRef-Elastic-License-2.0",
   "type": "module",
   "workspaces": [
     "packages/*",
