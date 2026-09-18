@@ -38,7 +38,8 @@ interface StorageCardProps {
     /** Decodes one key of a Secret in this namespace. Absent means no access. */
     readonly onRevealSecret?: ((secret: string, key: string) => Promise<string>) | undefined;
     readonly onOpenBrowser?: (() => void) | undefined;
+    readonly context?: string | undefined;
 }
-export declare function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, onOpenBrowser }: StorageCardProps): import("react").JSX.Element;
+export declare function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, onOpenBrowser, context }: StorageCardProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=StorageCard.d.ts.map

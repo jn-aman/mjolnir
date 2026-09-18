@@ -22,6 +22,7 @@ import { licenceRoutes } from './routes/licence.ts';
 import { dockerRoutes } from './routes/docker.ts';
 import { scanRoutes } from './routes/scan.ts';
 import { helmRoutes } from './routes/helm.ts';
+import { storageRoutes } from './routes/storage.ts';
 import { SettingsStore } from './settings.ts';
 import { ForwardManager } from './forwards.ts';
 
@@ -64,6 +65,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/docker', dockerRoutes());
   app.use('/api/scan', scanRoutes());
   app.use('/api/helm', helmRoutes(registry));
+  app.use('/api/storage', storageRoutes(settings, forwards));
   app.use('/api/ai', aiRoutes(toolContext));
   app.use('/mcp', mcpRoutes(toolContext));
   app.use('/api/resources', resourceRoutes(registry));

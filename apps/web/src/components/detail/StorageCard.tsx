@@ -78,9 +78,26 @@ interface StorageCardProps {
   /** Decodes one key of a Secret in this namespace. Absent means no access. */
   readonly onRevealSecret?: ((secret: string, key: string) => Promise<string>) | undefined;
   readonly onOpenBrowser?: (() => void) | undefined;
+  readonly context?: string | undefined;
 }
 
-export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, onOpenBrowser }: StorageCardProps) {
+export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, onOpenBrowser, context }: StorageCardProps) {
+  /** Reads the keys (revealing from Secrets if needed) and opens the browser on a forwarded connection. */
+  const openBrowser = async () => {
+    const value = async (entry: EnvVar | undefined): Promise<string> => {
+      if (!entry) return '';
+      if (entry.value !== undefined) return entry.value;
+      const ref = entry.valueFrom?.secretKeyRef;
+      if (ref?.name && ref.key && onRevealSecret) return onRevealSecret(ref.name, ref.key);
+      return '';
+    };
+    try {
+      const [accessKey, secretKey] = await Promise.all([value(detection.access), value(detection.secret)]);
+      window.dispatchEvent(new CustomEvent('mjolnir:open-storage', { detail: { name: `${pod} (${detection.product})`, source: { context: context ?? '', namespace, pod, port: detection.port }, accessKey, secretKey } }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const endpoint = podIP ? `http://${podIP}:${detection.port}` : `http://${pod}.${namespace}:${detection.port}`;
@@ -139,7 +156,7 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
     ...copyEntry('copy-endpoint', 'Copy endpoint', endpoint),
     ...copyEntry('copy-forward', 'Copy port-forward command', forward),
     SEPARATOR,
-    ...(onOpenBrowser ? [{ id: 'open', label: 'Open bucket browser', onSelect: onOpenBrowser }] : []),
+    { id: 'open', label: 'Open bucket browser', onSelect: () => void (context ? openBrowser() : onOpenBrowser?.()) },
   ];
 
   return (
@@ -154,11 +171,9 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
           <span className="text-[12.5px] font-semibold text-primary">{detection.product} detected</span>
           <span className="font-mono text-[11px] text-tertiary">container {detection.container}</span>
           <div className="flex-1" />
-          {onOpenBrowser ? (
-            <Button data-testid="storage-open" onClick={onOpenBrowser} icon={<ExternalLink size={12} strokeWidth={1.9} />}>
-              Open bucket browser
-            </Button>
-          ) : null}
+          <Button data-testid="storage-open" onClick={() => void (context ? openBrowser() : onOpenBrowser?.())} icon={<ExternalLink size={12} strokeWidth={1.9} />}>
+            Open bucket browser
+          </Button>
         </div>
         <div className="space-y-1.5">
           <Row

@@ -581,6 +581,30 @@ const HELM_COLUMNS: Array<Column<HelmItem>> = [
   { ...ageColumn<HelmItem>(), header: 'Updated' },
 ];
 
+interface StorageItem extends KubeItem {
+  spec?: { kind?: 'prefix' | 'object'; key?: string; size?: number; etag?: string; storageClass?: string };
+}
+const STORAGE_COLUMNS: Array<Column<StorageItem>> = [
+  {
+    id: 'name',
+    priority: 10,
+    header: 'Name',
+    width: 'minmax(260px, 3fr)',
+    content: (o) => (
+      <span className="flex min-w-0 items-center gap-2 font-mono text-[12.5px] text-primary">
+        <span aria-hidden className={`h-[7px] w-[7px] shrink-0 rounded-[2px] ${o.spec?.kind === 'prefix' ? 'bg-[var(--series-4)]' : 'bg-[var(--log-pod-b)]'}`} />
+        <span className="truncate">{o.metadata?.name}{o.spec?.kind === 'prefix' ? '/' : ''}</span>
+      </span>
+    ),
+    sortBy: (o) => `${o.spec?.kind === 'prefix' ? '0' : '1'}${o.metadata?.name ?? ''}`,
+    searchText: (o) => o.spec?.key,
+  },
+  { id: 'size', priority: 30, header: 'Size', width: '90px', align: 'right', content: (o) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{o.spec?.kind === 'prefix' ? '' : formatBytes(o.spec?.size)}</span>, sortBy: (o) => o.spec?.size ?? -1 },
+  { id: 'class', priority: 40, header: 'Class', width: '110px', content: (o) => <span className="text-[11.5px] text-tertiary">{o.spec?.storageClass ?? ''}</span> },
+  { id: 'etag', priority: 50, header: 'ETag', width: 'minmax(120px, 1fr)', content: (o) => <span className="truncate font-mono text-[11px] text-tertiary">{o.spec?.etag ?? ''}</span> },
+  { ...ageColumn<StorageItem>(), header: 'Modified' },
+];
+
 const GENERIC_COLUMNS: Array<Column<KubeItem>> = [name(), namespace(), ageColumn()];
 
 const BY_KIND: Record<string, Array<Column<never>>> = {
@@ -590,6 +614,7 @@ const BY_KIND: Record<string, Array<Column<never>>> = {
   DaemonSet: DEPLOYMENT_COLUMNS as Array<Column<never>>,
   Node: NODE_COLUMNS as Array<Column<never>>,
   HelmRelease: HELM_COLUMNS as Array<Column<never>>,
+  StorageObject: STORAGE_COLUMNS as Array<Column<never>>,
   DockerContainer: DOCKER_CONTAINER_COLUMNS as Array<Column<never>>,
   DockerImage: DOCKER_IMAGE_COLUMNS as Array<Column<never>>,
   DockerVolume: DOCKER_VOLUME_COLUMNS as Array<Column<never>>,

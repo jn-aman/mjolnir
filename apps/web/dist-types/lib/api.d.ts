@@ -190,6 +190,28 @@ export interface HelmReleaseFull extends HelmReleaseSummary {
     values: Record<string, unknown>;
     manifest: string;
 }
+export interface StorageConnection {
+    id: string;
+    name: string;
+    endpoint: string;
+    region: string;
+    accessKey: string;
+    secretKey: string;
+    pathStyle: boolean;
+    source?: {
+        context: string;
+        namespace: string;
+        pod: string;
+        port: number;
+    };
+}
+export interface StorageObject {
+    key: string;
+    size: number;
+    lastModified: string;
+    etag: string;
+    storageClass?: string;
+}
 export interface ForwardRecord {
     readonly id: string;
     readonly context: string;
@@ -298,6 +320,48 @@ export declare const api: {
         prune: (ctx: string, what: string) => Promise<{
             ok: boolean;
             reclaimed: number;
+        }>;
+    };
+    storage: {
+        connections: () => Promise<{
+            connections: StorageConnection[];
+        }>;
+        addConnection: (body: Partial<StorageConnection>) => Promise<{
+            connection: StorageConnection;
+        }>;
+        removeConnection: (id: string) => Promise<{
+            ok: boolean;
+        }>;
+        buckets: (id: string) => Promise<{
+            buckets: Array<{
+                name: string;
+                created: string;
+            }>;
+        }>;
+        createBucket: (id: string, name: string) => Promise<{
+            ok: boolean;
+        }>;
+        objects: (id: string, bucket: string, prefix: string, token?: string) => Promise<{
+            objects: StorageObject[];
+            prefixes: string[];
+            next?: string;
+        }>;
+        objectUrl: (id: string, bucket: string, key: string, inline?: boolean) => string;
+        head: (id: string, bucket: string, key: string) => Promise<{
+            size: number;
+            type: string;
+            lastModified: string;
+        }>;
+        upload: (id: string, bucket: string, key: string, file: Blob) => Promise<{
+            ok: boolean;
+            size: number;
+        }>;
+        remove: (id: string, bucket: string, key: string) => Promise<{
+            ok: boolean;
+        }>;
+        presign: (id: string, bucket: string, key: string, expires: number) => Promise<{
+            url: string;
+            expires: number;
         }>;
     };
     helm: {

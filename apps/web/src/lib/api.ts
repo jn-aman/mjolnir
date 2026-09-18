@@ -195,6 +195,24 @@ export interface HelmReleaseFull extends HelmReleaseSummary {
   manifest: string;
 }
 
+export interface StorageConnection {
+  id: string;
+  name: string;
+  endpoint: string;
+  region: string;
+  accessKey: string;
+  secretKey: string;
+  pathStyle: boolean;
+  source?: { context: string; namespace: string; pod: string; port: number };
+}
+export interface StorageObject {
+  key: string;
+  size: number;
+  lastModified: string;
+  etag: string;
+  storageClass?: string;
+}
+
 export interface ForwardRecord {
   readonly id: string;
   readonly context: string;
@@ -284,6 +302,24 @@ export const api = {
     removeNetwork: (ctx: string, id: string) => request<unknown>(`/api/docker/${encodeURIComponent(ctx)}/networks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     system: (ctx: string) => request<{ info: Record<string, unknown>; df: Record<string, unknown>; version: Record<string, unknown> }>(`/api/docker/${encodeURIComponent(ctx)}/system`),
     prune: (ctx: string, what: string) => request<{ ok: boolean; reclaimed: number }>(`/api/docker/${encodeURIComponent(ctx)}/prune/${what}`, { method: 'POST', body: '{}' }),
+  },
+  storage: {
+    connections: () => request<{ connections: StorageConnection[] }>('/api/storage/connections'),
+    addConnection: (body: Partial<StorageConnection>) => request<{ connection: StorageConnection }>('/api/storage/connections', { method: 'POST', body: JSON.stringify(body) }),
+    removeConnection: (id: string) => request<{ ok: boolean }>(`/api/storage/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    buckets: (id: string) => request<{ buckets: Array<{ name: string; created: string }> }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets`),
+    createBucket: (id: string, name: string) => request<{ ok: boolean }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets`, { method: 'POST', body: JSON.stringify({ name }) }),
+    objects: (id: string, bucket: string, prefix: string, token?: string) =>
+      request<{ objects: StorageObject[]; prefixes: string[]; next?: string }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/objects?prefix=${encodeURIComponent(prefix)}${token ? `&token=${encodeURIComponent(token)}` : ''}`),
+    objectUrl: (id: string, bucket: string, key: string, inline = false) => `${base()}/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}${inline ? '&inline=1' : ''}`,
+    head: (id: string, bucket: string, key: string) => request<{ size: number; type: string; lastModified: string }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/head?key=${encodeURIComponent(key)}`),
+    upload: async (id: string, bucket: string, key: string, file: Blob) => {
+      const response = await fetch(`${base()}/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, { method: 'PUT', body: file, headers: { 'content-type': file.type || 'application/octet-stream' } });
+      if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: { message?: string } }).error?.message ?? response.statusText);
+      return (await response.json()) as { ok: boolean; size: number };
+    },
+    remove: (id: string, bucket: string, key: string) => request<{ ok: boolean }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, { method: 'DELETE' }),
+    presign: (id: string, bucket: string, key: string, expires: number) => request<{ url: string; expires: number }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/presign`, { method: 'POST', body: JSON.stringify({ key, expires }) }),
   },
   helm: {
     releases: (context: string, namespace?: string) => request<{ releases: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`),

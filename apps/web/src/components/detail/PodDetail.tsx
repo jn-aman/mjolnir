@@ -118,9 +118,11 @@ interface PodDetailProps {
   readonly onShell?: ((container: string) => void) | undefined;
   /** The workload above the immediate owner (ReplicaSet → Deployment), when resolved. */
   readonly parent?: { kind: string; name: string } | undefined;
+  /** The cluster context, for a bucket browser that forwards to this pod. */
+  readonly storageContext?: string | undefined;
 }
 
-export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent }: PodDetailProps) {
+export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent, storageContext }: PodDetailProps) {
   const storage = detectObjectStorage(pod.spec?.containers as never);
   const statuses = pod.status?.containerStatuses ?? [];
   const initStatuses = pod.status?.initContainerStatuses ?? [];
@@ -155,6 +157,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
           podIP={(pod.status as { podIP?: string } | undefined)?.podIP}
           onRevealSecret={onRevealSecret}
           onOpenBrowser={onOpenWorkspace ? () => onOpenWorkspace('storage') : undefined}
+          context={storageContext}
         />
       ) : null}
 

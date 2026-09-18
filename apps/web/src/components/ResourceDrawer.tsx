@@ -392,6 +392,7 @@ export function ResourceDrawer({
               onForward={onForward ? (port) => onForward(item, port) : undefined}
               onShell={onShell ? (container) => onShell(item, container) : undefined}
               parent={parent}
+              storageContext={context}
               onEditContainer={async (container, change) => {
                 const where = await editContainer(context, item, container, change);
                 toast.success(where);

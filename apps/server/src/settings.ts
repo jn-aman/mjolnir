@@ -57,6 +57,25 @@ export const Settings = z.object({
     })
     .default({ http: false, token: '', allowWrites: false }),
   licence: z.object({ key: z.string().default('') }).default({ key: '' }),
+  storage: z
+    .object({
+      connections: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            endpoint: z.string(),
+            region: z.string().default('us-east-1'),
+            accessKey: z.string().default(''),
+            secretKey: z.string().default(''),
+            pathStyle: z.boolean().default(true),
+            /** When the store runs in a pod, the forward that reaches it. */
+            source: z.object({ context: z.string(), namespace: z.string(), pod: z.string(), port: z.number() }).optional(),
+          }),
+        )
+        .default([]),
+    })
+    .default({ connections: [] }),
 });
 
 export type SettingsShape = z.infer<typeof Settings>;
@@ -82,6 +101,7 @@ export class SettingsStore {
       ai: { ...value.ai, apiKey: value.ai.apiKey ? 'set' : '' },
       mcp: { ...value.mcp, token: value.mcp.token ? 'set' : '' },
       licence: { key: value.licence.key ? 'set' : '' },
+      storage: { connections: value.storage.connections.map((c) => ({ ...c, secretKey: c.secretKey ? 'set' : '' })) },
     };
   }
 

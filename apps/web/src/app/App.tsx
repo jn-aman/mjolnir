@@ -38,6 +38,7 @@ import { ForwardsPanel } from '../components/ForwardsPanel.tsx';
 import { DockerModule, type DockerSection } from '../components/docker/DockerModule.tsx';
 import { ScanDialog } from '../components/ScanDialog.tsx';
 import { HelmPanel } from '../components/HelmPanel.tsx';
+import { StorageModule, type StorageSection } from '../components/storage/StorageModule.tsx';
 
 export function App() {
   const theme = useTheme();
@@ -77,6 +78,23 @@ export function App() {
   const [forwarding, setForwarding] = useState<KubeItem | null>(null);
   const [incomingAsk, setIncomingAsk] = useState<{ id: number; text: string } | null>(null);
   const [scanningImage, setScanningImage] = useState<string | null>(null);
+  const [focusStorage, setFocusStorage] = useState<string | undefined>(undefined);
+  // "Open bucket browser" on a storage pod: a connection through a forward, then the module.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ name: string; source: { context: string; namespace: string; pod: string; port: number }; accessKey?: string; secretKey?: string }>).detail;
+      void api.storage
+        .addConnection({ name: detail.name, source: detail.source, accessKey: detail.accessKey ?? '', secretKey: detail.secretKey ?? '', pathStyle: true, region: 'us-east-1' })
+        .then((response) => {
+          setFocusStorage(response.connection.id);
+          setSelection({ kind: 'workspace', value: 'storage:buckets' });
+          setSelected(null);
+        })
+        .catch((error: unknown) => toast.error(error instanceof Error ? error.message : String(error)));
+    };
+    window.addEventListener('mjolnir:open-storage', onOpen);
+    return () => window.removeEventListener('mjolnir:open-storage', onOpen);
+  }, []);
   useEffect(() => {
     const onScan = (event: Event) => setScanningImage((event as CustomEvent<string>).detail);
     window.addEventListener('mjolnir:scan', onScan);
@@ -554,6 +572,8 @@ export function App() {
               <HelmPanel context={context} namespace={namespace || undefined} onNavigate={navigate} />
             ) : view === 'tool' && tool?.id === 'portforward' ? (
               <ForwardsPanel onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })} />
+            ) : view === 'workspace' && tool?.id === 'storage' ? (
+              <StorageModule tool={tool} section={(section ?? 'buckets') as StorageSection} focusConnection={focusStorage} />
             ) : view === 'workspace' && tool?.id === 'docker' ? (
               <DockerModule tool={tool} section={(section ?? 'containers') as DockerSection} onOpenDock={openDockerTab} />
             ) : (view === 'tool' || view === 'workspace') && tool ? (

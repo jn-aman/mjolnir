@@ -165,7 +165,9 @@ interface PodDetailProps {
         kind: string;
         name: string;
     } | undefined;
+    /** The cluster context, for a bucket browser that forwards to this pod. */
+    readonly storageContext?: string | undefined;
 }
-export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent }: PodDetailProps): import("react").JSX.Element;
+export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent, storageContext }: PodDetailProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=PodDetail.d.ts.map
