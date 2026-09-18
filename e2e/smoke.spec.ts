@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/app.js';
+import { expect, test } from './fixtures/app.ts';
 
 /**
  * If these fail, nothing else is worth running — the app did not start, or it

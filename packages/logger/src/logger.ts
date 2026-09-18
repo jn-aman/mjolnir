@@ -1,4 +1,4 @@
-import { redact } from './redact.js';
+import { redact } from './redact.ts';
 
 export const LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
 export type Level = (typeof LEVELS)[number];

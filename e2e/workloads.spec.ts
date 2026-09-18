@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/app.js';
+import { expect, test } from './fixtures/app.ts';
 
 test.describe('workloads', () => {
   test('lists pods and drills into one', async ({ window }) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REDACTED, redact, redactString } from './redact.js';
+import { REDACTED, redact, redactString } from './redact.ts';
 
 describe('redact', () => {
   it('replaces values under secret-looking keys', () => {

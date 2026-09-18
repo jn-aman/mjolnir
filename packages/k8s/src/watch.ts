@@ -6,8 +6,8 @@ import {
   makeInformer,
 } from '@kubernetes/client-node';
 import { logger } from '@odin/logger';
-import type { ClusterTransport } from './transport.js';
-import { type ResourceDefinition, collectionPath } from './resources.js';
+import type { ClusterTransport } from './transport.ts';
+import { type ResourceDefinition, collectionPath } from './resources.ts';
 
 const log = logger.child('watch');
 

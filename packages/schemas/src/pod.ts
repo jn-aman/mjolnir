@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ConditionSchema, ObjectMetaSchema } from './meta.js';
+import { ConditionSchema, ObjectMetaSchema } from './meta.ts';
 
 /** A quantity as the API sends it — string or number, validated on read. */
 const QuantityString = z.union([z.string(), z.number()]);

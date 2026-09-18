@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatCpu, parseCpu, parseMemory, parseQuantity } from './quantity.js';
+import { formatBytes, formatCpu, parseCpu, parseMemory, parseQuantity } from './quantity.ts';
 
 describe('parseQuantity', () => {
   it('reads plain numbers', () => {

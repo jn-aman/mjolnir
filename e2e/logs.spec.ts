@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/app.js';
+import { expect, test } from './fixtures/app.ts';
 
 /**
  * The log viewer is the feature people use most and the one most likely to

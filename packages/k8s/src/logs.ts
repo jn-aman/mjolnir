@@ -1,6 +1,6 @@
 import { logger } from '@odin/logger';
-import { ApiError, type ClusterTransport } from './transport.js';
-import { LineSplitter, type LogLine, parseLogLine } from './log-line.js';
+import { ApiError, type ClusterTransport } from './transport.ts';
+import { LineSplitter, type LogLine, parseLogLine } from './log-line.ts';
 
 const log = logger.child('logs');
 

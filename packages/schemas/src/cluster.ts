@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ConditionSchema, ObjectMetaSchema } from './meta.js';
+import { ConditionSchema, ObjectMetaSchema } from './meta.ts';
 
 const QuantityString = z.union([z.string(), z.number()]);
 const ResourceMap = z.record(z.string(), QuantityString);

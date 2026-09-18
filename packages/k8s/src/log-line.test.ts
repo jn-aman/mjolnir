@@ -5,9 +5,11 @@ import {
   parseLogLine,
   parseStructured,
   stripAnsi,
-} from './log-line.js';
+} from './log-line.ts';
 
-const ESC = '';
+// Built rather than written literally: a raw control byte in source gets
+// mangled by editors, diffs and copy-paste.
+const ESC = String.fromCharCode(27);
 
 describe('LineSplitter', () => {
   it('emits only complete lines', () => {

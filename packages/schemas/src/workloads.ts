@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ConditionSchema, LabelSelectorSchema, ObjectMetaSchema } from './meta.js';
-import { PodSpecSchema } from './pod.js';
+import { ConditionSchema, LabelSelectorSchema, ObjectMetaSchema } from './meta.ts';
+import { PodSpecSchema } from './pod.ts';
 
 const PodTemplateSchema = z.looseObject({
   metadata: ObjectMetaSchema.optional(),

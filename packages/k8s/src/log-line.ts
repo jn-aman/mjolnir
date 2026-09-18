@@ -78,9 +78,11 @@ export function parseLogLine(
 
 // Covers SGR colour codes plus cursor movement, erase and the OSC title
 // sequence, which some loggers emit and which render as visible junk.
-const ESC = '';
-const CSI = '';
-const BEL = '';
+// Built from char codes rather than written literally: raw control bytes in
+// source get mangled by editors, diffs and copy-paste.
+const ESC = String.fromCharCode(0x1b);
+const CSI = String.fromCharCode(0x9b);
+const BEL = String.fromCharCode(0x07);
 const ANSI = new RegExp(
   `[${ESC}${CSI}][[\\]()#;?]*` +
     `(?:(?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d/#&.:=?%@~_]*)*)?${BEL}` +
