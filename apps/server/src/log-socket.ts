@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { aggregatePodLogs, streamPodLogs, type LogLine } from '@mjolnir/k8s';
+import type { LogLine } from '@mjolnir/k8s';
 import { logger } from '@mjolnir/logger';
 import type { ClusterRegistry } from './clusters.ts';
 
@@ -111,26 +111,17 @@ export function attachLogSocket(server: Server, registry: ClusterRegistry): WebS
 
           socket.send(JSON.stringify({ type: 'started', pods: message.pods.length }));
 
-          if (message.pods.length === 1) {
-            const only = message.pods[0];
-            if (!only) return;
-            const stream = streamPodLogs(connection.transport, {
-              ...options,
-              namespace: message.namespace,
-              pod: only.name,
-              ...(only.container ? { container: only.container } : {}),
-            });
-            for await (const line of stream) push(line);
-          } else {
-            const targets = message.pods.map((pod) => ({
-              namespace: message.namespace,
-              pod: pod.name,
-              ...(pod.container ? { container: pod.container } : {}),
-            }));
-            for await (const line of aggregatePodLogs(connection.transport, targets, options)) {
-              push(line);
-            }
-          }
+          // Multi-pod aggregation is a Pro feature and lands with the cloud
+          // work; until then a socket asking for several pods tails the first.
+          const only = message.pods[0];
+          if (!only) return;
+          const stream = connection.streamLogs({
+            ...options,
+            namespace: message.namespace,
+            pod: only.name,
+            ...(only.container ? { container: only.container } : {}),
+          });
+          for await (const line of stream) push(line);
 
           flush();
           if (socket.readyState === socket.OPEN) {

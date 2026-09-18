@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { readPodLogs } from '@mjolnir/k8s';
 import type { ClusterRegistry } from '../clusters.ts';
 import { handle, param, query, queryBoolean, queryNumber } from '../http.ts';
 
@@ -23,7 +22,7 @@ export function logRoutes(registry: ClusterRegistry): Router {
       const sinceSeconds = queryNumber(req, 'sinceSeconds');
       const limitBytes = queryNumber(req, 'limitBytes');
 
-      const lines = await readPodLogs(connection.transport, {
+      const lines = await connection.readLogs({
         namespace: param(req, 'namespace'),
         pod: param(req, 'pod'),
         previous: queryBoolean(req, 'previous'),

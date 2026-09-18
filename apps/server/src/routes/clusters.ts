@@ -41,7 +41,7 @@ export function clusterRoutes(registry: ClusterRegistry): Router {
       const connection = registry.connect(name);
       const startedAt = Date.now();
       try {
-        const version = await connection.transport.json<{ gitVersion?: string }>('/version');
+        const version = await connection.json<{ gitVersion?: string }>('/version');
         res.json({
           reachable: true,
           version: version.gitVersion ?? null,

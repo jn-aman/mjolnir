@@ -8,6 +8,61 @@ Status key: **done** · **planned** · **new** (nobody in this category has it)
 
 ---
 
+## Part 0 — The source app, so nothing is lost
+
+Audited from the k8sight source tree. Everything here exists today and must
+survive the migration.
+
+### Under-documented until now, and important
+
+| Feature | Why it matters |
+|---|---|
+| **MCP server, 28 tools** | The app doubles as an MCP server (`list_resources`, `get_pod_logs`, `get_topology`, `get_cluster_summary`, `list_argocd_apps`, `get_rbac`, `list_helm_releases`, `list_custom_resources` and twenty more) over stdio and HTTP. External agents — Claude Code included — can inspect the cluster through it. **Nothing else in this category does this**, and it should be a headline feature rather than a footnote. Free. |
+| **Docked coding agents** | Detects Claude Code, GitHub Copilot CLI, Gemini CLI, Codex CLI and OpenCode on `PATH` and runs them in the dock, in the cluster's context. Distinctive and cheap to keep. |
+| **Native EKS and AKS token helpers** | `eks-token.js` and `azure-token.js` generate auth tokens in-process, so an imported cluster works with **no `aws`, `az` or `kubelogin` installed**. This is a large and invisible UX win — it is the difference between "import and go" and "first install three CLIs". Must be carried over, and it becomes the foundation of `@mjolnir/cloud`. |
+| **Bundled Trivy** | Scanning works with nothing installed in-cluster. Downloaded at build time. |
+| **Demo mode** | 25+ kinds including Argo CD Applications and AppProjects, cert-manager Certificates and ClusterIssuers, Trivy ConfigAuditReports — plus a deliberately Pending pod and a CrashLoopBackOff pod. Richer than expected and the foundation of the whole test strategy. |
+
+### The rest of the inventory
+
+**Server**: version, settings, MCP info and config, kubeconfig status/load/context/reload,
+Azure (status, login, clusters, import), AWS (status, SSO login, accounts, roles,
+configure, clusters, import), AI agents and external launch, auth check,
+namespaces, resources, storage, RBAC, resource detail, logs, exec, port-forward
+(create/list/delete), YAML get and put, apply, delete, scale, restart, events,
+nodes and node pods, Helm releases/values/manifests, CRDs and custom resources,
+security status/vulnerabilities/checks/scan, Argo CD status/applications/
+application detail/sync/delete/refresh/projects/appsets/repositories/clusters,
+cluster summary, pod and node metrics, topology.
+
+**Client**: resource list and drawer and detail, custom resources with tree and
+detail, namespaces and multi-select, security centre, access control (RBAC),
+Argo CD, nodes, navigation, toasts, logs viewer, preferences, Azure and AWS
+integration, cluster view, markdown renderer, service port-forward, top bar,
+loader, command palette, topology, resource viewer, metrics chart, config and
+context and namespace selectors, terminal viewer, overview, refresh control,
+Helm, YAML viewer, cluster rail, auth error modal, events, agent panel,
+assistant.
+
+**Shell**: hidden-inset title bar on macOS, application menu, server as a
+utility process, light and dark themes, two-step confirm on destructive actions,
+back/forward history.
+
+**Distribution**: macOS dmg, Windows exe, Linux AppImage and deb, Docker image,
+standalone web mode.
+
+### Carried over with changes
+
+| Source | Mjolnir |
+|---|---|
+| `demo.js`, 1,708 lines | `@mjolnir/demo`, typed, driving the Playwright suite |
+| `assistant.js` read-only AI | Pro; same read-only posture, secrets redacted by `@mjolnir/logger` |
+| `mcp.js` HTTP + stdio | Kept whole, typed; the tool list grows with the resource registry |
+| `eks-token.js`, `azure-token.js` | Become the credential core of `@mjolnir/cloud` |
+| Light and dark themes | Rebuilt on Storm tokens |
+
+---
+
 ## Part 1 — Logs, measured against Datadog
 
 Datadog is the high-water mark for log tooling. Most of it assumes an ingestion

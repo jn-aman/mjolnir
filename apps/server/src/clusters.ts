@@ -2,49 +2,143 @@ import type { KubeConfig } from '@kubernetes/client-node';
 import {
   ClusterTransport,
   type ClusterContext,
+  type LogLine,
+  type LogStreamOptions,
   ResourceWatch,
   type ResourceDefinition,
+  type WatchSnapshot,
   configForContext,
   loadKubeconfig,
+  readPodLogs,
+  streamPodLogs,
 } from '@mjolnir/k8s';
+import { DEMO_CONTEXT, DemoTransport, DemoWatch, demoContainers, streamDemoLogs } from '@mjolnir/demo';
 import { logger } from '@mjolnir/logger';
 
 const log = logger.child('clusters');
 
-/** One connected cluster: its pinned config, transport, and live watches. */
-class Connection {
-  readonly transport: ClusterTransport;
+/**
+ * What a route needs from a cluster, real or synthetic.
+ *
+ * Log streaming lives on the connection rather than beside it so that no route
+ * ever asks "is this the demo cluster?". A branch like that starts in one place
+ * and ends up in nine, and then the demo drifts from the real thing and stops
+ * being worth testing against.
+ */
+export interface ClusterConnection {
+  readonly context: ClusterContext;
+  json<T = unknown>(path: string): Promise<T>;
+  watch(resource: ResourceDefinition, namespace?: string): ResourceSource;
+  streamLogs(options: LogStreamOptions): AsyncGenerator<LogLine, void, undefined>;
+  readLogs(options: Omit<LogStreamOptions, 'follow'>): Promise<LogLine[]>;
+  close(): Promise<void>;
+}
+
+/** The watch surface routes depend on. Both the real and demo watches satisfy it. */
+export interface ResourceSource {
+  snapshot(): WatchSnapshot<never>;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+class LiveConnection implements ClusterConnection {
+  readonly #transport: ClusterTransport;
   readonly #watches = new Map<string, ResourceWatch>();
 
   constructor(
     readonly context: ClusterContext,
     readonly config: KubeConfig,
   ) {
-    this.transport = new ClusterTransport(config);
+    this.#transport = new ClusterTransport(config);
+  }
+
+  json<T = unknown>(path: string): Promise<T> {
+    return this.#transport.json<T>(path);
   }
 
   /**
-   * A watch for one kind, created on first use and shared thereafter.
+   * One watch per kind, shared.
    *
-   * Sharing matters: two screens showing pods must not open two watches against
-   * the same collection. The API server tracks every watch, and a UI that opens
-   * one per component is how a dashboard ends up rate-limited on a large
-   * cluster.
+   * Two screens showing pods must not open two watches against the same
+   * collection: the API server tracks every watch, and a UI that opens one per
+   * component is how a dashboard gets itself rate-limited on a large cluster.
    */
-  watch(resource: ResourceDefinition, namespace?: string): ResourceWatch {
+  watch(resource: ResourceDefinition, namespace?: string): ResourceSource {
     const key = `${resource.kind}/${namespace ?? '*'}`;
     const existing = this.#watches.get(key);
-    if (existing) return existing;
+    if (existing) return existing as unknown as ResourceSource;
 
     const created = new ResourceWatch({
       config: this.config,
-      transport: this.transport,
+      transport: this.#transport,
       resource,
       ...(namespace ? { namespace } : {}),
     });
     this.#watches.set(key, created);
     void created.start();
-    return created;
+    return created as unknown as ResourceSource;
+  }
+
+  streamLogs(options: LogStreamOptions): AsyncGenerator<LogLine, void, undefined> {
+    return streamPodLogs(this.#transport, options);
+  }
+
+  readLogs(options: Omit<LogStreamOptions, 'follow'>): Promise<LogLine[]> {
+    return readPodLogs(this.#transport, options);
+  }
+
+  async close(): Promise<void> {
+    await Promise.all([...this.#watches.values()].map((watch) => watch.stop()));
+    this.#watches.clear();
+  }
+}
+
+class DemoConnection implements ClusterConnection {
+  readonly context: ClusterContext = {
+    name: DEMO_CONTEXT,
+    cluster: DEMO_CONTEXT,
+    user: DEMO_CONTEXT,
+    namespace: 'payments',
+    source: '(built in)',
+    server: 'https://demo.mjolnir.local',
+    provider: 'other',
+  };
+
+  readonly #transport = new DemoTransport();
+  readonly #watches = new Map<string, DemoWatch>();
+
+  json<T = unknown>(path: string): Promise<T> {
+    return this.#transport.json<T>(path);
+  }
+
+  watch(resource: ResourceDefinition, namespace?: string): ResourceSource {
+    const key = `${resource.kind}/${namespace ?? '*'}`;
+    const existing = this.#watches.get(key);
+    if (existing) return existing as unknown as ResourceSource;
+
+    const created = new DemoWatch({ resource, ...(namespace ? { namespace } : {}) });
+    this.#watches.set(key, created);
+    void created.start();
+    return created as unknown as ResourceSource;
+  }
+
+  streamLogs(options: LogStreamOptions): AsyncGenerator<LogLine, void, undefined> {
+    const containers = demoContainers(options.namespace, options.pod);
+    return streamDemoLogs({
+      namespace: options.namespace,
+      pod: options.pod,
+      container: options.container ?? containers[0] ?? '',
+      ...(options.follow !== undefined ? { follow: options.follow } : {}),
+      ...(options.previous !== undefined ? { previous: options.previous } : {}),
+      ...(options.tailLines !== undefined ? { tailLines: options.tailLines } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  }
+
+  async readLogs(options: Omit<LogStreamOptions, 'follow'>): Promise<LogLine[]> {
+    const lines: LogLine[] = [];
+    for await (const line of this.streamLogs({ ...options, follow: false })) lines.push(line);
+    return lines;
   }
 
   async close(): Promise<void> {
@@ -54,29 +148,31 @@ class Connection {
 }
 
 /**
- * Holds every cluster the user has open.
+ * Every cluster the user has open.
  *
- * Connections are lazy — loading a kubeconfig with forty contexts must not open
- * forty connections, because most of them are clusters the user is not looking
- * at and some are unreachable VPN-only endpoints that would each cost a
- * timeout.
+ * Connections are lazy — a kubeconfig with forty contexts must not open forty
+ * connections, because most are clusters nobody is looking at and some are
+ * VPN-only endpoints that would each cost a timeout.
  */
 export class ClusterRegistry {
   #contexts: ClusterContext[] = [];
   #current: string | null = null;
   #failures: Array<{ path: string; error: string }> = [];
   #kubeconfig: KubeConfig | null = null;
-  readonly #connections = new Map<string, Connection>();
+  readonly #connections = new Map<string, ClusterConnection>();
 
   async reload(): Promise<void> {
     const result = await loadKubeconfig();
     this.#kubeconfig = result.config;
-    this.#contexts = result.contexts;
-    this.#current = result.currentContext;
     this.#failures = result.failures;
 
-    // Drop connections whose context vanished from the kubeconfig.
-    const names = new Set(result.contexts.map((context) => context.name));
+    // The demo cluster is always present. Someone evaluating the app should
+    // never have to point it at production to find out whether it is any good.
+    const demo = new DemoConnection();
+    this.#contexts = [demo.context, ...result.contexts];
+    this.#current = result.currentContext ?? DEMO_CONTEXT;
+
+    const names = new Set(this.#contexts.map((context) => context.name));
     for (const [name, connection] of this.#connections) {
       if (!names.has(name)) {
         this.#connections.delete(name);
@@ -85,7 +181,7 @@ export class ClusterRegistry {
     }
 
     log.info('kubeconfig loaded', {
-      contexts: this.#contexts.length,
+      contexts: result.contexts.length,
       current: this.#current,
       failures: this.#failures.length,
     });
@@ -103,16 +199,21 @@ export class ClusterRegistry {
     return this.#failures;
   }
 
-  /** Connect on demand, reusing an existing connection. */
-  connect(contextName: string): Connection {
+  connect(contextName: string): ClusterConnection {
     const existing = this.#connections.get(contextName);
     if (existing) return existing;
+
+    if (contextName === DEMO_CONTEXT) {
+      const demo = new DemoConnection();
+      this.#connections.set(contextName, demo);
+      return demo;
+    }
 
     if (!this.#kubeconfig) throw new Error('kubeconfig has not been loaded');
     const context = this.#contexts.find((entry) => entry.name === contextName);
     if (!context) throw new Error(`unknown context: ${contextName}`);
 
-    const connection = new Connection(context, configForContext(this.#kubeconfig, contextName));
+    const connection = new LiveConnection(context, configForContext(this.#kubeconfig, contextName));
     this.#connections.set(contextName, connection);
     log.info('connected to cluster', { context: contextName, provider: context.provider });
     return connection;
@@ -131,5 +232,3 @@ export class ClusterRegistry {
     await Promise.all(connections.map((connection) => connection.close()));
   }
 }
-
-export type { Connection };

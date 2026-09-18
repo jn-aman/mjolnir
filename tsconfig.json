@@ -11,6 +11,9 @@
       "path": "./packages/k8s"
     },
     {
+      "path": "./packages/demo"
+    },
+    {
       "path": "./packages/licensing"
     },
     {

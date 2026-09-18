@@ -70,7 +70,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
 
       const connection = registry.connect(contextName);
       const path = `${collectionPath(resource, namespace)}/${encodeURIComponent(name)}`;
-      const object = await connection.transport.json(path);
+      const object = await connection.json(path);
       res.json(object);
     }),
   );
