@@ -1,0 +1,135 @@
+/**
+ * Storm tokens.
+ *
+ * Generated shape from the design system at packages' sibling artifact: one set
+ * per theme under the same names, so a colour that exists in only one theme is
+ * a bug you can see rather than one you discover in a screenshot.
+ *
+ * Dark is the default. `[data-theme="light"]` overrides; nothing else does.
+ */
+
+:root,
+[data-theme='dark'] {
+  --surface-ground: #080a10;
+  --surface-sunken: #0b0f16;
+  --surface-raised: #0e1219;
+  --surface-overlay: #141a25;
+  --surface-pressed: #202a3d;
+  --surface-hover: #111823;
+
+  --border-subtle: #141a25;
+  --border-default: #1a2232;
+  --border-strong: #253048;
+  --border-focus: #3d6fe0;
+
+  --text-primary: #e9edf5;
+  --text-secondary: #95a0b5;
+  --text-tertiary: #7c879c;
+  --text-inverse: #080a10;
+
+  --accent-base: #6e9bff;
+  --accent-solid: #3d6fe0;
+  --accent-hover: #9cbaff;
+  --accent-subtle: #111a2e;
+
+  --status-ok: #4ed493;
+  --status-ok-bg: #10281e;
+  --status-ok-border: #1d4433;
+  --status-warn: #f0a84e;
+  --status-warn-bg: #241a0f;
+  --status-error: #ff7e84;
+  --status-error-bg: #1d1319;
+  --status-error-border: #45242c;
+
+  --log-gutter: #3a4457;
+  --log-time: #5a6478;
+  --log-body: #c4ccda;
+  --log-debug: #6e7a90;
+  --log-info: #6e9bff;
+  --log-warn: #f0a84e;
+  --log-error: #ff7e84;
+  --log-highlight: #22304c;
+  --log-pod-a: #6e9bff;
+  --log-pod-b: #b78bf5;
+  --log-pod-c: #4ed493;
+  --log-pod-d: #f0a84e;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.34);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.44);
+
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --surface-ground: #fbfcfe;
+  --surface-sunken: #ffffff;
+  --surface-raised: #f2f5fa;
+  --surface-overlay: #e8edf6;
+  --surface-pressed: #dce5f3;
+  --surface-hover: #edf1f8;
+
+  --border-subtle: #ebeff6;
+  --border-default: #d6deec;
+  --border-strong: #bcc7db;
+  --border-focus: #2b5bd7;
+
+  --text-primary: #0d1220;
+  --text-secondary: #4e586c;
+  --text-tertiary: #67718a;
+  --text-inverse: #ffffff;
+
+  --accent-base: #2b5bd7;
+  --accent-solid: #2b5bd7;
+  --accent-hover: #1e47b0;
+  --accent-subtle: #e6edfc;
+
+  --status-ok: #0f7345;
+  --status-ok-bg: #e3f5ec;
+  --status-ok-border: #b4dfc9;
+  --status-warn: #8a5200;
+  --status-warn-bg: #fbf0dc;
+  --status-error: #b3261e;
+  --status-error-bg: #fceae8;
+  --status-error-border: #f0c2bd;
+
+  --log-gutter: #a9b2c4;
+  --log-time: #767f93;
+  --log-body: #232a38;
+  --log-debug: #6b7488;
+  --log-info: #2b5bd7;
+  --log-warn: #8a5200;
+  --log-error: #b3261e;
+  --log-highlight: #fff2c2;
+  --log-pod-a: #2b5bd7;
+  --log-pod-b: #6b3fb8;
+  --log-pod-c: #0f7345;
+  --log-pod-d: #8a5200;
+
+  /* Softer than dark's: the same opacity over a light ground reads as dirt. */
+  --shadow-sm: 0 1px 2px rgb(13 18 32 / 0.06);
+  --shadow-md: 0 4px 12px rgb(13 18 32 / 0.1);
+  --shadow-lg: 0 16px 40px rgb(13 18 32 / 0.14);
+
+  color-scheme: light;
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

@@ -1,0 +1,118 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/**
+ * Storm tokens exposed to Tailwind.
+ *
+ * Mapped rather than replaced: the tokens stay the single source of truth and
+ * Tailwind gets utility classes over them. shadcn's own palette is deliberately
+ * not adopted — two competing token systems in one app is how a design system
+ * stops being followed.
+ */
+@theme inline {
+  --color-ground: var(--surface-ground);
+  --color-sunken: var(--surface-sunken);
+  --color-raised: var(--surface-raised);
+  --color-overlay: var(--surface-overlay);
+  --color-pressed: var(--surface-pressed);
+  --color-hover: var(--surface-hover);
+
+  --color-subtle: var(--border-subtle);
+  --color-line: var(--border-default);
+  --color-strong: var(--border-strong);
+  --color-focus: var(--border-focus);
+
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent-base);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --color-ok: var(--status-ok);
+  --color-ok-bg: var(--status-ok-bg);
+  --color-warn: var(--status-warn);
+  --color-warn-bg: var(--status-warn-bg);
+  --color-error: var(--status-error);
+  --color-error-bg: var(--status-error-bg);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--surface-ground);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 21px;
+    -webkit-font-smoothing: antialiased;
+    /* The window chrome is ours; the page itself never rubber-bands. */
+    overscroll-behavior: none;
+  }
+
+  /* Visible focus, everywhere, always. Removing it is never the fix. */
+  :focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::selection {
+    background: var(--accent-subtle);
+    color: var(--text-primary);
+  }
+
+  /* Thin scrollbars that match the surface rather than the OS default. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    border-radius: var(--radius-full);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+/**
+ * Reduced motion.
+ *
+ * Everything stops moving; opacity fades drop to 90ms rather than disappearing,
+ * so state changes are still perceptible. Nothing becomes unusable.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 90ms !important;
+    scroll-behavior: auto !important;
+  }
+}
