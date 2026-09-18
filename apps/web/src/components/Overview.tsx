@@ -17,19 +17,35 @@ import { age, podStatus, type KubeItem } from './columns.tsx';
  * infrastructure dashboard people make capacity decisions from it.
  */
 
-interface OverviewProps {
-  readonly context: string;
-  readonly onOpenResources: () => void;
+export interface NavigateTarget {
+  readonly kind: string;
+  readonly name?: string;
+  readonly namespace?: string;
+  readonly filter?: string;
 }
 
-export function Overview({ context, onOpenResources }: OverviewProps) {
+interface OverviewProps {
+  readonly context: string;
+  /**
+   * Opens the thing that was clicked.
+   *
+   * Every number, line and row on this screen is about a specific object, so
+   * every one of them is a link to it. A dashboard that shows you a problem and
+   * then makes you go find it by hand is doing half its job.
+   */
+  readonly onNavigate: (target: NavigateTarget) => void;
+}
+
+export function Overview({ context, onNavigate }: OverviewProps) {
   const [nodeMetrics, setNodeMetrics] = useState<MetricsResponse | null>(null);
   const [pods, setPods] = useState<KubeItem[]>([]);
   const [nodes, setNodes] = useState<KubeItem[]>([]);
   const [events, setEvents] = useState<KubeItem[]>([]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
 
     const load = async () => {
       const [metricsResponse, podList, nodeList, eventList] = await Promise.all([
@@ -45,6 +61,10 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
       setPods(podList.items);
       setNodes(nodeList.items);
       setEvents(eventList.items);
+      // A watch reports "connecting" before its first sync. Rendering that as
+      // zero tells someone their cluster is empty when it is not — the same
+      // lie the resource list was careful to avoid, missed here.
+      if (podList.state === 'synced') setReady(true);
     };
 
     void load();
@@ -97,24 +117,68 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
     [events],
   );
 
+  /**
+   * Shaded periods on the charts, taken from warning events.
+   *
+   * Derived from what the cluster actually reported, never from a threshold we
+   * picked — a band that says "incident" has to correspond to something a human
+   * can go and read.
+   */
+  const bands = useMemo(() => {
+    const first = nodeMetrics?.series[0]?.points[0]?.t ?? 0;
+    return warnings
+      .map((event) => {
+        const at = (event as { lastTimestamp?: string }).lastTimestamp;
+        const reason = (event as { reason?: string }).reason ?? 'Warning';
+        if (!at) return null;
+        const t = new Date(at).getTime();
+        if (!Number.isFinite(t) || t < first) return null;
+        return { from: t - 60_000, to: t + 60_000, label: reason };
+      })
+      .filter((band): band is { from: number; to: number; label: string } => band !== null)
+      .slice(0, 2);
+  }, [warnings, nodeMetrics]);
+
   const totalCpu = nodeMetrics?.series.reduce((sum, s) => sum + (s.cpuCapacity ?? 0), 0) ?? 0;
   const usedCpu = nodeMetrics?.series.reduce((sum, s) => sum + (s.points.at(-1)?.cpu ?? 0), 0) ?? 0;
 
   return (
     <div data-testid="overview" className="min-h-0 flex-1 overflow-auto p-4">
       <div className="mb-4 grid grid-cols-4 gap-3">
-        <Stat label="Pods" value={String(pods.length)} hint={`${health.ok} running`} />
+        <Stat
+          label="Pods"
+          loading={!ready}
+          value={String(pods.length)}
+          hint={`${health.ok} running`}
+          onClick={() => onNavigate({ kind: 'Pod' })}
+        />
         <Stat
           label="Not running"
+          loading={!ready}
           value={String(health.error + health.warn)}
           tone={health.error > 0 ? 'error' : health.warn > 0 ? 'warn' : 'default'}
           hint={health.error > 0 ? `${health.error} failing` : 'nothing failing'}
+          // Opens the pod list already filtered to the thing the number counts.
+          onClick={() =>
+            onNavigate({
+              kind: 'Pod',
+              ...(troubled[0]?.metadata?.name ? { name: troubled[0].metadata.name } : {}),
+            })
+          }
         />
-        <Stat label="Nodes" value={String(nodes.length)} hint={`${formatCpu(totalCpu)} cores`} />
+        <Stat
+          label="Nodes"
+          loading={!ready}
+          value={String(nodes.length)}
+          hint={`${formatCpu(totalCpu)} cores`}
+          onClick={() => onNavigate({ kind: 'Node' })}
+        />
         <Stat
           label="CPU in use"
+          loading={!ready}
           value={totalCpu > 0 ? `${Math.round((usedCpu / totalCpu) * 100)}%` : '—'}
           hint={`${formatCpu(usedCpu)} of ${formatCpu(totalCpu)}`}
+          onClick={() => onNavigate({ kind: 'Node' })}
         />
       </div>
 
@@ -124,7 +188,9 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
             <TimeSeries
               series={cpuSeries}
               format={formatCpu}
+              bands={bands}
               ariaLabel="CPU usage per node over the last hour"
+              onSelect={(name) => onNavigate({ kind: 'Node', name })}
             />
           ) : (
             <Unavailable reason={nodeMetrics?.reason} />
@@ -137,7 +203,9 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
             <TimeSeries
               series={memorySeries}
               format={formatMemory}
+              bands={bands}
               ariaLabel="Memory usage per node over the last hour"
+              onSelect={(name) => onNavigate({ kind: 'Node', name })}
             />
           ) : (
             <Unavailable reason={nodeMetrics?.reason} />
@@ -148,32 +216,47 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
       <div className="grid grid-cols-2 gap-3">
         <Card
           title="Needs attention"
-          subtitle={troubled.length === 0 ? 'everything is running' : `${troubled.length} workloads`}
+          subtitle={
+            !ready ? 'checking…' : troubled.length === 0 ? 'everything is running' : `${troubled.length} workloads`
+          }
           actions={
-            <Button variant="ghost" onClick={onOpenResources} icon={<ArrowRight size={13} />}>
+            <Button variant="ghost" onClick={() => onNavigate({ kind: 'Pod' })} icon={<ArrowRight size={13} />}>
               All pods
             </Button>
           }
         >
-          {troubled.length === 0 ? (
+          {!ready ? (
+            <p className="py-6 text-center text-[12.5px] text-tertiary">Connecting to the cluster…</p>
+          ) : troubled.length === 0 ? (
             <p className="py-6 text-center text-[12.5px] text-tertiary">
               Nothing is failing or pending.
             </p>
           ) : (
             <ul className="space-y-1.5">
               {troubled.map((pod) => (
-                <li
-                  key={pod.metadata?.name}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-hover"
-                  style={{ transitionProperty: 'background-color', transitionDuration: '90ms' }}
-                >
-                  <StatusChip status={podStatus(pod as never)} />
-                  <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-primary">
-                    {pod.metadata?.name}
-                  </span>
-                  <span className="shrink-0 text-[11.5px] text-tertiary">
-                    {pod.metadata?.namespace}
-                  </span>
+                <li key={pod.metadata?.name}>
+                  <button
+                    type="button"
+                    data-testid="attention-item"
+                    onClick={() =>
+                      onNavigate({
+                        kind: 'Pod',
+                        ...(pod.metadata?.name ? { name: pod.metadata.name } : {}),
+                        ...(pod.metadata?.namespace ? { namespace: pod.metadata.namespace } : {}),
+                      })
+                    }
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover"
+                    style={{ transitionProperty: 'background-color', transitionDuration: '90ms' }}
+                  >
+                    <StatusChip status={podStatus(pod as never)} />
+                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-primary">
+                      {pod.metadata?.name}
+                    </span>
+                    <span className="shrink-0 text-[11.5px] text-tertiary">
+                      {pod.metadata?.namespace}
+                    </span>
+                    <ArrowRight size={13} aria-hidden className="shrink-0 text-tertiary" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -194,7 +277,20 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
                   involvedObject?: { name?: string };
                 };
                 return (
-                  <li key={event.metadata?.name} className="border-l-2 border-[var(--status-warn)] pl-3">
+                  <li key={event.metadata?.name}>
+                    <button
+                      type="button"
+                      data-testid="warning-item"
+                      onClick={() =>
+                        onNavigate({
+                          kind: 'Pod',
+                          ...(wire.involvedObject?.name ? { name: wire.involvedObject.name } : {}),
+                          ...(event.metadata?.namespace ? { namespace: event.metadata.namespace } : {}),
+                        })
+                      }
+                      className="w-full border-l-2 border-[var(--status-warn)] pl-3 text-left hover:bg-hover"
+                      style={{ transitionProperty: 'background-color', transitionDuration: '90ms' }}
+                    >
                     <div className="flex items-baseline gap-2">
                       <span className="text-[12px] font-medium text-warn">{wire.reason}</span>
                       <span className="font-mono text-[11px] text-tertiary">
@@ -209,6 +305,7 @@ export function Overview({ context, onOpenResources }: OverviewProps) {
                     <p className="mt-0.5 text-[11.5px] leading-[17px] text-secondary">
                       {wire.message}
                     </p>
+                    </button>
                   </li>
                 );
               })}

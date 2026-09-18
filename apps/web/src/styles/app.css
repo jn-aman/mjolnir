@@ -161,3 +161,37 @@
     opacity: 1;
   }
 }
+
+/* A chart line draws itself left to right, because the line IS time passing.
+   This is the one place animating data is honest: the direction of the motion
+   matches the direction of the axis. */
+@keyframes mjolnir-draw {
+  from {
+    stroke-dashoffset: 1200;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.mjolnir-draw {
+  stroke-dasharray: 1200;
+  animation: mjolnir-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@keyframes mjolnir-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.mjolnir-fade-in {
+  animation: mjolnir-fade-in 320ms ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mjolnir-draw {
+    stroke-dasharray: none;
+    animation: none;
+  }
+}

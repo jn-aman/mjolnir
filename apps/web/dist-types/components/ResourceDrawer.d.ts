@@ -21,8 +21,9 @@ interface DrawerProps {
             v: number;
         }>;
     };
+    readonly initialTab?: string;
     readonly onClose: () => void;
 }
-export declare function ResourceDrawer({ context, kind, item, metrics, onClose }: DrawerProps): import("react").JSX.Element | null;
+export declare function ResourceDrawer({ context, kind, item, metrics, initialTab, onClose }: DrawerProps): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=ResourceDrawer.d.ts.map

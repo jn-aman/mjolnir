@@ -13,6 +13,10 @@ interface StatProps {
     readonly value: string;
     readonly hint?: string;
     readonly tone?: 'default' | 'ok' | 'warn' | 'error';
+    /** Makes the tile a link to whatever the number counts. */
+    readonly onClick?: (() => void) | undefined;
+    /** Shows a placeholder instead of a number that is not known yet. */
+    readonly loading?: boolean;
 }
 /**
  * A single number, given room.
@@ -20,6 +24,6 @@ interface StatProps {
  * Not every measure deserves a chart. One value with no trend is a stat tile,
  * and drawing it as a one-bar chart wastes the space and says less.
  */
-export declare function Stat({ label, value, hint, tone }: StatProps): import("react").JSX.Element;
+export declare function Stat({ label, value, hint, tone, onClick, loading }: StatProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Card.d.ts.map

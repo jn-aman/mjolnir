@@ -34,6 +34,10 @@ interface StatProps {
   readonly value: string;
   readonly hint?: string;
   readonly tone?: 'default' | 'ok' | 'warn' | 'error';
+  /** Makes the tile a link to whatever the number counts. */
+  readonly onClick?: (() => void) | undefined;
+  /** Shows a placeholder instead of a number that is not known yet. */
+  readonly loading?: boolean;
 }
 
 const TONE: Record<NonNullable<StatProps['tone']>, string> = {
@@ -49,14 +53,28 @@ const TONE: Record<NonNullable<StatProps['tone']>, string> = {
  * Not every measure deserves a chart. One value with no trend is a stat tile,
  * and drawing it as a one-bar chart wastes the space and says less.
  */
-export function Stat({ label, value, hint, tone = 'default' }: StatProps) {
+export function Stat({ label, value, hint, tone = 'default', onClick, loading = false }: StatProps) {
+  const Element = onClick ? 'button' : 'div';
   return (
-    <div className="rounded-lg border border-line bg-raised px-4 py-3">
+    <Element
+      {...(onClick ? { type: 'button' as const, onClick } : {})}
+      data-testid="stat-tile"
+      className={`w-full rounded-lg border border-line bg-raised px-4 py-3 text-left ${
+        onClick ? 'cursor-pointer hover:border-strong hover:bg-hover' : ''
+      }`}
+      style={{ transitionProperty: 'background-color, border-color', transitionDuration: '90ms' }}
+    >
       <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-tertiary">
         {label}
       </div>
-      <div className={`font-mono text-[26px] leading-none tabular-nums ${TONE[tone]}`}>{value}</div>
-      {hint ? <div className="mt-1.5 text-[11.5px] text-tertiary">{hint}</div> : null}
-    </div>
+      {loading ? (
+        <div className="h-[26px] w-[48px] animate-pulse rounded-sm bg-[var(--border-default)]" />
+      ) : (
+        <div className={`font-mono text-[26px] leading-none tabular-nums ${TONE[tone]}`}>{value}</div>
+      )}
+      {hint ? (
+        <div className="mt-1.5 text-[11.5px] text-tertiary">{loading ? '\u00a0' : hint}</div>
+      ) : null}
+    </Element>
   );
 }

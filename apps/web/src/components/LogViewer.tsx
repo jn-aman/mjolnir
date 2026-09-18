@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, Download, Regex, Search, WrapText } from 'lucide-react';
+import { ArrowDown, Download, Maximize2, Minimize2, Regex, Search, WrapText } from 'lucide-react';
 import { useLogStream } from '../lib/useLogStream.ts';
 import { Button } from './ui/Button.tsx';
 import { Select } from './ui/Select.tsx';
@@ -50,11 +50,24 @@ interface LogViewerProps {
   readonly namespace: string;
   readonly pod: string;
   readonly containers: string[];
+  readonly expanded?: boolean;
+  readonly onToggleExpand?: () => void;
+  readonly initialContainer?: string | undefined;
+  readonly initialPrevious?: boolean | undefined;
 }
 
-export function LogViewer({ context, namespace, pod, containers }: LogViewerProps) {
-  const [container, setContainer] = useState(containers[0] ?? '');
-  const [previous, setPrevious] = useState(false);
+export function LogViewer({
+  context,
+  namespace,
+  pod,
+  containers,
+  expanded = false,
+  onToggleExpand,
+  initialContainer,
+  initialPrevious,
+}: LogViewerProps) {
+  const [container, setContainer] = useState(initialContainer ?? containers[0] ?? '');
+  const [previous, setPrevious] = useState(initialPrevious ?? false);
   const [query, setQuery] = useState('');
   const [useRegex, setUseRegex] = useState(false);
   const [mode, setMode] = useState<'highlight' | 'filter'>('highlight');
@@ -100,11 +113,16 @@ export function LogViewer({ context, namespace, pod, containers }: LogViewerProp
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW,
     overscan: 24,
-    // A wrapped line is taller than one row. Without measuring, the fixed
-    // estimate makes long lines draw on top of each other — which is exactly
-    // what happens to stack traces, the lines you most need to read.
-    ...(wrap ? { measureElement: (element: Element) => element.getBoundingClientRect().height } : {}),
   });
+
+  // A wrapped line is taller than one row, so rows must be measured rather than
+  // estimated — otherwise long lines draw on top of each other, which is
+  // exactly what happens to stack traces, the lines you most need to read.
+  // TanStack's own measureElement reads data-index off the node; a replacement
+  // that returns only a height cannot associate the measurement with a row.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [wrap, virtualizer]);
 
   // Follow means "stay pinned to the bottom". Scrolling away turns it off;
   // scrolling back to the bottom does not turn it back on, because an implicit
@@ -113,6 +131,15 @@ export function LogViewer({ context, namespace, pod, containers }: LogViewerProp
     if (!follow || rows.length === 0) return;
     virtualizer.scrollToIndex(rows.length - 1, { align: 'end' });
   }, [rows.length, follow, virtualizer]);
+
+  useEffect(() => {
+    if (!expanded || !onToggleExpand) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onToggleExpand();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expanded, onToggleExpand]);
 
   const onScroll = () => {
     const node = scrollRef.current;
@@ -245,6 +272,21 @@ export function LogViewer({ context, namespace, pod, containers }: LogViewerProp
           onClick={download}
           icon={<Download size={14} strokeWidth={1.9} />}
         />
+        {onToggleExpand ? (
+          <Button
+            iconOnly
+            data-testid="log-expand"
+            aria-label={expanded ? 'Exit full screen' : 'Full screen'}
+            onClick={onToggleExpand}
+            icon={
+              expanded ? (
+                <Minimize2 size={14} strokeWidth={1.9} />
+              ) : (
+                <Maximize2 size={14} strokeWidth={1.9} />
+              )
+            }
+          />
+        ) : null}
       </div>
 
       {previous ? (
@@ -304,7 +346,7 @@ export function LogViewer({ context, namespace, pod, containers }: LogViewerProp
                 <div
                   key={line.seq}
                   data-index={item.index}
-                  ref={wrap ? virtualizer.measureElement : undefined}
+                  ref={virtualizer.measureElement}
                   data-testid="log-line"
                   className="absolute inset-x-0 flex items-baseline gap-0 px-3 font-mono text-[12.5px]"
                   style={{

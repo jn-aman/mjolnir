@@ -3,10 +3,10 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { X } from 'lucide-react';
 import { api } from '../lib/api.ts';
 import { LogViewer } from './LogViewer.tsx';
-import { Sparkline } from './TimeSeries.tsx';
+import { PodDetail, type PodShape as PodDetailShape } from './detail/PodDetail.tsx';
 import { StatusChip } from './StatusChip.tsx';
 import { Button } from './ui/Button.tsx';
-import { age, podStatus, type KubeItem } from './columns.tsx';
+import { podStatus, type KubeItem } from './columns.tsx';
 
 /**
  * The detail panel.
@@ -22,6 +22,7 @@ interface DrawerProps {
   readonly kind: string;
   readonly item: KubeItem | null;
   readonly metrics?: { cpu: Array<{ t: number; v: number }>; memory: Array<{ t: number; v: number }> };
+  readonly initialTab?: string;
   readonly onClose: () => void;
 }
 
@@ -43,9 +44,16 @@ interface PodShape extends KubeItem {
   };
 }
 
-export function ResourceDrawer({ context, kind, item, metrics, onClose }: DrawerProps) {
+export function ResourceDrawer({ context, kind, item, metrics, initialTab, onClose }: DrawerProps) {
   const [yaml, setYaml] = useState<string | null>(null);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(initialTab ?? 'overview');
+  const [expanded, setExpanded] = useState(false);
+  const [logContainer, setLogContainer] = useState<string | undefined>(undefined);
+  const [logPrevious, setLogPrevious] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
 
   const pod = item as PodShape | null;
   const isPod = kind === 'Pod';
@@ -58,8 +66,14 @@ export function ResourceDrawer({ context, kind, item, metrics, onClose }: Drawer
     [];
 
   useEffect(() => {
-    setTab('overview');
+    setTab(initialTab ?? 'overview');
     setYaml(null);
+    setExpanded(false);
+    setLogContainer(undefined);
+    setLogPrevious(false);
+    // initialTab is applied by its own effect; re-running on it here would
+    // reset the tab every time the parent re-renders with the same value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, namespace]);
 
   useEffect(() => {
@@ -83,8 +97,46 @@ export function ResourceDrawer({ context, kind, item, metrics, onClose }: Drawer
 
   if (!item) return null;
 
-  const terminated = pod?.status?.containerStatuses?.find((s) => s.lastState?.terminated)?.lastState
-    ?.terminated;
+
+  // Full screen is a fixed layer over the whole window rather than a wider
+  // drawer. Logs are the one thing people want the entire screen for, and a
+  // panel that merely gets wider does not feel like it got out of the way.
+  if (expanded && isPod && tab === 'logs') {
+    return (
+      <div
+        data-testid="log-fullscreen"
+        className="fixed inset-0 z-40 flex flex-col bg-ground"
+        style={{ animation: 'mjolnir-fade-in 160ms ease-out' }}
+      >
+        <header className="flex shrink-0 items-center gap-2 border-b border-line bg-raised px-4 py-2.5">
+          <span className="rounded-xs bg-accent-subtle px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-accent">
+            Logs
+          </span>
+          <span className="font-mono text-[13px] text-primary">{name}</span>
+          <span className="text-[11.5px] text-tertiary">{namespace}</span>
+          <div className="flex-1" />
+          <span className="text-[11px] text-tertiary">esc to exit</span>
+          <Button
+            iconOnly
+            aria-label="Exit full screen"
+            variant="ghost"
+            onClick={() => setExpanded(false)}
+            icon={<X size={15} strokeWidth={2} />}
+          />
+        </header>
+        <LogViewer
+          context={context}
+          namespace={namespace}
+          pod={name}
+          containers={containers}
+          expanded
+          onToggleExpand={() => setExpanded(false)}
+          initialContainer={logContainer}
+          initialPrevious={logPrevious}
+        />
+      </div>
+    );
+  }
 
   return (
     <aside
@@ -137,78 +189,21 @@ export function ResourceDrawer({ context, kind, item, metrics, onClose }: Drawer
         </Tabs.List>
 
         <Tabs.Content value="overview" className="min-h-0 flex-1 overflow-auto p-4 outline-none">
-          {terminated ? (
-            <div className="mb-4 rounded-lg border border-[var(--status-error-border)] bg-error-bg p-3">
-              <div className="mb-1 text-[12.5px] font-semibold text-error">
-                Last exit: {terminated.reason} (code {terminated.exitCode})
-              </div>
-              <div className="text-[12px] text-[var(--text-secondary)]">
-                {terminated.reason === 'OOMKilled'
-                  ? 'The container exceeded its memory limit and was killed. Raise the limit or reduce what it holds.'
-                  : 'The container exited. Its previous logs are under the Logs tab.'}
-              </div>
-            </div>
-          ) : null}
-
-          {metrics && (metrics.cpu.length > 0 || metrics.memory.length > 0) ? (
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              <MetricTile
-                label="CPU"
-                value={`${((metrics.cpu.at(-1)?.v ?? 0) * 1000).toFixed(0)}m`}
-                points={metrics.cpu}
-                tone="var(--series-1)"
-              />
-              <MetricTile
-                label="Memory"
-                value={`${((metrics.memory.at(-1)?.v ?? 0) / (1024 * 1024)).toFixed(0)} MiB`}
-                points={metrics.memory}
-                tone="var(--series-3)"
-              />
-            </div>
-          ) : null}
-
-          <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-[12.5px]">
-            <Row label="Age" value={age(item.metadata?.creationTimestamp)} />
-            {isPod ? (
-              <>
-                <Row label="Node" value={pod?.spec?.nodeName ?? '—'} mono />
-                <Row label="Pod IP" value={pod?.status?.podIP ?? '—'} mono />
-                <Row label="QoS" value={pod?.status?.qosClass ?? '—'} />
-                <Row label="Service account" value={pod?.spec?.serviceAccountName ?? '—'} mono />
-              </>
-            ) : null}
-          </dl>
-
-          {isPod && pod?.status?.containerStatuses?.length ? (
-            <div className="mt-5">
-              <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-tertiary">
-                Containers
-              </h3>
-              <div className="space-y-2">
-                {pod.status.containerStatuses.map((status) => (
-                  <div key={status.name} className="rounded-md border border-line bg-raised p-3">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="font-mono text-[12.5px] text-primary">{status.name}</span>
-                      <StatusChip
-                        status={status.state?.waiting?.reason ?? (status.ready ? 'Running' : 'NotReady')}
-                      />
-                      {(status.restartCount ?? 0) > 0 ? (
-                        <span className="font-mono text-[11px] text-warn">
-                          {status.restartCount} restarts
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="truncate font-mono text-[11px] text-tertiary">{status.image}</div>
-                    {status.state?.waiting?.message ? (
-                      <div className="mt-1.5 text-[11.5px] text-secondary">
-                        {status.state.waiting.message}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {isPod && pod ? (
+            <PodDetail
+              pod={pod as PodDetailShape}
+              metrics={metrics}
+              onOpenLogs={(container, previous) => {
+                setLogContainer(container);
+                setLogPrevious(previous);
+                setTab('logs');
+              }}
+            />
+          ) : (
+            <p className="text-[12.5px] text-tertiary">
+              A detailed view for {kind} is not built yet. The YAML tab has everything.
+            </p>
+          )}
         </Tabs.Content>
 
         {isPod ? (
@@ -219,6 +214,10 @@ export function ResourceDrawer({ context, kind, item, metrics, onClose }: Drawer
                 namespace={namespace}
                 pod={name}
                 containers={containers}
+                expanded={expanded}
+                onToggleExpand={() => setExpanded((value) => !value)}
+                initialContainer={logContainer}
+                initialPrevious={logPrevious}
               />
             ) : null}
           </Tabs.Content>
@@ -234,38 +233,5 @@ export function ResourceDrawer({ context, kind, item, metrics, onClose }: Drawer
         </Tabs.Content>
       </Tabs.Root>
     </aside>
-  );
-}
-
-function Row({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <>
-      <dt className="text-tertiary">{label}</dt>
-      <dd className={`m-0 truncate text-primary ${mono ? 'font-mono text-[12px]' : ''}`}>{value}</dd>
-    </>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  points,
-  tone,
-}: {
-  label: string;
-  value: string;
-  points: Array<{ t: number; v: number }>;
-  tone: string;
-}) {
-  return (
-    <div className="rounded-lg border border-line bg-raised p-3">
-      <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-tertiary">
-        {label}
-      </div>
-      <div className="flex items-end justify-between gap-2">
-        <span className="font-mono text-[19px] leading-none tabular-nums text-primary">{value}</span>
-        <Sparkline points={points} tone={tone} width={92} height={24} />
-      </div>
-    </div>
   );
 }
