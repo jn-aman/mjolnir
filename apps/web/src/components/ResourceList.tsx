@@ -17,6 +17,7 @@ interface ResourceListProps {
   readonly state: WatchState;
   readonly error: string | null;
   readonly filter: string;
+  readonly selectedName?: string | undefined;
   readonly onSelect?: (item: KubeItem) => void;
 }
 
@@ -24,7 +25,7 @@ const ROW_HEIGHT = 32;
 
 type SortState = { readonly columnId: string; readonly direction: 'asc' | 'desc' } | null;
 
-export function ResourceList({ kind, items, state, error, filter, onSelect }: ResourceListProps) {
+export function ResourceList({ kind, items, state, error, filter, selectedName, onSelect }: ResourceListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sort, setSort] = useState<SortState>(null);
 
@@ -92,7 +93,7 @@ export function ResourceList({ kind, items, state, error, filter, onSelect }: Re
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="resource-list" data-kind={kind}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="resource-list" data-kind={kind}>
       <div
         role="row"
         className="grid shrink-0 items-center gap-4 border-b border-line bg-raised px-4 text-[11px] font-semibold uppercase tracking-[0.05em] text-tertiary"
@@ -142,7 +143,10 @@ export function ResourceList({ kind, items, state, error, filter, onSelect }: Re
                       onSelect?.(item);
                     }
                   }}
-                  className="absolute inset-x-0 grid cursor-pointer items-center gap-4 border-b border-subtle px-4 hover:bg-hover"
+                  data-selected={item.metadata?.name === selectedName}
+                  className={`absolute inset-x-0 grid cursor-pointer items-center gap-4 border-b border-subtle px-4 ${
+                    item.metadata?.name === selectedName ? 'bg-pressed' : 'hover:bg-hover'
+                  }`}
                   style={{
                     gridTemplateColumns: template,
                     height: row.size,

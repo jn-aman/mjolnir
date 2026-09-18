@@ -54,6 +54,15 @@
   --log-pod-c: #4ed493;
   --log-pod-d: #f0a84e;
 
+  /* Chart series. Fixed order, never cycled — a filtered chart must not
+     repaint the series that survive. Validated for CVD separation against
+     this surface; adjacent pairs sit in the warn band, so every series also
+     carries a direct label. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
   --shadow-md: 0 4px 12px rgb(0 0 0 / 0.34);
   --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.44);
@@ -105,6 +114,11 @@
   --log-pod-b: #6b3fb8;
   --log-pod-c: #0f7345;
   --log-pod-d: #8a5200;
+
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
 
   /* Softer than dark's: the same opacity over a light ground reads as dirt. */
   --shadow-sm: 0 1px 2px rgb(13 18 32 / 0.06);

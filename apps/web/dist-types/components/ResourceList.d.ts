@@ -13,8 +13,9 @@ interface ResourceListProps {
     readonly state: WatchState;
     readonly error: string | null;
     readonly filter: string;
+    readonly selectedName?: string | undefined;
     readonly onSelect?: (item: KubeItem) => void;
 }
-export declare function ResourceList({ kind, items, state, error, filter, onSelect }: ResourceListProps): import("react").JSX.Element;
+export declare function ResourceList({ kind, items, state, error, filter, selectedName, onSelect }: ResourceListProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=ResourceList.d.ts.map

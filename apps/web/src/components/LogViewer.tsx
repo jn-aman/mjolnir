@@ -1,0 +1,407 @@
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, Download, Regex, Search, WrapText } from 'lucide-react';
+import { useLogStream } from '../lib/useLogStream.ts';
+import { Button } from './ui/Button.tsx';
+import { Select } from './ui/Select.tsx';
+
+/**
+ * The log viewer.
+ *
+ * Three behaviours here are the reason this exists rather than a `<pre>`:
+ *
+ * 1. **Follow pauses when you scroll up** and resumes when you ask. A tail that
+ *    yanks you back to the bottom mid-read is unusable, and one that silently
+ *    stops following is worse.
+ * 2. **Highlight and filter are different modes.** Highlight tints matches and
+ *    keeps the surrounding lines; filter hides everything else. Every tool
+ *    collapses these into one, and they are different tasks.
+ * 3. **Previous-container logs.** When the current container has written
+ *    nothing because it is crash-looping, the dead one explains why.
+ *
+ * Rows are virtualized and never animated — easing a log line into view
+ * misstates when it arrived.
+ */
+
+const ANSI = new RegExp(
+  `[${String.fromCharCode(0x1b)}${String.fromCharCode(0x9b)}][[\\]()#;?]*` +
+    `(?:(?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d/#&.:=?%@~_]*)*)?${String.fromCharCode(0x07)}` +
+    `|(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~])`,
+  'g',
+);
+
+const LEVEL = /\b(ERROR|FATAL|PANIC|WARN|WARNING|INFO|DEBUG|TRACE)\b/;
+
+const LEVEL_TOKEN: Record<string, string> = {
+  ERROR: 'var(--log-error)',
+  FATAL: 'var(--log-error)',
+  PANIC: 'var(--log-error)',
+  WARN: 'var(--log-warn)',
+  WARNING: 'var(--log-warn)',
+  INFO: 'var(--log-info)',
+  DEBUG: 'var(--log-debug)',
+  TRACE: 'var(--log-debug)',
+};
+
+const ROW = 19;
+
+interface LogViewerProps {
+  readonly context: string;
+  readonly namespace: string;
+  readonly pod: string;
+  readonly containers: string[];
+}
+
+export function LogViewer({ context, namespace, pod, containers }: LogViewerProps) {
+  const [container, setContainer] = useState(containers[0] ?? '');
+  const [previous, setPrevious] = useState(false);
+  const [query, setQuery] = useState('');
+  const [useRegex, setUseRegex] = useState(false);
+  const [mode, setMode] = useState<'highlight' | 'filter'>('highlight');
+  const [wrap, setWrap] = useState(true);
+  const [follow, setFollow] = useState(true);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+
+  const { lines, state, error } = useLogStream({
+    context,
+    namespace,
+    pod,
+    container,
+    previous,
+    follow: !previous,
+    tailLines: 500,
+  });
+
+  const matcher = useMemo(() => {
+    if (!query) return null;
+    try {
+      return new RegExp(useRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    } catch {
+      // A half-typed regex is not an error state — it just matches nothing yet.
+      return null;
+    }
+  }, [query, useRegex]);
+
+  const rows = useMemo(() => {
+    const cleaned = lines.map((line) => ({ ...line, message: line.message.replace(ANSI, '') }));
+    if (mode !== 'filter' || !matcher) return cleaned;
+    return cleaned.filter((line) => matcher.test(line.message));
+  }, [lines, matcher, mode]);
+
+  const matchCount = useMemo(() => {
+    if (!matcher) return 0;
+    return lines.reduce((total, line) => (matcher.test(line.message) ? total + 1 : total), 0);
+  }, [lines, matcher]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW,
+    overscan: 24,
+    // A wrapped line is taller than one row. Without measuring, the fixed
+    // estimate makes long lines draw on top of each other — which is exactly
+    // what happens to stack traces, the lines you most need to read.
+    ...(wrap ? { measureElement: (element: Element) => element.getBoundingClientRect().height } : {}),
+  });
+
+  // Follow means "stay pinned to the bottom". Scrolling away turns it off;
+  // scrolling back to the bottom does not turn it back on, because an implicit
+  // resume is how you lose your place a second time.
+  useEffect(() => {
+    if (!follow || rows.length === 0) return;
+    virtualizer.scrollToIndex(rows.length - 1, { align: 'end' });
+  }, [rows.length, follow, virtualizer]);
+
+  const onScroll = () => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
+    if (!atBottom && stickRef.current) {
+      stickRef.current = false;
+      setFollow(false);
+    } else if (atBottom) {
+      stickRef.current = true;
+    }
+  };
+
+  const download = () => {
+    const text = rows
+      .map((line) => `${line.timestamp?.toISOString() ?? ''} ${line.message}`)
+      .join('\n');
+    // A Blob, not a data: URI — the URI form silently truncates past a few MB,
+    // which is exactly the size of log anyone bothers to download.
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${pod}${container ? `-${container}` : ''}.log`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="log-viewer">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-raised px-3 py-2">
+        {containers.length > 1 ? (
+          <Select
+            label="Container"
+            value={container}
+            onChange={setContainer}
+            options={containers.map((name) => ({ value: name, label: name }))}
+            testId="log-container"
+            mono
+          />
+        ) : null}
+
+        <div className="flex h-[30px] min-w-[220px] flex-1 items-center gap-2 rounded-md border border-line bg-sunken px-2.5 focus-within:border-focus">
+          <Search size={13} strokeWidth={2} aria-hidden className="shrink-0 text-tertiary" />
+          <label htmlFor="log-search" className="sr-only">
+            Search logs
+          </label>
+          <input
+            id="log-search"
+            data-testid="log-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            className="min-w-0 flex-1 bg-transparent font-mono text-[12.5px] text-primary outline-none placeholder:text-tertiary"
+          />
+          {query ? (
+            <span data-testid="log-match-count" className="shrink-0 font-mono text-[11px] tabular-nums text-tertiary">
+              {matchCount}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            data-testid="log-regex-toggle"
+            onClick={() => setUseRegex((value) => !value)}
+            aria-label="Regular expression"
+            aria-pressed={useRegex}
+            className={`shrink-0 rounded-xs p-0.5 ${useRegex ? 'text-accent' : 'text-tertiary hover:text-secondary'}`}
+          >
+            <Regex size={13} strokeWidth={2} />
+          </button>
+        </div>
+
+        <Segmented
+          value={mode}
+          onChange={(value) => setMode(value as 'highlight' | 'filter')}
+          options={[
+            { value: 'highlight', label: 'Highlight' },
+            { value: 'filter', label: 'Filter' },
+          ]}
+        />
+
+        <Segmented
+          value={previous ? 'previous' : 'current'}
+          onChange={(value) => setPrevious(value === 'previous')}
+          tone={previous ? 'error' : 'default'}
+          testId="log-previous-group"
+          options={[
+            { value: 'current', label: 'Current' },
+            { value: 'previous', label: 'Previous' },
+          ]}
+        />
+
+        <button
+          type="button"
+          data-testid="log-follow"
+          data-active={follow}
+          onClick={() => {
+            stickRef.current = true;
+            setFollow(true);
+          }}
+          disabled={previous}
+          className={`inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] font-medium disabled:opacity-40 ${
+            follow
+              ? 'border-[var(--status-ok-border)] bg-ok-bg text-ok'
+              : 'border-line bg-sunken text-secondary hover:border-strong'
+          }`}
+          style={{ transitionProperty: 'background-color, border-color, color', transitionDuration: '90ms' }}
+        >
+          {follow ? (
+            <span
+              aria-hidden
+              className="h-[6px] w-[6px] rounded-full bg-current"
+              style={{ animation: 'mjolnir-pulse 2.4s ease-in-out infinite' }}
+            />
+          ) : (
+            <ArrowDown size={12} strokeWidth={2.4} aria-hidden />
+          )}
+          {follow ? 'Following' : 'Paused'}
+        </button>
+
+        <Button
+          iconOnly
+          aria-label="Wrap lines"
+          onClick={() => setWrap((value) => !value)}
+          variant={wrap ? 'secondary' : 'ghost'}
+          icon={<WrapText size={14} strokeWidth={1.9} />}
+        />
+        <Button
+          iconOnly
+          aria-label="Download logs"
+          onClick={download}
+          icon={<Download size={14} strokeWidth={1.9} />}
+        />
+      </div>
+
+      {previous ? (
+        <div className="shrink-0 border-b border-[var(--status-error-border)] bg-error-bg px-3 py-2 text-[12px] text-error">
+          Showing the previous container. The running one has written nothing yet.
+        </div>
+      ) : null}
+
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        data-testid="log-body"
+        className="min-h-0 flex-1 overflow-auto bg-sunken py-1"
+      >
+        {state === 'connecting' && rows.length === 0 ? (
+          <Empty>Connecting…</Empty>
+        ) : error ? (
+          <Empty tone="error">{error}</Empty>
+        ) : rows.length === 0 ? (
+          <Empty>
+            {query && mode === 'filter' ? (
+              `Nothing matches “${query}”.`
+            ) : previous ? (
+              'The previous container wrote nothing.'
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <p className="m-0 max-w-[320px] text-[13px] text-secondary">
+                  This container has written nothing yet.
+                </p>
+                <p className="m-0 max-w-[340px] text-[12px] text-tertiary">
+                  If it is restarting, the instance that failed is the one with the
+                  answer.
+                </p>
+                <Button variant="secondary" onClick={() => setPrevious(true)}>
+                  Show the previous container
+                </Button>
+              </div>
+            )}
+          </Empty>
+        ) : (
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualizer.getVirtualItems().map((item) => {
+              const line = rows[item.index];
+              if (!line) return null;
+              const level = LEVEL.exec(line.message)?.[1];
+              // The level gets its own column, so strip it from the message —
+              // otherwise every warning reads "WARN WARN ...".
+              const body = level
+                ? line.message.replace(new RegExp(`^\\s*${level}\\s+`), '')
+                : line.message;
+              const hit = mode === 'highlight' && matcher?.test(line.message);
+              // A continuation line — a stack frame — dims so the eye lands on
+              // the error above it rather than five equally loud frames.
+              const continuation = /^\s{4,}at\s/.test(line.message);
+
+              return (
+                <div
+                  key={line.seq}
+                  data-index={item.index}
+                  ref={wrap ? virtualizer.measureElement : undefined}
+                  data-testid="log-line"
+                  className="absolute inset-x-0 flex items-baseline gap-0 px-3 font-mono text-[12.5px]"
+                  style={{
+                    ...(wrap ? {} : { height: item.size }),
+                    minHeight: ROW,
+                    lineHeight: `${ROW}px`,
+                    transform: `translateY(${item.start}px)`,
+                    background: hit ? 'var(--log-highlight)' : undefined,
+                  }}
+                >
+                  <span className="w-[86px] shrink-0 select-none text-[var(--log-time)]">
+                    {line.timestamp?.toTimeString().slice(0, 8) ?? ''}
+                  </span>
+                  <span
+                    className="w-[52px] shrink-0 font-medium"
+                    style={{ color: level ? LEVEL_TOKEN[level] : 'transparent' }}
+                  >
+                    {level ?? ''}
+                  </span>
+                  <span
+                    className={wrap ? 'min-w-0 flex-1 whitespace-pre-wrap break-words' : 'flex-1 whitespace-pre'}
+                    style={{
+                      color: continuation ? 'var(--log-debug)' : 'var(--log-body)',
+                    }}
+                  >
+                    {body}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="flex h-[26px] shrink-0 items-center gap-3 border-t border-line bg-raised px-3 font-mono text-[11px] text-tertiary">
+        <span data-testid="log-count">{rows.length} lines</span>
+        {state === 'streaming' ? <span className="text-ok">streaming</span> : null}
+        {state === 'ended' && !previous ? <span>ended</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function Empty({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'error' }) {
+  return (
+    <div
+      className={`flex h-full items-center justify-center p-8 text-[13px] ${
+        tone === 'error' ? 'text-error' : 'text-tertiary'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Segmented({
+  value,
+  onChange,
+  options,
+  tone = 'default',
+  testId,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  tone?: 'default' | 'error';
+  testId?: string;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      className={`flex shrink-0 rounded-md border bg-sunken p-[3px] ${
+        tone === 'error' ? 'border-[var(--status-error-border)]' : 'border-line'
+      }`}
+    >
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            data-testid={`seg-${option.value}`}
+            data-active={active}
+            onClick={() => onChange(option.value)}
+            className={`rounded-sm px-2.5 py-[3px] text-[12px] font-medium ${
+              active
+                ? tone === 'error'
+                  ? 'bg-error-bg text-error'
+                  : 'bg-pressed text-primary'
+                : 'text-secondary hover:text-primary'
+            }`}
+            style={{ transitionProperty: 'background-color, color', transitionDuration: '90ms' }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

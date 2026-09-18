@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,6 +12,25 @@
     />
   </head>
   <body>
+    <script>
+      // Applied before first paint. Without this the document renders in one
+      // theme and React switches it on mount, which is a visible flash on every
+      // launch — the most noticeable rough edge a themed app can ship with.
+      (function () {
+        try {
+          var choice = localStorage.getItem('mjolnir.theme') || 'system';
+          var resolved =
+            choice === 'system'
+              ? window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+              : choice;
+          document.documentElement.dataset.theme = resolved;
+        } catch (_) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

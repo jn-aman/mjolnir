@@ -1,5 +1,8 @@
 import express from 'express';
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { logger } from '@mjolnir/logger';
 import { setSchemaReporter } from '@mjolnir/schemas';
 import { ClusterRegistry } from './clusters.ts';
@@ -7,6 +10,7 @@ import { errorHandler } from './http.ts';
 import { attachLogSocket } from './log-socket.ts';
 import { clusterRoutes } from './routes/clusters.ts';
 import { logRoutes } from './routes/logs.ts';
+import { metricRoutes } from './routes/metrics.ts';
 import { resourceRoutes } from './routes/resources.ts';
 
 const log = logger.child('server');
@@ -35,7 +39,31 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/clusters', clusterRoutes(registry));
   app.use('/api/resources', resourceRoutes(registry));
   app.use('/api/logs', logRoutes(registry));
+  app.use('/api/metrics', metricRoutes(registry));
   app.use(errorHandler);
+
+  /**
+   * The built client, when there is one.
+   *
+   * In the desktop app Electron loads these files directly; this path is what
+   * makes the standalone web and Docker modes work, and it is also the quickest
+   * way to look at the app during development without a second dev server.
+   */
+  const webDist = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../web/dist',
+  );
+
+  if (existsSync(webDist)) {
+    app.use(express.static(webDist, { index: false }));
+    // Client-side routing: anything that is not an API call gets the shell.
+    app.get(/^(?!\/api|\/ws).*/, (_req, res) => {
+      res.sendFile(path.join(webDist, 'index.html'));
+    });
+    log.info('serving the built client', { from: webDist });
+  } else {
+    log.info('no built client found; API only', { expected: webDist });
+  }
 
   const server = createServer(app);
   attachLogSocket(server, registry);
