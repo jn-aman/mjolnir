@@ -1,4 +1,5 @@
 import type { ResourceDefinition } from '@mjolnir/k8s';
+import { type ToolDefinition } from '../lib/tools.ts';
 /** What the sidebar can select: a resource kind, or one of the app's own pages. */
 export type NavSelection = {
     kind: 'resource';
@@ -23,7 +24,9 @@ interface SidebarProps {
     readonly counts: Record<string, number>;
     readonly onSelect: (selection: NavSelection) => void;
     readonly width: number;
+    /** When set, this is a module other than Kubernetes: its sections are the nav. */
+    readonly module?: ToolDefinition | undefined;
 }
-export declare function Sidebar({ kinds, selection, counts, onSelect, width }: SidebarProps): import("react").JSX.Element;
+export declare function Sidebar({ kinds, selection, counts, onSelect, width, module }: SidebarProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Sidebar.d.ts.map

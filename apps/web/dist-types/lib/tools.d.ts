@@ -29,7 +29,17 @@ export interface ToolDefinition {
     readonly detail: readonly string[];
     /** What does the job today, so the page is useful before the feature is. */
     readonly today: readonly ToolCommand[];
+    /** A module's sidebar entries. Only for `workspace` entries. */
+    readonly sections?: readonly string[];
 }
+/** The Kubernetes module, alongside the others; it is not the app. */
+export declare const KUBERNETES_MODULE: {
+    readonly id: 'kubernetes';
+    readonly label: 'Kubernetes';
+    readonly tint: 'var(--series-1)';
+};
+export declare function isModule(id: string): boolean;
+export declare function modules(): ToolDefinition[];
 export declare const TOOLS: readonly ToolDefinition[];
 export declare function toolById(id: string): ToolDefinition | undefined;
 //# sourceMappingURL=tools.d.ts.map

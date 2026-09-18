@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ResourceDefinition } from '@mjolnir/k8s';
 import { CATEGORY_TINT } from '../lib/tint.ts';
-import { TOOLS } from '../lib/tools.ts';
+import { TOOLS, type ToolDefinition } from '../lib/tools.ts';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import {
   Boxes,
@@ -99,9 +99,11 @@ interface SidebarProps {
   readonly counts: Record<string, number>;
   readonly onSelect: (selection: NavSelection) => void;
   readonly width: number;
+  /** When set, this is a module other than Kubernetes: its sections are the nav. */
+  readonly module?: ToolDefinition | undefined;
 }
 
-export function Sidebar({ kinds, selection, counts, onSelect, width }: SidebarProps) {
+export function Sidebar({ kinds, selection, counts, onSelect, width, module }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const grouped = new Map<string, ResourceDefinition[]>();
@@ -128,33 +130,36 @@ export function Sidebar({ kinds, selection, counts, onSelect, width }: SidebarPr
     { id: 'expand-all', label: 'Expand all sections', onSelect: () => setCollapsed(new Set()) },
   ];
   const tools = TOOLS.filter((tool) => tool.area === 'tools');
-  const workspaces = TOOLS.filter((tool) => tool.area === 'workspace');
 
-  if (selection.kind === 'workspace') {
+  if (module) {
+    const [, activeSection] = selection.kind === 'workspace' ? selection.value.split(':') : [];
+    const Icon = module.icon;
     return (
       <nav data-testid="sidebar" className="flex shrink-0 flex-col overflow-y-auto border-r border-line bg-raised py-2" style={{ width }}>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">
-          <span aria-hidden className="h-[6px] w-[6px] rounded-full bg-accent" />
-          Toolbox
+        <div className="flex items-center gap-2 px-3 py-2">
+          <Icon size={15} strokeWidth={1.8} aria-hidden style={{ color: module.tint }} />
+          <span className="text-[13px] font-semibold text-primary">{module.label}</span>
+          <span className="rounded-xs border border-line px-1 text-[9.5px] font-semibold uppercase tracking-wide text-tertiary">planned</span>
         </div>
+        <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
         <ul>
-          {workspaces.map((space) => (
-            <li key={space.id}>
-              <Entry
-                icon={space.icon}
-                label={space.label}
-                testId={`nav-workspace-${space.id}`}
-                active={selection.value === space.id}
-                tint={space.tint}
-                menu={[{ id: 'open', label: `Open ${space.label}`, onSelect: () => onSelect({ kind: 'workspace', value: space.id }) }]}
-                onSelect={() => onSelect({ kind: 'workspace', value: space.id })}
-              />
-            </li>
-          ))}
+          {(module.sections ?? []).map((section) => {
+            const id = `${module.id}:${section.toLowerCase().replace(/\s+/g, '-')}`;
+            return (
+              <li key={section}>
+                <Entry
+                  icon={Icon}
+                  label={section}
+                  testId={`nav-${id}`}
+                  active={activeSection === id.split(':')[1]}
+                  tint={module.tint}
+                  menu={[{ id: 'open', label: `Open ${section}`, onSelect: () => onSelect({ kind: 'workspace', value: id }) }]}
+                  onSelect={() => onSelect({ kind: 'workspace', value: id })}
+                />
+              </li>
+            );
+          })}
         </ul>
-        <div className="flex-1" />
-        <div className="mx-3 my-1.5 h-px bg-[var(--border-subtle)]" />
-        <Entry icon={Settings} label="Mjolnir settings" testId="nav-app-settings" active={false} onSelect={() => onSelect({ kind: 'page', value: 'app-settings' })} />
       </nav>
     );
   }

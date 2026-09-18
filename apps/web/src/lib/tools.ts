@@ -51,6 +51,19 @@ export interface ToolDefinition {
   readonly detail: readonly string[];
   /** What does the job today, so the page is useful before the feature is. */
   readonly today: readonly ToolCommand[];
+  /** A module's sidebar entries. Only for `workspace` entries. */
+  readonly sections?: readonly string[];
+}
+
+/** The Kubernetes module, alongside the others; it is not the app. */
+export const KUBERNETES_MODULE = { id: 'kubernetes', label: 'Kubernetes', tint: 'var(--series-1)' } as const;
+
+export function isModule(id: string): boolean {
+  return id === KUBERNETES_MODULE.id || TOOLS.some((tool) => tool.area === 'workspace' && tool.id === id);
+}
+
+export function modules(): ToolDefinition[] {
+  return TOOLS.filter((tool) => tool.area === 'workspace');
 }
 
 export const TOOLS: readonly ToolDefinition[] = [
@@ -156,6 +169,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Team sync of session definitions, never of credentials, through a shared file or a Git repo',
     ],
     today: [{ label: 'Who am I', command: 'aws sts get-caller-identity' }],
+    sections: ['Sessions', 'AWS', 'Azure', 'Google Cloud', 'Profiles', 'Audit log'],
   },
   {
     id: 'docker',
@@ -173,6 +187,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'System: disk usage, prune, events stream, resource limits of the engine; Kubernetes-in-Docker clusters (kind, k3d, OrbStack) appear in the rail',
     ],
     today: [{ label: 'Running containers', command: 'docker ps' }],
+    sections: ['Containers', 'Images', 'Volumes', 'Networks', 'Compose', 'Registries', 'System'],
   },
   {
     id: 'storage',
@@ -189,6 +204,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Bucket policies, versioning, lifecycle and replication shown and editable where the store supports them',
     ],
     today: [{ label: 'List a bucket', command: 'mc ls <alias>/<bucket>' }],
+    sections: ['Connections', 'Buckets', 'Transfers', 'Presigned links'],
   },
   {
     id: 'database',
@@ -203,6 +219,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Read-only by default; writes need a switch you flip per session',
     ],
     today: [{ label: 'Connect through a forward', command: 'kubectl -n <namespace> port-forward svc/<db> 5432:5432' }],
+    sections: ['Connections', 'Query', 'Tables', 'Redis keys', 'Mongo collections'],
   },
   {
     id: 'kafka',
@@ -217,6 +234,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Jump from a lagging group to the pods that make it up',
     ],
     today: [{ label: 'Group lag', command: 'kafka-consumer-groups.sh --bootstrap-server <broker> --describe --group <group>' }],
+    sections: ['Clusters', 'Topics', 'Consumer groups', 'Messages'],
   },
   {
     id: 'drift',
@@ -273,6 +291,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Renew through cert-manager where it manages the cert; otherwise the command that does',
     ],
     today: [{ label: 'Check a TLS secret', command: 'kubectl get secret <name> -o jsonpath="{.data.tls\\.crt}" | base64 -d | openssl x509 -noout -enddate' }],
+    sections: ['Expiring', 'Cluster certificates', 'Kubeconfig certificates', 'Renewals'],
   },
   {
     id: 'netpath',
@@ -301,6 +320,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Base image and its age; images pulled by tag rather than digest called out',
     ],
     today: [{ label: 'Verify a signature', command: 'cosign verify <image>' }],
+    sections: ['Running images', 'Signatures', 'SBOMs', 'Base images'],
   },
   {
     id: 'traffic',

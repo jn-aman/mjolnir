@@ -28,8 +28,9 @@ finding room.
 
 | Region | Holds | Extension point |
 |---|---|---|
-| **Rail** | one tile per cluster; below a rule, the Toolbox tile and the Mjolnir settings gear | `TOOLS` entries with `area: 'workspace'` fill the Toolbox sidebar |
-| **Sidebar** | cluster mode: the cluster's kinds by category, then Tools, then Kubernetes settings. Toolbox mode: the generic workspaces, then Mjolnir settings | resource registry (`@mjolnir/k8s`), `TOOLS` entries by `area` |
+| **Rail** | one tile per module: Kubernetes, Cloud access, Containers, Object storage, Databases, Kafka, Certificates, Image provenance; the Mjolnir settings gear below. Modules are peers; none is the app | `KUBERNETES_MODULE` plus `TOOLS` entries with `area: 'workspace'` |
+| **Cluster strip** | inside the Kubernetes module only: one tile per cluster, plus add | kubeconfig contexts |
+| **Sidebar** | per module. Kubernetes: kinds by category, Tools, Kubernetes settings. Any other module: its `sections` | resource registry (`@mjolnir/k8s`), `ToolDefinition.sections` |
 | **Content** | a list, the overview, a tool page or a settings page | `NavSelection` union in `Sidebar.tsx`; `view` switch in `App.tsx` |
 | **Drawer** | one object: overview / logs / events / yaml (+ per-kind tabs) | `tabs` array in `ResourceDrawer.tsx`; `detail/<Kind>Detail.tsx` |
 | **Dock** | things kept open while you browse: log tails and the assistant now; terminals and port-forward tabs next | `DockTab['kind']` and the switch in `Dock.tsx` |

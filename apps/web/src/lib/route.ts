@@ -25,7 +25,9 @@ export function readRoute(): RouteState {
     const nav = params.get('nav');
     let selection: NavSelection | undefined;
     if (nav) {
-      const [kind, value] = nav.split(':', 2);
+      const colon = nav.indexOf(':');
+      const kind = colon === -1 ? nav : nav.slice(0, colon);
+      const value = colon === -1 ? '' : nav.slice(colon + 1);
       if (kind && value && NAV_KINDS.has(kind)) selection = { kind, value } as NavSelection;
     }
     const pick = (key: string) => {

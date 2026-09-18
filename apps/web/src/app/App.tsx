@@ -10,7 +10,8 @@ import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { ResourceList } from '../components/ResourceList.tsx';
 import { ResourceDrawer } from '../components/ResourceDrawer.tsx';
 import { Sidebar, type NavSelection } from '../components/Sidebar.tsx';
-import { ClusterRail } from '../components/ClusterRail.tsx';
+import { ClusterStrip } from '../components/ClusterStrip.tsx';
+import { ModuleRail } from '../components/ModuleRail.tsx';
 import { Overview, type NavigateTarget } from '../components/Overview.tsx';
 import { SettingsPanel } from '../components/SettingsPanel.tsx';
 import { podStatus, type KubeItem } from '../components/columns.tsx';
@@ -23,7 +24,7 @@ import { Dock, type DockTab } from '../components/Dock.tsx';
 import { CommandPalette } from '../components/CommandPalette.tsx';
 import { ToolPanel } from '../components/ToolPanel.tsx';
 import { ScaleDialog } from '../components/ScaleDialog.tsx';
-import { toolById } from '../lib/tools.ts';
+import { KUBERNETES_MODULE, toolById } from '../lib/tools.ts';
 import { readRoute, writeRoute } from '../lib/route.ts';
 import { offsetMinutes, timezoneOptions, useTimezone, utcLabel } from '../lib/time.ts';
 import { Globe } from 'lucide-react';
@@ -66,7 +67,7 @@ export function App() {
   const [creating, setCreating] = useState(false);
   const [forwarding, setForwarding] = useState<KubeItem | null>(null);
   const [incomingAsk, setIncomingAsk] = useState<{ id: number; text: string } | null>(null);
-  const [lastWorkspace, setLastWorkspace] = useState('cloud');
+  const [lastSection, setLastSection] = useState<Record<string, string>>({});
 
   // "Ask the assistant" from any menu: open the assistant tab and hand it the prompt.
   const openAssistant = useCallback(
@@ -119,7 +120,11 @@ export function App() {
 
   const view =
     selection.kind === 'page' ? selection.value : selection.kind === 'resource' ? 'resources' : selection.kind;
-  const tool = selection.kind === 'tool' || selection.kind === 'workspace' ? toolById(selection.value) : undefined;
+  const moduleId = selection.kind === 'workspace' ? (selection.value.split(':')[0] ?? '') : KUBERNETES_MODULE.id;
+  const section = selection.kind === 'workspace' ? selection.value.split(':')[1] : undefined;
+  const tool = selection.kind === 'tool' || selection.kind === 'workspace' ? toolById(selection.kind === 'workspace' ? moduleId : selection.value) : undefined;
+  const sectionLabel = section && tool ? tool.sections?.find((entry) => entry.toLowerCase().replace(/\s+/g, '-') === section) : undefined;
+  const isAppSettings = selection.kind === 'page' && selection.value === 'app-settings';
 
   const load = useCallback(async () => {
     if (!context || selection.kind !== 'resource') return;
@@ -395,7 +400,8 @@ export function App() {
     <Tooltip.Provider delayDuration={400}>
       <div className="flex h-full flex-col bg-ground text-primary">
         <TitleBar
-          current={current}
+          module={tool && moduleId !== KUBERNETES_MODULE.id ? { label: tool.label, tint: tool.tint, icon: tool.icon } : isAppSettings ? null : { label: KUBERNETES_MODULE.label, tint: KUBERNETES_MODULE.tint, icon: null }}
+          current={moduleId === KUBERNETES_MODULE.id && !isAppSettings ? current : undefined}
           theme={theme.resolved}
           onToggleTheme={() => theme.set(theme.resolved === 'dark' ? 'light' : 'dark')}
           onPalette={() => setPaletteOpen(true)}
@@ -403,46 +409,52 @@ export function App() {
         />
 
         <div className="flex min-h-0 flex-1">
-          <ClusterRail
-            contexts={clusters?.contexts ?? []}
-            current={context}
-            workspace={selection.kind === 'workspace' ? selection.value : null}
-            onSelect={(name) => {
-              setContext(name);
+          <ModuleRail
+            active={moduleId}
+            settingsActive={isAppSettings}
+            onSelect={(id) => {
               setSelected(null);
-              if (selection.kind === 'workspace') setSelection({ kind: 'page', value: 'overview' });
+              if (id === KUBERNETES_MODULE.id) setSelection({ kind: 'page', value: 'overview' });
+              else setSelection({ kind: 'workspace', value: lastSection[id] ?? id });
             }}
-            onWorkspace={(id) => {
-              const value = id === 'toolbox' ? lastWorkspace : id;
-              setLastWorkspace(value);
-              setSelection({ kind: 'workspace', value });
-              setSelected(null);
-            }}
-            onAdd={() => setSelection({ kind: 'page', value: 'settings' })}
             onSettings={() => setSelection({ kind: 'page', value: 'app-settings' })}
-            settingsActive={selection.kind === 'page' && selection.value === 'app-settings'}
           />
 
-          <div className="relative flex shrink-0">
-            <Sidebar
-              kinds={kinds}
-              selection={selection}
-              counts={counts}
-              width={sidebar.width}
-              onSelect={(next) => {
-                setSelection(next);
-                if (next.kind === 'resource') setKind(next.value);
-                if (next.kind === 'workspace') setLastWorkspace(next.value);
+          {isAppSettings ? null : moduleId === KUBERNETES_MODULE.id ? (
+            <ClusterStrip
+              contexts={clusters?.contexts ?? []}
+              current={context}
+              onSelect={(name) => {
+                setContext(name);
                 setSelected(null);
               }}
+              onAdd={() => setSelection({ kind: 'page', value: 'settings' })}
             />
-            <ResizeHandle
-              side="right"
-              label="Resize navigation"
-              dragging={sidebar.dragging}
-              onPointerDown={sidebar.onPointerDown}
-            />
-          </div>
+          ) : null}
+
+          {isAppSettings ? null : (
+            <div className="relative flex shrink-0">
+              <Sidebar
+                kinds={kinds}
+                selection={selection}
+                counts={counts}
+                width={sidebar.width}
+                module={moduleId === KUBERNETES_MODULE.id ? undefined : tool}
+                onSelect={(next) => {
+                  setSelection(next);
+                  if (next.kind === 'resource') setKind(next.value);
+                  if (next.kind === 'workspace') setLastSection((current) => ({ ...current, [next.value.split(':')[0] ?? '']: next.value }));
+                  setSelected(null);
+                }}
+              />
+              <ResizeHandle
+                side="right"
+                label="Resize navigation"
+                dragging={sidebar.dragging}
+                onPointerDown={sidebar.onPointerDown}
+              />
+            </div>
+          )}
 
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -462,7 +474,7 @@ export function App() {
             {view === 'tool' && tool?.id === 'portforward' ? (
               <ForwardsPanel onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })} />
             ) : (view === 'tool' || view === 'workspace') && tool ? (
-              <ToolPanel tool={tool} />
+              <ToolPanel tool={tool} section={sectionLabel} />
             ) : null}
 
             {view === 'settings' || view === 'app-settings' ? (
@@ -739,6 +751,7 @@ function Dot({
 }
 
 interface TitleBarProps {
+  readonly module: { label: string; tint: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties }> | null } | null;
   readonly current: ClusterContext | undefined;
   readonly theme: 'dark' | 'light';
   readonly onToggleTheme: () => void;
@@ -768,7 +781,7 @@ const PROVIDER_LABEL: Record<string, string> = {
  * rail. What is left is who you are connected to and whether it is answering -
  * the two things worth having on screen permanently.
  */
-function TitleBar({ current, theme, onToggleTheme, onPalette, onAssistant }: TitleBarProps) {
+function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistant }: TitleBarProps) {
   const provider = current ? PROVIDER_LABEL[current.provider] : '';
   const timezone = useTimezone();
   const zoneOptions = useMemo(() => timezoneOptions(), []);
@@ -787,6 +800,18 @@ function TitleBar({ current, theme, onToggleTheme, onPalette, onAssistant }: Tit
 
       <div className="mx-1 h-4 w-px bg-[var(--border-default)]" />
 
+      {module ? (
+        <span className="flex items-center gap-1.5 text-[12.5px] text-primary" data-testid="module-crumb">
+          {module.icon ? <module.icon size={13} strokeWidth={1.9} style={{ color: module.tint }} /> : <span aria-hidden className="h-[7px] w-[7px] rounded-full" style={{ background: module.tint }} />}
+          {module.label}
+        </span>
+      ) : (
+        <span className="text-[12.5px] text-primary" data-testid="module-crumb">Settings</span>
+      )}
+
+      {current !== undefined ? <span className="text-tertiary">›</span> : null}
+
+      {current !== undefined ? (
       <span
         data-testid="connection-status"
         data-state={current ? 'connected' : 'disconnected'}
@@ -812,6 +837,7 @@ function TitleBar({ current, theme, onToggleTheme, onPalette, onAssistant }: Tit
           <span className="font-mono text-[11px] text-tertiary">{current.server}</span>
         ) : null}
       </span>
+      ) : null}
 
       <div className="flex-1" />
 

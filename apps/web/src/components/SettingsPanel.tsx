@@ -91,6 +91,7 @@ const AI_PRESETS: ReadonlyArray<{ id: string; label: string; provider: 'anthropi
   { id: 'groq', label: 'Groq', provider: 'openai', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', needsKey: true },
   { id: 'mistral', label: 'Mistral', provider: 'openai', baseUrl: 'https://api.mistral.ai/v1', model: 'mistral-large-latest', needsKey: true },
   { id: 'xai', label: 'xAI', provider: 'openai', baseUrl: 'https://api.x.ai/v1', model: 'grok-4', needsKey: true },
+  { id: 'mimo', label: 'Xiaomi MiMo', provider: 'openai', baseUrl: 'https://api.xiaomimimo.com/v1', model: 'mimo-v2-flash', needsKey: true },
   { id: 'custom', label: 'Custom (OpenAI-compatible)', provider: 'openai', baseUrl: '', model: '', needsKey: false },
 ];
 

@@ -93,7 +93,7 @@ export function CommandPalette({
           </Command.Item>
         </Command.Group>
 
-        <Command.Group heading="Tools">
+        <Command.Group heading="Modules and tools">
           {TOOLS.map((tool) => {
             const Icon = tool.icon;
             return (

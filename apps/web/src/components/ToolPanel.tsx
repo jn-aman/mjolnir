@@ -10,7 +10,7 @@ import type { ToolDefinition } from '../lib/tools.ts';
  * the slot is useful before the feature is. It does not pretend: no empty
  * table, no disabled buttons dressed as a preview.
  */
-export function ToolPanel({ tool }: { readonly tool: ToolDefinition }) {
+export function ToolPanel({ tool, section }: { readonly tool: ToolDefinition; readonly section?: string | undefined }) {
   const Icon = tool.icon;
   return (
     <div className="mjolnir-fade-in flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid={`tool-${tool.id}`}>
@@ -25,6 +25,7 @@ export function ToolPanel({ tool }: { readonly tool: ToolDefinition }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-primary">{tool.label}</h1>
+              {section ? <span className="text-[13px] text-tertiary">› {section}</span> : null}
               <span className="rounded-xs border border-line bg-raised px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-tertiary">
                 Planned
               </span>
