@@ -1,0 +1,21 @@
+{
+  "name": "@odin/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": { "build": "tsc -b", "dev": "node --experimental-strip-types src/index.ts" },
+  "dependencies": {
+    "@odin/k8s": "*",
+    "@odin/licensing": "*",
+    "@odin/logger": "*",
+    "@odin/schemas": "*",
+    "express": "^4.21.2",
+    "ws": "^8.21.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.13"
+  }
+}
