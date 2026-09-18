@@ -1,5 +1,5 @@
-import type { Duplex } from 'node:stream';
-import { PortForward } from '@kubernetes/client-node';
+import { Writable, type Duplex, type Readable } from 'node:stream';
+import { Exec, PortForward } from '@kubernetes/client-node';
 import type { KubeConfig } from '@kubernetes/client-node';
 import {
   ClusterTransport,
@@ -27,6 +27,25 @@ const log = logger.child('clusters');
  * and ends up in nine, and then the demo drifts from the real thing and stops
  * being worth testing against.
  */
+export interface ExecOptions {
+  readonly namespace: string;
+  readonly pod: string;
+  readonly container?: string | undefined;
+  readonly command: readonly string[];
+  readonly cols: number;
+  readonly rows: number;
+}
+
+export interface ExecIo {
+  /** Bytes from the container, in order. */
+  readonly onData: (chunk: Buffer) => void;
+  readonly onExit: (status: { code: number | null; message?: string }) => void;
+  /** The server reads the user's keystrokes from here. */
+  readonly stdin: Readable;
+  /** Emits when the user's terminal changes size. */
+  readonly size: { readonly cols: number; readonly rows: number; on: (event: 'resize', fn: () => void) => void };
+}
+
 export interface ClusterConnection {
   readonly context: ClusterContext;
   json<T = unknown>(path: string): Promise<T>;
@@ -38,6 +57,8 @@ export interface ClusterConnection {
   patch<T = unknown>(path: string, body: unknown): Promise<T>;
   /** POST: a new object into a collection, or a subresource such as eviction. */
   create<T = unknown>(path: string, body: unknown): Promise<T>;
+  /** A shell in a container: `kubectl exec -it`. Resolves with a handle to close it. */
+  exec(options: ExecOptions, io: ExecIo): Promise<{ close: () => void }>;
   /** Pipes one TCP connection to a pod port, the wire behind `kubectl port-forward`. */
   forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void>;
   watch(resource: ResourceDefinition, namespace?: string): ResourceSource;
@@ -97,6 +118,41 @@ class LiveConnection implements ClusterConnection {
     await forwarder.portForward(namespace, pod, [port], socket, null, socket);
   }
 
+  async exec(options: ExecOptions, io: ExecIo): Promise<{ close: () => void }> {
+    // client-node forwards terminal size when stdout looks like a TTY:
+    // it reads `columns`/`rows` and listens for 'resize'. This stream is that.
+    const stdout = new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        io.onData(chunk);
+        callback();
+      },
+    }) as Writable & { columns: number; rows: number };
+    stdout.columns = io.size.cols;
+    stdout.rows = io.size.rows;
+    io.size.on('resize', () => {
+      stdout.columns = io.size.cols;
+      stdout.rows = io.size.rows;
+      stdout.emit('resize');
+    });
+    const runner = new Exec(this.config);
+    const ws = await runner.exec(
+      options.namespace,
+      options.pod,
+      options.container ?? '',
+      [...options.command],
+      stdout,
+      stdout,
+      io.stdin,
+      true,
+      (status) => {
+        const code = status.status === 'Success' ? 0 : Number(status.details?.causes?.find((c) => c.reason === 'ExitCode')?.message ?? 1);
+        io.onExit({ code, ...(status.message ? { message: status.message } : {}) });
+      },
+    );
+    ws.on('close', () => io.onExit({ code: null }));
+    return { close: () => ws.close() };
+  }
+
   /**
    * One watch per kind, shared.
    *
@@ -134,6 +190,63 @@ class LiveConnection implements ClusterConnection {
   }
 }
 
+/**
+ * The demo cluster's shell: a few commands, a prompt, honest about what it is.
+ * Enough to see that a terminal in the dock types, echoes, resizes and exits.
+ */
+function demoShell(options: ExecOptions, io: ExecIo): { close: () => void } {
+  const prompt = `\x1b[32m${options.pod}\x1b[0m:\x1b[34m/app\x1b[0m$ `;
+  let line = '';
+  const write = (text: string) => io.onData(Buffer.from(text));
+  write('\x1b[2mMjolnir demo shell. This container is imaginary; the terminal is real.\x1b[0m\r\n');
+  write(prompt);
+  const answer = (input: string): string => {
+    const [cmd, ...args] = input.trim().split(/\s+/);
+    switch (cmd) {
+      case '': return '';
+      case 'ls': return 'app.js  node_modules  package.json  config\r\n';
+      case 'pwd': return '/app\r\n';
+      case 'whoami': return 'app\r\n';
+      case 'hostname': return `${options.pod}\r\n`;
+      case 'env': return `HOSTNAME=${options.pod}\r\nNAMESPACE=${options.namespace}\r\nNODE_ENV=production\r\nPORT=8080\r\n`;
+      case 'ps': return 'PID   USER     COMMAND\r\n    1 app      node app.js\r\n   17 app      sh\r\n';
+      case 'cat': return args[0] === '/etc/os-release' ? 'NAME="Alpine Linux"\r\nVERSION_ID=3.20.3\r\n' : `cat: ${args[0] ?? ''}: No such file or directory\r\n`;
+      case 'uptime': return ' 21:14:02 up 2:11,  load average: 0.42, 0.37, 0.29\r\n';
+      case 'echo': return `${args.join(' ')}\r\n`;
+      case 'clear': return '\x1b[2J\x1b[H';
+      case 'exit': return '\x00exit';
+      default: return `sh: ${cmd}: not found\r\n`;
+    }
+  };
+  const onInput = (chunk: Buffer) => {
+    for (const ch of chunk.toString()) {
+      if (ch === '\r' || ch === '\n') {
+        write('\r\n');
+        const out = answer(line);
+        line = '';
+        if (out === '\x00exit') {
+          io.onExit({ code: 0 });
+          return;
+        }
+        write(out + prompt);
+      } else if (ch === '\x7f' || ch === '\b') {
+        if (line.length) {
+          line = line.slice(0, -1);
+          write('\b \b');
+        }
+      } else if (ch === '\x03') {
+        line = '';
+        write('^C\r\n' + prompt);
+      } else if (ch >= ' ') {
+        line += ch;
+        write(ch);
+      }
+    }
+  };
+  io.stdin.on('data', onInput);
+  return { close: () => io.stdin.off('data', onInput) };
+}
+
 class DemoConnection implements ClusterConnection {
   readonly context: ClusterContext = {
     name: DEMO_CONTEXT,
@@ -167,6 +280,10 @@ class DemoConnection implements ClusterConnection {
 
   create<T = unknown>(path: string, body: unknown): Promise<T> {
     return this.#transport.create<T>(path, body);
+  }
+
+  async exec(options: ExecOptions, io: ExecIo): Promise<{ close: () => void }> {
+    return demoShell(options, io);
   }
 
   async forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void> {

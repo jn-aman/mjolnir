@@ -16,6 +16,8 @@ export interface DockTab {
     readonly namespace?: string;
     readonly pod?: string;
     readonly containers?: readonly string[];
+    /** For terminal tabs: the container to exec into. */
+    readonly container?: string | undefined;
 }
 interface DockProps {
     readonly tabs: readonly DockTab[];

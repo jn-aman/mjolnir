@@ -159,7 +159,8 @@ interface PodDetailProps {
     readonly onOpenWorkspace?: ((id: string) => void) | undefined;
     /** Opens the port-forward dialog, on this port. */
     readonly onForward?: ((port: number) => void) | undefined;
+    readonly onShell?: ((container: string) => void) | undefined;
 }
-export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward }: PodDetailProps): import("react").JSX.Element;
+export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell }: PodDetailProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=PodDetail.d.ts.map

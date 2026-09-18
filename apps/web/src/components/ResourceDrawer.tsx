@@ -13,6 +13,7 @@ import { Button } from './ui/Button.tsx';
 import { Modal } from './ui/Modal.tsx';
 import { askEntry, copyEntry, copyText, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { editContainer } from '../lib/edits.ts';
+import { Terminal as TerminalIcon } from 'lucide-react';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
 
@@ -37,6 +38,7 @@ interface DrawerProps {
   /** Called after a successful delete so the list can drop the row at once. */
   readonly onDeleted?: () => void;
   readonly onForward?: ((item: KubeItem, port?: number) => void) | undefined;
+  readonly onShell?: ((item: KubeItem, container?: string) => void) | undefined;
 }
 
 interface PodShape extends KubeItem {
@@ -63,6 +65,7 @@ export function ResourceDrawer({
   onNavigate,
   onDeleted,
   onForward,
+  onShell,
 }: DrawerProps) {
   const [yaml, setYaml] = useState<string | null>(null);
   const [tab, setTab] = useState(initialTab ?? 'overview');
@@ -236,6 +239,7 @@ export function ResourceDrawer({
   const headerMenu: MenuEntry[] = [
     askEntry('Ask the assistant about this', `Look at ${kind} ${name}${namespace ? ` in namespace ${namespace}` : ''}: describe it, check logs and events, and tell me anything that needs attention.`),
     ...(isPod ? [{ id: 'logs', label: 'Logs', onSelect: () => openLogs(containers[0] ?? '', false) }] : []),
+    ...(isPod && onShell ? [{ id: 'shell', label: 'Shell', onSelect: () => onShell(item, containers[0]) }] : []),
     ...(isPod && onForward ? [{ id: 'forward', label: 'Port forward…', onSelect: () => onForward(item) }] : []),
     { id: 'yaml', label: 'Edit YAML', onSelect: () => setTab('yaml') },
     { id: 'events', label: 'Events', onSelect: () => setTab('events') },
@@ -302,6 +306,11 @@ export function ResourceDrawer({
 
         {/* The same actions the right-click menu offers, where you can see them. */}
         <div className="mt-3 flex flex-wrap items-center gap-1.5" data-testid="drawer-actions">
+          {isPod && onShell ? (
+            <Button data-testid="drawer-shell" onClick={() => onShell(item, containers[0])} icon={<TerminalIcon size={13} strokeWidth={1.9} />}>
+              Shell
+            </Button>
+          ) : null}
           {isPod ? (
             <Button
               onClick={() => openLogs(containers[0] ?? '', false)}
@@ -366,6 +375,7 @@ export function ResourceDrawer({
               }}
               onOpenWorkspace={(id) => onNavigate?.({ kind: 'Pod', workspace: id })}
               onForward={onForward ? (port) => onForward(item, port) : undefined}
+              onShell={onShell ? (container) => onShell(item, container) : undefined}
               onEditContainer={async (container, change) => {
                 const where = await editContainer(context, item, container, change);
                 toast.success(where);

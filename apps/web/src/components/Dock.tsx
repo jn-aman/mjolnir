@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
-import { ScrollText, Sparkles, Terminal, X } from 'lucide-react';
+import { ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Assistant } from './Assistant.tsx';
+import { Terminal } from './Terminal.tsx';
 import { LogViewer } from './LogViewer.tsx';
 import { ResizeHandle } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
@@ -25,6 +26,8 @@ export interface DockTab {
   readonly namespace?: string;
   readonly pod?: string;
   readonly containers?: readonly string[];
+  /** For terminal tabs: the container to exec into. */
+  readonly container?: string | undefined;
 }
 
 interface DockProps {
@@ -98,7 +101,7 @@ export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActiva
                 ) : tab.kind === 'assistant' ? (
                   <Sparkles size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
                 ) : (
-                  <Terminal size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
+                  <TerminalIcon size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
                 )}
                 <span className="font-mono">{tab.title}</span>
                 {tab.subtitle ? <span className="text-[11px] text-tertiary">{tab.subtitle}</span> : null}
@@ -137,11 +140,9 @@ export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActiva
               />
             ) : tab.kind === 'assistant' ? (
               <Assistant context={tab.context || null} incoming={assistant?.incoming ?? null} onOpenSettings={assistant?.onOpenSettings ?? (() => undefined)} />
-            ) : (
-              <div className="flex flex-1 items-center justify-center text-[12.5px] text-tertiary">
-                Terminals arrive with the PTY bridge. Until then: <code className="ml-1 font-mono text-secondary">kubectl exec -it &lt;pod&gt; -- sh</code>
-              </div>
-            )}
+            ) : tab.kind === 'terminal' && tab.pod ? (
+              <Terminal context={tab.context} namespace={tab.namespace ?? ''} pod={tab.pod} container={tab.container} />
+            ) : null}
           </div>
         ))}
       </div>

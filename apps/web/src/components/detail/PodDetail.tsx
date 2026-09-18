@@ -114,9 +114,10 @@ interface PodDetailProps {
   readonly onOpenWorkspace?: ((id: string) => void) | undefined;
   /** Opens the port-forward dialog, on this port. */
   readonly onForward?: ((port: number) => void) | undefined;
+  readonly onShell?: ((container: string) => void) | undefined;
 }
 
-export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward }: PodDetailProps) {
+export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell }: PodDetailProps) {
   const storage = detectObjectStorage(pod.spec?.containers as never);
   const statuses = pod.status?.containerStatuses ?? [];
   const initStatuses = pod.status?.initContainerStatuses ?? [];
@@ -306,6 +307,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
               spec={pod.spec?.containers?.find((c) => c.name === status.name)}
               onEditContainer={onEditContainer}
               onForward={onForward}
+              onShell={onShell}
               onOpenLogs={onOpenLogs}
             />
           ))}
@@ -360,6 +362,7 @@ function ContainerCard({
   onOpenLogs,
   onEditContainer,
   onForward,
+  onShell,
 
 }: {
   status: ContainerStatus;
@@ -367,6 +370,7 @@ function ContainerCard({
   onOpenLogs: (container: string, previous: boolean) => void;
   onEditContainer?: ((container: string, change: ContainerChange) => Promise<void>) | undefined;
   onForward?: ((port: number) => void) | undefined;
+  onShell?: ((container: string) => void) | undefined;
 }) {
   const state = status.state?.waiting
     ? status.state.waiting.reason ?? 'Waiting'
@@ -380,6 +384,7 @@ function ContainerCard({
 
   const containerMenu: MenuEntry[] = [
     askEntry('Ask about this container', `Container ${status.name ?? ''} (image ${status.image ?? spec?.image ?? 'unknown'}): what does it run, is it healthy, and what do its recent logs say?`),
+    ...(onShell ? [{ id: 'shell', label: 'Shell', onSelect: () => onShell(status.name ?? '') }] : []),
     { id: 'logs', label: 'Logs', onSelect: () => onOpenLogs(status.name ?? '', false) },
     { id: 'previous', label: 'Previous logs', onSelect: () => onOpenLogs(status.name ?? '', true) },
     SEPARATOR,
@@ -402,6 +407,16 @@ function ContainerCard({
           <span className="font-mono text-[11px] text-warn">{status.restartCount} restarts</span>
         ) : null}
         <div className="flex-1" />
+        {onShell ? (
+          <button
+            type="button"
+            data-testid="container-shell"
+            onClick={() => onShell(status.name ?? '')}
+            className="rounded-sm px-1.5 py-0.5 text-[11.5px] text-secondary hover:bg-hover hover:text-primary"
+          >
+            Shell
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => onOpenLogs(status.name ?? '', false)}

@@ -53,6 +53,8 @@ Every edge between regions is draggable and remembered (`useResizable`).
 | Cloud access (Leapp-class) | Rail › workspace | `tools.ts#cloud` |
 | Containers (Docker) | Rail › workspace | `tools.ts#docker` |
 | Object storage browser | Rail › workspace; per-pod tab for MinIO/RustFS pods | `tools.ts#storage` |
+| Machines: paired agent, host metrics, Docker on hosts (Beszel-class) | Rail › module | `tools.ts#machines` |
+| Alerts: rules, email/webhook/push channels, quiet hours, history | Rail › module | `tools.ts#alerts` |
 | Database browser | Sidebar › Tools; detection card in the pod overview (like object storage) | `tools.ts#database` |
 | Kafka consumer lag | Sidebar › Tools | `tools.ts#kafka` |
 | Diff & drift | Sidebar › Tools; per-object Diff tab in the drawer | `tools.ts#drift` |

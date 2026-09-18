@@ -1,4 +1,3 @@
-import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { LogLine } from '@mjolnir/k8s';
 import { logger } from '@mjolnir/logger';
@@ -42,8 +41,8 @@ function isStartMessage(value: unknown): value is StartMessage {
   );
 }
 
-export function attachLogSocket(server: Server, registry: ClusterRegistry): WebSocketServer {
-  const wss = new WebSocketServer({ server, path: '/ws/logs' });
+export function attachLogSocket(registry: ClusterRegistry): WebSocketServer {
+  const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (socket: WebSocket) => {
     const abort = new AbortController();

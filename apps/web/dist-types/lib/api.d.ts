@@ -158,5 +158,6 @@ export declare const api: {
     }>;
 };
 /** WebSocket URL for the log stream, respecting an injected API origin. */
+export declare function execSocketUrl(): string;
 export declare function logSocketUrl(): string;
 //# sourceMappingURL=api.d.ts.map

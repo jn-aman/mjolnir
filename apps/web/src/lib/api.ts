@@ -226,6 +226,10 @@ export const api = {
 };
 
 /** WebSocket URL for the log stream, respecting an injected API origin. */
+export function execSocketUrl(): string {
+  return logSocketUrl().replace(/\/ws\/logs$/, '/ws/exec');
+}
+
 export function logSocketUrl(): string {
   const origin = base();
   if (origin) return `${origin.replace(/^http/, 'ws')}/ws/logs`;

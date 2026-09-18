@@ -69,7 +69,7 @@ the slot exists (menu entry, page or dock tab) and the operation is scheduled.
 | `logs` | drawer › Logs; **Open logs in dock**; full screen | done |
 | `logs -f` / `--previous` / `-c` / `--tail` | follow, Previous, container picker, tail | done |
 | `logs --since` / `--timestamps` / `-l` | time range; timestamps column exists; label-selected multi-pod logs | next |
-| `exec -it` | row menu › Shell → dock terminal (PTY bridge) | next |
+| `exec -it` | row menu › Shell, drawer › Shell, per-container Shell: a dock terminal over the exec WebSocket, resizes, bash when present else sh | done |
 | `attach` | dock terminal | next |
 | `cp` | drawer › Files tab | later |
 | `port-forward` | row menu › Port forward…; Forward beside each port in the drawer; Tools › Port forwards lists and stops them | done (pods); services next |

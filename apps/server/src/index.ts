@@ -7,7 +7,9 @@ import { logger } from '@mjolnir/logger';
 import { setSchemaReporter } from '@mjolnir/schemas';
 import { ClusterRegistry } from './clusters.ts';
 import { errorHandler } from './http.ts';
+import type { WebSocketServer } from 'ws';
 import { attachLogSocket } from './log-socket.ts';
+import { attachExecSocket } from './exec-socket.ts';
 import { clusterRoutes } from './routes/clusters.ts';
 import { logRoutes } from './routes/logs.ts';
 import { metricRoutes } from './routes/metrics.ts';
@@ -84,7 +86,22 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   }
 
   const server = createServer(app);
-  attachLogSocket(server, registry);
+  // One upgrade handler routes by path. Two servers each bound to the HTTP
+  // server would both answer, and the one whose path did not match would
+  // reject the handshake with a 400.
+  const sockets: Record<string, WebSocketServer> = {
+    '/ws/logs': attachLogSocket(registry),
+    '/ws/exec': attachExecSocket(registry),
+  };
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const wss = sockets[pathname];
+    if (!wss) {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  });
 
   // Bind to loopback only. This server exists for the desktop app's renderer;
   // exposing a process that holds every one of the user's cluster credentials

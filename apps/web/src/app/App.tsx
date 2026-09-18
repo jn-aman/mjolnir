@@ -263,6 +263,24 @@ export function App() {
     [context],
   );
 
+  const openShell = useCallback(
+    (item: KubeItem, container?: string) => {
+      if (!context) return;
+      const name = item.metadata?.name ?? '';
+      const ns = item.metadata?.namespace ?? '';
+      const spec = item.spec as { containers?: Array<{ name?: string }> } | undefined;
+      const chosen = container ?? spec?.containers?.[0]?.name ?? '';
+      const id = `shell:${context}:${ns}:${name}:${chosen}`;
+      setDockTabs((current) =>
+        current.some((tab) => tab.id === id)
+          ? current
+          : [...current, { id, kind: 'terminal', title: name, subtitle: chosen, context, namespace: ns, pod: name, container: chosen }],
+      );
+      setDockActive(id);
+    },
+    [context],
+  );
+
   const restart = useCallback(
     async (item: KubeItem) => {
       if (!context) return;
@@ -342,6 +360,9 @@ export function App() {
         case 'dock-logs':
           openInDock(item);
           return;
+        case 'shell':
+          openShell(item);
+          return;
         case 'restart':
           void restart(item);
           return;
@@ -353,11 +374,11 @@ export function App() {
       }
       setSelected(item);
       // Every remaining action lands in the panel on the tab that performs it.
-      if (action === 'logs' || action === 'shell') setDrawerTab('logs');
+      if (action === 'logs') setDrawerTab('logs');
       else if (action === 'yaml') setDrawerTab('yaml');
       else setDrawerTab('overview');
     },
-    [openInDock, restart, verb, context],
+    [openInDock, openShell, restart, verb, context],
   );
 
   const apiVersionFor = (entry: ResourceDefinition | undefined): string => {
@@ -582,6 +603,7 @@ export function App() {
                       {...(drawerTab ? { initialTab: drawerTab } : {})}
                       onNavigate={navigate}
                       onForward={(item) => setForwarding(item)}
+                      onShell={(item, container) => openShell(item, container)}
                       onDeleted={() => void load()}
                       onClose={() => setSelected(null)}
                     />

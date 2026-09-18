@@ -33,7 +33,8 @@ interface DrawerProps {
     /** Called after a successful delete so the list can drop the row at once. */
     readonly onDeleted?: () => void;
     readonly onForward?: ((item: KubeItem, port?: number) => void) | undefined;
+    readonly onShell?: ((item: KubeItem, container?: string) => void) | undefined;
 }
-export declare function ResourceDrawer({ context, kind, item, metrics, initialTab, onClose, onNavigate, onDeleted, onForward, }: DrawerProps): import("react").JSX.Element | null;
+export declare function ResourceDrawer({ context, kind, item, metrics, initialTab, onClose, onNavigate, onDeleted, onForward, onShell, }: DrawerProps): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=ResourceDrawer.d.ts.map
