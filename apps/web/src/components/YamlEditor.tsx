@@ -99,9 +99,11 @@ interface YamlEditorProps {
   readonly startEditing?: boolean;
   readonly applyLabel?: string;
   readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
+  /** Hands the caller apply and discard, so a guard elsewhere can offer Save. */
+  readonly controller?: ((api: { apply: () => Promise<void>; discard: () => void }) => void) | undefined;
 }
 
-export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditing = false, applyLabel = 'Apply', onDirtyChange }: YamlEditorProps) {
+export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditing = false, applyLabel = 'Apply', onDirtyChange, controller }: YamlEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const [dirty, setDirtyState] = useState(false);
@@ -178,6 +180,11 @@ export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditin
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    controller?.({ apply, discard: cancel });
+    // apply/cancel close over fresh state each render; re-handing them is the point.
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid={testId}>

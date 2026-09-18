@@ -31,6 +31,7 @@ import { Field } from './ui/Field.tsx';
 import { Switch } from './ui/Switch.tsx';
 import { ConfirmDialog } from './ui/Modal.tsx';
 import { copyText } from './ui/ContextMenu.tsx';
+import { AskSave } from './ui/AskSave.tsx';
 
 /**
  * Settings, in two scopes.
@@ -202,16 +203,11 @@ function General({ theme, onTheme, settings }: { theme: ThemeChoice; onTheme: (c
 function Ai({ settings, onSave }: { settings: AppSettings | null; onSave: (patch: unknown, said?: string) => Promise<void> }) {
   const ai = settings?.ai;
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [askInstructions, setAskInstructions] = useState(false);
   const [testing, setTesting] = useState(false);
   useEffect(() => {
-    if (ai) {
-      setModel(ai.model);
-      setBaseUrl(ai.baseUrl);
-      setInstructions(ai.instructions);
-    }
+    if (ai) setInstructions(ai.instructions);
   }, [ai]);
   if (!ai) return <Card title="AI assistant"><p className="text-[12.5px] text-tertiary">Loading…</p></Card>;
   const preset = AI_PRESETS.find((p) => p.id === ai.preset) ?? AI_PRESETS[0]!;
@@ -254,11 +250,11 @@ function Ai({ settings, onSave }: { settings: AppSettings | null; onSave: (patch
           }
         />
         <Divider />
-        <Row label="Model" control={<div className="flex items-center gap-1.5"><Field id="ai-model" label="Model" hideLabel mono value={model} onChange={(e) => setModel(e.target.value)} className="w-[260px]" data-testid="ai-model" /><Button disabled={model === ai.model} onClick={() => void onSave({ ai: { model } })}>Save</Button></div>} />
+        <Row label="Model" hint="Enter saves." control={<SaveField id="ai-model" label="Model" value={ai.model} testId="ai-model" onSave={(next) => onSave({ ai: { model: next } })} />} />
         {ai.provider === 'openai' ? (
           <>
             <Divider />
-            <Row label="Base URL" hint="The /v1 root; /chat/completions is added." control={<div className="flex items-center gap-1.5"><Field id="ai-base" label="Base URL" hideLabel mono value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="w-[260px]" /><Button disabled={baseUrl === ai.baseUrl} onClick={() => void onSave({ ai: { baseUrl } })}>Save</Button></div>} />
+            <Row label="Base URL" hint="The /v1 root; /chat/completions is added. Enter saves." control={<SaveField id="ai-base" label="Base URL" value={ai.baseUrl} onSave={(next) => onSave({ ai: { baseUrl: next } })} />} />
           </>
         ) : null}
         <Divider />
@@ -268,8 +264,11 @@ function Ai({ settings, onSave }: { settings: AppSettings | null; onSave: (patch
         <Row label="Allow writes" hint="Off: the assistant can only read and will give you the command instead. On: it can apply, scale, restart, delete and forward, and says so before it does." control={<Switch checked={ai.allowWrites} onChange={(next) => void onSave({ ai: { allowWrites: next } }, next ? 'The assistant may change clusters' : 'The assistant is read-only')} label="Allow writes" testId="ai-writes" />} />
       </Card>
       <Card title="Instructions" subtitle="Added to every conversation. Team conventions, what not to touch, how you like answers.">
-        <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} aria-label="Instructions" className="w-full resize-y rounded-md border border-line bg-sunken px-3 py-2 text-[12.5px] text-primary outline-none focus:border-focus" placeholder="e.g. Production is context prod-eu. Never scale anything in it without asking." />
-        <div className="mt-2 flex justify-end"><Button disabled={instructions === ai.instructions} onClick={() => void onSave({ ai: { instructions } })}>Save</Button></div>
+        <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} onBlur={() => { if (instructions !== ai.instructions) setAskInstructions(true); }} rows={4} aria-label="Instructions" className="w-full resize-y rounded-md border border-line bg-sunken px-3 py-2 text-[12.5px] text-primary outline-none focus:border-focus" placeholder="e.g. Production is context prod-eu. Never scale anything in it without asking." />
+        <div className="mt-2 flex justify-end gap-2">
+          {askInstructions && instructions !== ai.instructions ? <AskSave what="instructions" onSave={() => void onSave({ ai: { instructions } }).then(() => setAskInstructions(false))} onDiscard={() => { setInstructions(ai.instructions); setAskInstructions(false); }} /> : null}
+          <Button disabled={instructions === ai.instructions} onClick={() => void onSave({ ai: { instructions } }).then(() => setAskInstructions(false))}>Save</Button>
+        </div>
       </Card>
     </>
   );
@@ -475,7 +474,7 @@ function Clusters({ clusters, settings, onSave, onChanged }: { clusters: Cluster
                   <div className="font-mono text-[12.5px] text-primary">{c.name}</div>
                   <div className="truncate text-[11px] text-tertiary">{c.server ?? ''}{c.source && c.source !== '(built in)' ? ` · ${c.source}` : ' · built in'}</div>
                 </div>
-                <Field id={`ns-${c.name}`} label="Default namespace" hideLabel mono placeholder="namespace" className="w-[150px]" defaultValue={per.namespace ?? ''} onBlur={(e) => { if ((e.target.value || undefined) !== per.namespace) void onSave({ clusters: { perContext: { [c.name]: { namespace: e.target.value } } } }); }} />
+                <SaveField id={`ns-${c.name}`} label="Default namespace" placeholder="namespace" className="w-[150px]" value={per.namespace ?? ''} onSave={(next) => onSave({ clusters: { perContext: { [c.name]: { namespace: next } } } })} />
                 {c.name !== 'demo' ? (
                   <>
                     <Button variant="ghost" aria-label={`Hide ${c.name}`} onClick={() => setRemoving({ name: c.name, scope: 'hide' })} icon={<EyeOff size={12} strokeWidth={1.9} />}>Hide</Button>
@@ -517,8 +516,47 @@ function Namespaces({ settings, onSave }: { settings: AppSettings | null; onSave
     <Card title="Namespaces">
       <Row label="Show system namespaces" hint="kube-system and friends, in lists and the namespace picker." control={<Switch checked={settings.general.showSystemNamespaces} onChange={(next) => void onSave({ general: { showSystemNamespaces: next } })} label="Show system namespaces" />} />
       <Divider />
-      <Row label="Default namespace" hint="Applied when a cluster does not name one." control={<Field id="default-namespace" label="Default namespace" hideLabel placeholder="default" mono defaultValue={settings.general.defaultNamespace} onBlur={(e) => void onSave({ general: { defaultNamespace: e.target.value } })} />} />
+      <Row label="Default namespace" hint="Applied when a cluster does not name one. Enter saves." control={<SaveField id="default-namespace" label="Default namespace" placeholder="default" value={settings.general.defaultNamespace} onSave={(next) => onSave({ general: { defaultNamespace: next } })} />} />
     </Card>
+  );
+}
+
+/**
+ * A settings field with the one rule: Enter saves, leaving it unchanged does
+ * nothing, leaving it changed asks.
+ */
+function SaveField({ id, label, value, onSave, mono = true, placeholder, className = 'w-[260px]', type, testId }: { id: string; label: string; value: string; onSave: (next: string) => Promise<void>; mono?: boolean; placeholder?: string; className?: string; type?: string; testId?: string }) {
+  const [draft, setDraft] = useState(value);
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    setDraft(value);
+    setAsking(false);
+  }, [value]);
+  const changed = draft !== value;
+  const save = () => void onSave(draft).then(() => setAsking(false));
+  return (
+    <span className="relative inline-flex">
+      <Field
+        id={id}
+        label={label}
+        hideLabel
+        mono={mono}
+        {...(type ? { type } : {})}
+        {...(placeholder ? { placeholder } : {})}
+        {...(testId ? { 'data-testid': testId } : {})}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { if (changed) setAsking(true); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && changed) save();
+          if (e.key === 'Escape') { setDraft(value); setAsking(false); }
+        }}
+        className={className}
+      />
+      {asking && changed ? (
+        <span className="absolute right-0 top-full z-20 mt-1.5"><AskSave what={label.toLowerCase()} onSave={save} onDiscard={() => { setDraft(value); setAsking(false); }} /></span>
+      ) : null}
+    </span>
   );
 }
 

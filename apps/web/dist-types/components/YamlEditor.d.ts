@@ -8,7 +8,12 @@ interface YamlEditorProps {
     readonly startEditing?: boolean;
     readonly applyLabel?: string;
     readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
+    /** Hands the caller apply and discard, so a guard elsewhere can offer Save. */
+    readonly controller?: ((api: {
+        apply: () => Promise<void>;
+        discard: () => void;
+    }) => void) | undefined;
 }
-export declare function YamlEditor({ value, onApply, testId, startEditing, applyLabel, onDirtyChange }: YamlEditorProps): import("react").JSX.Element;
+export declare function YamlEditor({ value, onApply, testId, startEditing, applyLabel, onDirtyChange, controller }: YamlEditorProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=YamlEditor.d.ts.map

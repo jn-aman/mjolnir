@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
 import { FileText, ScrollText, Trash2, X } from 'lucide-react';
@@ -10,6 +10,7 @@ import { PodDetail, type PodShape as PodDetailShape } from './detail/PodDetail.t
 import { YamlEditor, toEditableYaml } from './YamlEditor.tsx';
 import { StatusChip } from './StatusChip.tsx';
 import { Button } from './ui/Button.tsx';
+import { Modal } from './ui/Modal.tsx';
 import { askEntry, copyEntry, copyText, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { editContainer } from '../lib/edits.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
@@ -70,6 +71,14 @@ export function ResourceDrawer({
   const [logPrevious, setLogPrevious] = useState(false);
   const [events, setEvents] = useState<EventShape[] | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [yamlDirty, setYamlDirty] = useState(false);
+  const yamlApi = useRef<{ apply: () => Promise<void>; discard: () => void } | null>(null);
+  /** What to do once unsaved YAML is resolved. */
+  const [pending, setPending] = useState<(() => void) | null>(null);
+  const guarded = (action: () => void) => {
+    if (yamlDirty && tab === 'yaml') setPending(() => action);
+    else action();
+  };
   const [deleting, setDeleting] = useState(false);
   // Anchored on the right, so dragging its left edge leftward widens it.
   const size = useResizable({ key: 'drawer', initial: 680, min: 420, max: 1200, direction: 'left' });
@@ -135,7 +144,8 @@ export function ResourceDrawer({
   useEffect(() => {
     if (!item) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (confirmDelete || expanded) return;
+      if (confirmDelete || expanded || pending) return;
+      if (event.defaultPrevented) return;
       const target = event.target as Element | null;
       if (!target) return;
       if (
@@ -145,7 +155,7 @@ export function ResourceDrawer({
       ) {
         return;
       }
-      onClose();
+      guarded(onClose);
     };
     window.addEventListener('pointerdown', onPointerDown);
     return () => window.removeEventListener('pointerdown', onPointerDown);
@@ -157,7 +167,7 @@ export function ResourceDrawer({
       // A menu or dialog that consumed Escape has already used it; closing the
       // panel too would make "close the menu" mean "lose my place".
       if (event.defaultPrevented) return;
-      if (event.key === 'Escape' && !confirmDelete && !expanded) onClose();
+      if (event.key === 'Escape' && !confirmDelete && !expanded && !pending) guarded(onClose);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -286,7 +296,7 @@ export function ResourceDrawer({
             </h2>
             {namespace ? <p className="truncate text-[11.5px] text-tertiary">{namespace}</p> : null}
           </div>
-          <Button iconOnly aria-label="Close" variant="ghost" onClick={onClose} icon={<X size={15} strokeWidth={2} />} />
+          <Button iconOnly aria-label="Close" variant="ghost" onClick={() => guarded(onClose)} icon={<X size={15} strokeWidth={2} />} />
         </div>
         </Menu>
 
@@ -315,7 +325,7 @@ export function ResourceDrawer({
         </div>
       </header>
 
-      <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+      <Tabs.Root value={tab} onValueChange={(next) => guarded(() => setTab(next))} className="flex min-h-0 flex-1 flex-col">
         <Tabs.List className="flex shrink-0 gap-0 border-b border-line bg-raised px-2">
           {tabs.map((entry) => (
             <Tabs.Trigger
@@ -339,6 +349,7 @@ export function ResourceDrawer({
         <Tabs.Content value="overview" className="min-h-0 flex-1 overflow-auto p-4 outline-none">
           {isPod && pod ? (
             <PodDetail
+              key={`${namespace}/${name}`}
               pod={pod as PodDetailShape}
               metrics={metrics}
               onOpenLogs={openLogs}
@@ -427,6 +438,10 @@ export function ResourceDrawer({
             <YamlEditor
               key={`${name}:${namespace}`}
               value={yaml}
+              onDirtyChange={setYamlDirty}
+              controller={(api) => {
+                yamlApi.current = api;
+              }}
               onApply={async (text) => {
                 await api.apply(context, kind, name, text, namespace || undefined);
                 toast.success(`Applied ${kind.toLowerCase()} ${name}`);
@@ -436,6 +451,47 @@ export function ResourceDrawer({
           )}
         </Tabs.Content>
       </Tabs.Root>
+
+      <Modal
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        title="Unsaved YAML changes"
+        description="Apply them to the cluster, discard them, or keep editing."
+        testId="yaml-unsaved"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPending(null)}>
+              Keep editing
+            </Button>
+            <Button
+              variant="danger"
+              data-testid="yaml-unsaved-discard"
+              onClick={() => {
+                yamlApi.current?.discard();
+                setYamlDirty(false);
+                const action = pending;
+                setPending(null);
+                action?.();
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              variant="primary"
+              data-testid="yaml-unsaved-save"
+              onClick={() => {
+                const action = pending;
+                void yamlApi.current?.apply().then(() => {
+                  setPending(null);
+                  action?.();
+                });
+              }}
+            >
+              Apply and continue
+            </Button>
+          </>
+        }
+      />
 
       <Dialog.Root open={confirmDelete} onOpenChange={setConfirmDelete}>
         <Dialog.Portal>

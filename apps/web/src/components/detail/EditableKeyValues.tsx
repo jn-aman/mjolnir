@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { AskSave } from '../ui/AskSave.tsx';
+import { useOutsideClick } from '../../lib/useOutsideClick.ts';
 import { Check, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'motion/react';
@@ -33,6 +35,33 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [askingEdit, setAskingEdit] = useState(false);
+  const [askingAdd, setAskingAdd] = useState(false);
+  const editBox = useRef<HTMLSpanElement>(null);
+  const addBox = useRef<HTMLSpanElement>(null);
+  useOutsideClick(editBox, editingKey !== null, () => {
+    if (editingKey !== null && draft.trim() !== values[editingKey]) {
+      setAskingEdit(true);
+      return true;
+    }
+    setEditingKey(null);
+    setAskingEdit(false);
+    return false;
+  });
+  useOutsideClick(addBox, adding, () => {
+    if (newKey.trim() || newValue.trim()) {
+      setAskingAdd(true);
+      return true;
+    }
+    setAdding(false);
+    return false;
+  });
+  const stopAdding = () => {
+    setAdding(false);
+    setAskingAdd(false);
+    setNewKey('');
+    setNewValue('');
+  };
 
   const run = async (label: string, patch: Record<string, string | null>) => {
     setBusy(label);
@@ -48,6 +77,7 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
   const commitEdit = async (key: string) => {
     const next = draft.trim();
     setEditingKey(null);
+    setAskingEdit(false);
     if (next === values[key]) return;
     await run(key, { [key]: next });
   };
@@ -56,12 +86,10 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
     const key = newKey.trim();
     const value = newValue.trim();
     if (!key) {
-      setAdding(false);
+      stopAdding();
       return;
     }
-    setAdding(false);
-    setNewKey('');
-    setNewValue('');
+    stopAdding();
     await run(key, { [key]: value });
   };
 
@@ -106,18 +134,27 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
             <span className="text-secondary">{key}</span>
             <span className="text-tertiary">=</span>
             {isEditing ? (
+              <span ref={editBox} className="relative inline-flex">
               <input
                 autoFocus
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                onBlur={() => void commitEdit(key)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void commitEdit(key);
-                  if (event.key === 'Escape') setEditingKey(null);
+                  if (event.key === 'Escape') {
+                    setEditingKey(null);
+                    setAskingEdit(false);
+                  }
                 }}
                 aria-label={`Value for ${key}`}
                 className="w-[140px] bg-transparent text-primary outline-none"
               />
+              {askingEdit ? (
+                <span className="absolute left-0 top-full z-20 mt-1.5">
+                  <AskSave what={key} onSave={() => void commitEdit(key)} onDiscard={() => { setEditingKey(null); setAskingEdit(false); }} />
+                </span>
+              ) : null}
+              </span>
             ) : (
               <button
                 type="button"
@@ -154,13 +191,13 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
       </AnimatePresence>
 
       {adding ? (
-        <span className="inline-flex items-center gap-1 rounded-md border border-focus bg-overlay py-[3px] pl-2 pr-1 font-mono text-[11px]">
+        <span ref={addBox} className="relative inline-flex items-center gap-1 rounded-md border border-focus bg-overlay py-[3px] pl-2 pr-1 font-mono text-[11px]" data-testid="kv-add-row">
           <input
             autoFocus
             value={newKey}
             onChange={(event) => setNewKey(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Escape') setAdding(false);
+              if (event.key === 'Escape') stopAdding();
             }}
             placeholder="key"
             aria-label="New key"
@@ -172,7 +209,7 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
             onChange={(event) => setNewValue(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void commitAdd();
-              if (event.key === 'Escape') setAdding(false);
+              if (event.key === 'Escape') stopAdding();
             }}
             placeholder="value"
             aria-label="New value"
@@ -189,11 +226,16 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
           <button
             type="button"
             aria-label="Cancel"
-            onClick={() => setAdding(false)}
+            onClick={stopAdding}
             className="rounded-xs p-[1px] text-tertiary hover:bg-hover hover:text-primary"
           >
             <X size={12} strokeWidth={2.4} />
           </button>
+          {askingAdd ? (
+            <span className="absolute left-0 top-full z-20 mt-1.5">
+              <AskSave what="entry" onSave={() => void commitAdd()} onDiscard={stopAdding} />
+            </span>
+          ) : null}
         </span>
       ) : (
         <button

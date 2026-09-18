@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AskSave } from './AskSave.tsx';
+import { useOutsideClick } from '../../lib/useOutsideClick.ts';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { toast } from 'sonner';
 
@@ -24,6 +26,19 @@ export function EditableText({ value, label, onCommit, mono = true, disabledReas
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  const changed = draft.trim() !== value && draft.trim() !== '';
+  // Click away: unchanged closes, changed asks. Never a silent save, never a silent loss.
+  useOutsideClick(box, editing, () => {
+    if (!changed) {
+      setEditing(false);
+      setAsking(false);
+      return false;
+    }
+    setAsking(true);
+    return true;
+  });
 
   useEffect(() => {
     if (!editing) setDraft(value);
@@ -32,6 +47,7 @@ export function EditableText({ value, label, onCommit, mono = true, disabledReas
   const commit = async () => {
     const next = draft.trim();
     setEditing(false);
+    setAsking(false);
     if (!next || next === value) return;
     setBusy(true);
     try {
@@ -45,20 +61,29 @@ export function EditableText({ value, label, onCommit, mono = true, disabledReas
 
   if (editing) {
     return (
+      <span ref={box} className="relative inline-flex items-center gap-1.5">
       <input
         autoFocus
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => void commit()}
         onKeyDown={(event) => {
           if (event.key === 'Enter') void commit();
-          if (event.key === 'Escape') setEditing(false);
+          if (event.key === 'Escape') {
+            setEditing(false);
+            setAsking(false);
+          }
         }}
         aria-label={label}
         data-testid={testId ? `${testId}-input` : undefined}
         size={Math.max(8, Math.min(60, draft.length + 2))}
         className={`rounded-xs border border-focus bg-sunken px-1 text-primary outline-none ${mono ? 'font-mono' : ''} ${className}`}
       />
+      {asking ? (
+        <span className="absolute left-0 top-full z-20 mt-1">
+          <AskSave what={label} busy={busy} onSave={() => void commit()} onDiscard={() => { setEditing(false); setAsking(false); }} />
+        </span>
+      ) : null}
+      </span>
     );
   }
 
