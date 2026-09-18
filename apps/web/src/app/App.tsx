@@ -10,6 +10,7 @@ import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { ResourceList } from '../components/ResourceList.tsx';
 import { ResourceDrawer } from '../components/ResourceDrawer.tsx';
 import { Sidebar, type NavSelection } from '../components/Sidebar.tsx';
+import { NamespacePicker } from '../components/NamespacePicker.tsx';
 import { ClusterStrip } from '../components/ClusterStrip.tsx';
 import { ModuleRail } from '../components/ModuleRail.tsx';
 import { Overview, type NavigateTarget } from '../components/Overview.tsx';
@@ -46,7 +47,12 @@ export function App() {
   const [route] = useState(readRoute);
   const [selection, setSelection] = useState<NavSelection>(route.selection ?? { kind: 'page', value: 'overview' });
   const [kind, setKind] = useState(route.selection?.kind === 'resource' ? route.selection.value : 'Pod');
-  const [namespace, setNamespace] = useState(route.namespace ?? '');
+  const [namespaces, setNamespaces] = useState<string[]>(route.namespace ? route.namespace.split(',').filter(Boolean) : []);
+  /** The one namespace to scope a server request to; empty means all, or several (filtered here). */
+  const namespace = namespaces.length === 1 ? (namespaces[0] ?? '') : '';
+  const setNamespace = useCallback((next: string) => setNamespaces(next ? [next] : []), []);
+  const [allNamespaces, setAllNamespaces] = useState<string[]>([]);
+  const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState(route.status ?? '');
   const [filter, setFilter] = useState('');
   const [items, setItems] = useState<KubeItem[]>([]);
@@ -208,12 +214,40 @@ export function App() {
     writeRoute({
       ...(context ? { context } : {}),
       selection,
-      ...(namespace ? { namespace } : {}),
+      ...(namespaces.length ? { namespace: namespaces.join(',') } : {}),
       ...(statusFilter ? { status: statusFilter } : {}),
       ...(selected?.metadata?.name ? { selected: selected.metadata.name } : {}),
       ...(drawerTab ? { tab: drawerTab } : {}),
     });
-  }, [context, selection, namespace, statusFilter, selected, drawerTab]);
+  }, [context, selection, namespaces, statusFilter, selected, drawerTab]);
+
+  // The cluster's namespace list, for the picker; the choice is kept per cluster.
+  useEffect(() => {
+    if (!context) return;
+    let cancelled = false;
+    void api
+      .list<KubeItem>(context, 'Namespace')
+      .then((response) => {
+        if (!cancelled) setAllNamespaces(response.items.map((item) => item.metadata?.name ?? '').filter(Boolean).sort());
+      })
+      .catch(() => setAllNamespaces([]));
+    void api.settings.get().then((response) => {
+      const remembered = response.settings.clusters.perContext[context]?.namespaces;
+      if (!cancelled && remembered && !route.namespace) setNamespaces(remembered);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // route.namespace only matters on first load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context]);
+  const rememberNamespaces = useCallback(
+    (next: string[]) => {
+      setNamespaces(next);
+      if (context) void api.settings.update({ clusters: { perContext: { [context]: { namespaces: next } } } }).catch(() => undefined);
+    },
+    [context],
+  );
 
   /**
    * The status filter. A value is either a status ("CrashLoopBackOff") or a
@@ -241,7 +275,10 @@ export function App() {
     },
     [statusFilter, statusOf],
   );
-  const visibleItems = useMemo(() => (statusFilter ? items.filter(matchesStatus) : items), [items, statusFilter, matchesStatus]);
+  const visibleItems = useMemo(() => {
+    const scoped = namespaces.length > 1 ? items.filter((item) => !item.metadata?.namespace || namespaces.includes(item.metadata.namespace)) : items;
+    return statusFilter ? scoped.filter(matchesStatus) : scoped;
+  }, [items, namespaces, statusFilter, matchesStatus]);
   const statusOptions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
@@ -419,7 +456,7 @@ export function App() {
     return tally;
   }, [items, kind]);
 
-  const namespaces = useMemo(
+  const namespacesSeen = useMemo(
     () => [...new Set(items.map((item) => item.metadata?.namespace).filter(Boolean))].sort() as string[],
     [items],
   );
@@ -466,7 +503,10 @@ export function App() {
                 setContext(name);
                 setSelected(null);
               }}
-              onAdd={() => setSelection({ kind: 'page', value: 'settings' })}
+              onAdd={() => {
+                setSettingsSection('kubeconfig');
+                setSelection({ kind: 'page', value: 'settings' });
+              }}
             />
           ) : null}
 
@@ -520,6 +560,8 @@ export function App() {
             {view === 'settings' || view === 'app-settings' ? (
               <SettingsPanel
                 scope={view === 'settings' ? 'kubernetes' : 'app'}
+                initialSection={settingsSection}
+                onSectionShown={() => setSettingsSection(undefined)}
                 clusters={clusters}
                 theme={theme.choice}
                 onTheme={theme.set}
@@ -549,16 +591,7 @@ export function App() {
                   />
 
                   {definition?.namespaced ? (
-                    <Select
-                      label="Namespace"
-                      value={namespace}
-                      onChange={setNamespace}
-                      testId="namespace-select"
-                      options={[
-                        { value: '', label: 'All namespaces' },
-                        ...namespaces.map((entry) => ({ value: entry, label: entry })),
-                      ]}
-                    />
+                    <NamespacePicker all={allNamespaces.length ? allNamespaces : namespacesSeen} selected={namespaces} onChange={rememberNamespaces} />
                   ) : null}
 
                   {statusOptions.length ? (
@@ -599,7 +632,7 @@ export function App() {
                   <ResourceList
                     kind={kind}
                     label={definition?.label}
-                    namespace={definition?.namespaced ? namespace : undefined}
+                    namespace={definition?.namespaced ? (namespaces.length > 1 ? namespaces.join(', ') : namespace) : undefined}
                     items={visibleItems}
                     state={state}
                     error={error}
@@ -667,7 +700,7 @@ export function App() {
           onOpenChange={setPaletteOpen}
           kinds={kinds}
           clusters={clusters?.contexts ?? []}
-          namespaces={namespaces}
+          namespaces={allNamespaces.length ? allNamespaces : namespacesSeen}
           kind={kind}
           items={items}
           theme={theme.resolved}

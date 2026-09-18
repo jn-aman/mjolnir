@@ -43,6 +43,10 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
 
   const settings = new SettingsStore();
 
+  registry.extraKubeconfigs = settings.get().clusters.kubeconfigs;
+
+  if (registry.extraKubeconfigs.length) await registry.reload();
+
   const toolContext = { registry, forwards, settings };
   await registry.reload();
 

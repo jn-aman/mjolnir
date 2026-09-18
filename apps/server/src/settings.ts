@@ -38,9 +38,13 @@ export const Settings = z.object({
   clusters: z
     .object({
       hidden: z.array(z.string()).default([]),
-      perContext: z.record(z.string(), z.object({ namespace: z.string().optional(), label: z.string().optional(), color: z.string().optional() })).default({}),
+      /** Kubeconfig files beyond KUBECONFIG and ~/.kube/config. */
+      kubeconfigs: z.array(z.string()).default([]),
+      perContext: z
+        .record(z.string(), z.object({ namespace: z.string().optional(), namespaces: z.array(z.string()).optional(), label: z.string().optional(), color: z.string().optional() }))
+        .default({}),
     })
-    .default({ hidden: [], perContext: {} }),
+    .default({ hidden: [], kubeconfigs: [], perContext: {} }),
   ai: AiSettings.default(AiSettings.parse({})),
   mcp: z
     .object({

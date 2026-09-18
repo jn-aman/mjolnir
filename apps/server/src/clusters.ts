@@ -1,3 +1,4 @@
+import { delimiter as pathDelimiter } from 'node:path';
 import { Writable, type Duplex, type Readable } from 'node:stream';
 import { Exec, PortForward } from '@kubernetes/client-node';
 import type { KubeConfig } from '@kubernetes/client-node';
@@ -13,6 +14,7 @@ import {
   loadKubeconfig,
   readPodLogs,
   streamPodLogs,
+  kubeconfigPaths,
 } from '@mjolnir/k8s';
 import { DEMO_CONTEXT, DemoTransport, DemoWatch, demoContainers, streamDemoLogs } from '@mjolnir/demo';
 import { logger } from '@mjolnir/logger';
@@ -345,8 +347,13 @@ export class ClusterRegistry {
   #kubeconfig: KubeConfig | null = null;
   readonly #connections = new Map<string, ClusterConnection>();
 
+  /** Files to read on top of KUBECONFIG (or ~/.kube/config when unset). */
+  extraKubeconfigs: string[] = [];
+
   async reload(): Promise<void> {
-    const result = await loadKubeconfig();
+    const base = kubeconfigPaths(process.env);
+    const all = [...base, ...this.extraKubeconfigs.filter((entry) => !base.includes(entry))];
+    const result = await loadKubeconfig({ ...process.env, KUBECONFIG: all.join(pathDelimiter) });
     this.#kubeconfig = result.config;
     this.#failures = result.failures;
 

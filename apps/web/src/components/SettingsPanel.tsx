@@ -53,6 +53,9 @@ interface SettingsPanelProps {
   readonly onTheme: (choice: ThemeChoice) => void;
   readonly onReload: () => Promise<void>;
   readonly onClustersChanged: () => Promise<void>;
+  /** Open on this section, e.g. "kubeconfig" from the + on the cluster strip. */
+  readonly initialSection?: string | undefined;
+  readonly onSectionShown?: (() => void) | undefined;
 }
 
 interface Section {
@@ -95,15 +98,17 @@ const AI_PRESETS: ReadonlyArray<{ id: string; label: string; provider: 'anthropi
   { id: 'custom', label: 'Custom (OpenAI-compatible)', provider: 'openai', baseUrl: '', model: '', needsKey: false },
 ];
 
-export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged }: SettingsPanelProps) {
+export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown }: SettingsPanelProps) {
   const sections = scope === 'app' ? APP_SECTIONS : K8S_SECTIONS;
   const [section, setSection] = useState(sections[0]?.id ?? 'general');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [meta, setMeta] = useState<{ path: string; mcpCommand?: string } | null>(null);
 
   useEffect(() => {
-    setSection(sections[0]?.id ?? 'general');
-  }, [scope, sections]);
+    setSection(initialSection && sections.some((entry) => entry.id === initialSection) ? initialSection : (sections[0]?.id ?? 'general'));
+    if (initialSection) onSectionShown?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, sections, initialSection]);
 
   const refresh = async () => {
     const response = await api.settings.get();
@@ -166,8 +171,8 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
             {section === 'shortcuts' ? <Shortcuts /> : null}
             {section === 'about' ? <About path={meta?.path} /> : null}
 
-            {section === 'kubeconfig' ? <Kubeconfig clusters={clusters} onReload={onReload} /> : null}
-            {section === 'clusters' ? <Clusters clusters={clusters} settings={settings} onSave={save} onChanged={onClustersChanged} /> : null}
+            {section === 'kubeconfig' ? <Kubeconfig clusters={clusters} settings={settings} onReload={onReload} onChanged={async () => { await onClustersChanged(); await refresh(); }} /> : null}
+            {section === 'clusters' ? <Clusters clusters={clusters} settings={settings} onChanged={onClustersChanged} /> : null}
             {section === 'namespaces' ? <Namespaces settings={settings} onSave={save} /> : null}
           </motion.div>
         </AnimatePresence>
@@ -424,28 +429,67 @@ function About({ path }: { path: string | undefined }) {
 
 /* --------------------------- kubernetes scope --------------------------- */
 
-function Kubeconfig({ clusters, onReload }: { clusters: ClustersResponse | null; onReload: () => Promise<void> }) {
+function Kubeconfig({ clusters, settings, onReload, onChanged }: { clusters: ClustersResponse | null; settings: AppSettings | null; onReload: () => Promise<void>; onChanged: () => Promise<void> }) {
   const failures = clusters?.failures ?? [];
+  const extra = settings?.clusters.kubeconfigs ?? [];
   const files = [...new Set((clusters?.contexts ?? []).map((c) => c.source).filter((s) => s && s !== '(built in)'))];
+  const [path, setPath] = useState('');
+  const [name, setName] = useState('');
+  const [content, setContent] = useState('');
+  const [busy, setBusy] = useState(false);
+  const add = async (body: { path?: string; name?: string; content?: string }) => {
+    setBusy(true);
+    try {
+      await api.kubeconfigs.add(body);
+      toast.success('Kubeconfig added');
+      setPath('');
+      setName('');
+      setContent('');
+      await onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <Card title="Kubeconfig" subtitle="Read from KUBECONFIG, or ~/.kube/config when it is not set" actions={<Button onClick={() => void onReload()} icon={<RefreshCw size={13} strokeWidth={2} />}>Reload</Button>}>
-      {failures.length > 0 ? (
-        <div className="mb-3 rounded-md border border-[var(--status-warn)] bg-warn-bg p-3">
-          <div className="mb-1 flex items-center gap-2 text-[12.5px] font-semibold text-warn"><AlertTriangle size={14} strokeWidth={2} aria-hidden />{failures.length === 1 ? 'A kubeconfig could not be read' : `${failures.length} kubeconfigs could not be read`}</div>
-          {failures.map((f) => <div key={f.path} className="font-mono text-[11.5px] text-secondary">{f.path}: {f.error}</div>)}
+    <>
+      <Card title="Kubeconfig files" subtitle="KUBECONFIG, or ~/.kube/config when it is not set, plus any you add here. All are merged." actions={<Button onClick={() => void onReload()} icon={<RefreshCw size={13} strokeWidth={2} />}>Reload</Button>}>
+        {failures.length > 0 ? (
+          <div className="mb-3 rounded-md border border-[var(--status-warn)] bg-warn-bg p-3">
+            <div className="mb-1 flex items-center gap-2 text-[12.5px] font-semibold text-warn"><AlertTriangle size={14} strokeWidth={2} aria-hidden />{failures.length === 1 ? 'A kubeconfig could not be read' : `${failures.length} kubeconfigs could not be read`}</div>
+            {failures.map((f) => <div key={f.path} className="font-mono text-[11.5px] text-secondary">{f.path}: {f.error}</div>)}
+          </div>
+        ) : null}
+        <ul className="space-y-1" data-testid="kubeconfig-files">
+          {[...new Set([...files, ...extra])].map((f) => (
+            <li key={f} className="flex items-center gap-2 text-[12px]">
+              <span className="min-w-0 flex-1 truncate font-mono text-primary">{f}</span>
+              <span className="text-[11px] text-tertiary">{extra.includes(f) ? 'added here' : 'from environment'}</span>
+              {extra.includes(f) ? <Button variant="ghost" aria-label={`Remove ${f}`} onClick={() => void api.kubeconfigs.remove(f).then(onChanged)} icon={<Trash2 size={12} strokeWidth={1.9} />}>Remove</Button> : null}
+            </li>
+          ))}
+          {files.length + extra.length === 0 ? <li className="text-[12.5px] text-tertiary">No kubeconfig files yet. Add one below.</li> : null}
+        </ul>
+      </Card>
+      <Card title="Add a file" subtitle="A kubeconfig already on this machine.">
+        <div className="flex items-end gap-2">
+          <Field id="kubeconfig-path" label="Path" mono value={path} onChange={(e) => setPath(e.target.value)} placeholder="~/.kube/prod-config" className="flex-1" data-testid="kubeconfig-path" onKeyDown={(e) => { if (e.key === 'Enter' && path.trim()) void add({ path: path.trim() }); }} />
+          <Button variant="primary" disabled={!path.trim() || busy} onClick={() => void add({ path: path.trim() })} data-testid="kubeconfig-add-path">Add</Button>
         </div>
-      ) : null}
-      {files.length ? (
-        <ul className="space-y-1">{files.map((f) => <li key={f} className="font-mono text-[12px] text-primary">{f}</li>)}</ul>
-      ) : (
-        <p className="text-[12.5px] text-tertiary">No kubeconfig files found. Set KUBECONFIG or create ~/.kube/config, then Reload.</p>
-      )}
-      <p className="mt-3 text-[11.5px] text-tertiary">Adding a file from here, and pasting a kubeconfig, are next.</p>
-    </Card>
+      </Card>
+      <Card title="Paste a kubeconfig" subtitle="Saved under ~/.mjolnir/kubeconfigs with owner-only permissions.">
+        <div className="space-y-2">
+          <Field id="kubeconfig-name" label="Name" mono value={name} onChange={(e) => setName(e.target.value)} placeholder="staging" className="w-[260px]" data-testid="kubeconfig-name" />
+          <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} aria-label="Kubeconfig content" data-testid="kubeconfig-content" placeholder={'apiVersion: v1\nkind: Config\nclusters:\n  - name: …'} className="w-full resize-y rounded-md border border-line bg-sunken px-3 py-2 font-mono text-[11.5px] text-primary outline-none focus:border-focus" />
+          <div className="flex justify-end"><Button variant="primary" disabled={!name.trim() || !content.trim() || busy} onClick={() => void add({ name: name.trim(), content })} data-testid="kubeconfig-add-paste">Save and load</Button></div>
+        </div>
+      </Card>
+    </>
   );
 }
 
-function Clusters({ clusters, settings, onSave, onChanged }: { clusters: ClustersResponse | null; settings: AppSettings | null; onSave: (patch: unknown, said?: string) => Promise<void>; onChanged: () => Promise<void> }) {
+function Clusters({ clusters, settings, onChanged }: { clusters: ClustersResponse | null; settings: AppSettings | null; onChanged: () => Promise<void> }) {
   const [removing, setRemoving] = useState<{ name: string; scope: 'hide' | 'kubeconfig' } | null>(null);
   const [busy, setBusy] = useState(false);
   const hidden = clusters?.hidden ?? [];
@@ -465,7 +509,7 @@ function Clusters({ clusters, settings, onSave, onChanged }: { clusters: Cluster
   };
   return (
     <>
-      <Card title="Clusters" subtitle="Every context Mjolnir knows. Hide one to keep it out of the rail; remove one to take it out of its kubeconfig file.">
+      <Card title="Clusters" subtitle="Every context Mjolnir knows, with the namespaces chosen for it in the toolbar picker. Hide one to keep it out of the strip; remove one to take it out of its kubeconfig file.">
         <ul className="divide-y divide-[var(--border-subtle)]">
           {(clusters?.contexts ?? []).map((c) => {
             const per = settings?.clusters.perContext[c.name] ?? {};
@@ -475,7 +519,7 @@ function Clusters({ clusters, settings, onSave, onChanged }: { clusters: Cluster
                   <div className="font-mono text-[12.5px] text-primary">{c.name}</div>
                   <div className="truncate text-[11px] text-tertiary">{c.server ?? ''}{c.source && c.source !== '(built in)' ? ` · ${c.source}` : ' · built in'}</div>
                 </div>
-                <SaveField id={`ns-${c.name}`} label="Default namespace" placeholder="namespace" className="w-[150px]" value={per.namespace ?? ''} onSave={(next) => onSave({ clusters: { perContext: { [c.name]: { namespace: next } } } })} />
+                <span className="max-w-[260px] truncate font-mono text-[11.5px] text-tertiary" title={(per.namespaces ?? []).join(', ')}>{per.namespaces?.length ? per.namespaces.join(', ') : 'all namespaces'}</span>
                 {c.name !== 'demo' ? (
                   <>
                     <Button variant="ghost" aria-label={`Hide ${c.name}`} onClick={() => setRemoving({ name: c.name, scope: 'hide' })} icon={<EyeOff size={12} strokeWidth={1.9} />}>Hide</Button>

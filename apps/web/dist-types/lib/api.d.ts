@@ -44,8 +44,10 @@ export interface AppSettings {
     };
     clusters: {
         hidden: string[];
+        kubeconfigs: string[];
         perContext: Record<string, {
             namespace?: string;
+            namespaces?: string[];
             label?: string;
             color?: string;
         }>;
@@ -215,6 +217,21 @@ export declare const api: {
         get: () => Promise<LicenceStatus>;
         activate: (key: string) => Promise<LicenceStatus>;
         deactivate: () => Promise<LicenceStatus>;
+    };
+    kubeconfigs: {
+        list: () => Promise<{
+            files: string[];
+        }>;
+        add: (body: {
+            path?: string;
+            name?: string;
+            content?: string;
+        }) => Promise<{
+            files: string[];
+        }>;
+        remove: (path: string) => Promise<{
+            files: string[];
+        }>;
     };
     removeCluster: (name: string, scope: 'hide' | 'kubeconfig') => Promise<unknown>;
     unhideCluster: (name: string) => Promise<unknown>;

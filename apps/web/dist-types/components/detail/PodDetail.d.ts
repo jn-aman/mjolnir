@@ -160,7 +160,12 @@ interface PodDetailProps {
     /** Opens the port-forward dialog, on this port. */
     readonly onForward?: ((port: number) => void) | undefined;
     readonly onShell?: ((container: string) => void) | undefined;
+    /** The workload above the immediate owner (ReplicaSet → Deployment), when resolved. */
+    readonly parent?: {
+        kind: string;
+        name: string;
+    } | undefined;
 }
-export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell }: PodDetailProps): import("react").JSX.Element;
+export declare function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent }: PodDetailProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=PodDetail.d.ts.map

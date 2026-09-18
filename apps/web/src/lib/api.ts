@@ -86,7 +86,7 @@ export interface LogLineWire {
 
 export interface AppSettings {
   general: { showSystemNamespaces: boolean; defaultNamespace: string };
-  clusters: { hidden: string[]; perContext: Record<string, { namespace?: string; label?: string; color?: string }> };
+  clusters: { hidden: string[]; kubeconfigs: string[]; perContext: Record<string, { namespace?: string; namespaces?: string[]; label?: string; color?: string }> };
   ai: { provider: 'anthropic' | 'openai'; preset: string; baseUrl: string; apiKey: string; model: string; allowWrites: boolean; instructions: string };
   mcp: { http: boolean; token: string; allowWrites: boolean };
   licence: { key: string };
@@ -240,6 +240,11 @@ export const api = {
     get: () => request<LicenceStatus>('/api/licence'),
     activate: (key: string) => request<LicenceStatus>('/api/licence', { method: 'POST', body: JSON.stringify({ key }) }),
     deactivate: () => request<LicenceStatus>('/api/licence', { method: 'DELETE' }),
+  },
+  kubeconfigs: {
+    list: () => request<{ files: string[] }>('/api/clusters/kubeconfigs'),
+    add: (body: { path?: string; name?: string; content?: string }) => request<{ files: string[] }>('/api/clusters/kubeconfigs', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (path: string) => request<{ files: string[] }>(`/api/clusters/kubeconfigs?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   },
   removeCluster: (name: string, scope: 'hide' | 'kubeconfig') =>
     request<unknown>(`/api/clusters/${encodeURIComponent(name)}?scope=${scope}`, { method: 'DELETE' }),

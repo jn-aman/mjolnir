@@ -3,6 +3,9 @@ import type { ClusterRegistry } from '../clusters.ts';
 import { HttpError, handle, param, query } from '../http.ts';
 import type { SettingsStore } from '../settings.ts';
 import { removeContextFromFile } from '../kubeconfig-edit.ts';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 export function clusterRoutes(registry: ClusterRegistry, settings: SettingsStore): Router {
   const router = Router();
@@ -23,6 +26,50 @@ export function clusterRoutes(registry: ClusterRegistry, settings: SettingsStore
         // clusters than they have.
         failures: registry.failures,
       });
+    }),
+  );
+
+  /** Extra kubeconfig files: added by path, or pasted and kept under ~/.mjolnir/kubeconfigs. */
+  router.get(
+    '/kubeconfigs',
+    handle(async (_req, res) => {
+      res.json({ files: settings.get().clusters.kubeconfigs });
+    }),
+  );
+  router.post(
+    '/kubeconfigs',
+    handle(async (req, res) => {
+      const body = req.body as { path?: unknown; name?: unknown; content?: unknown };
+      let file: string;
+      if (typeof body.content === 'string' && body.content.trim()) {
+        const name = String(body.name ?? 'pasted').replace(/[^A-Za-z0-9_.-]/g, '-') || 'pasted';
+        const dir = join(homedir(), '.mjolnir', 'kubeconfigs');
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        file = join(dir, `${name}.yaml`);
+        writeFileSync(file, body.content, { mode: 0o600 });
+      } else if (typeof body.path === 'string' && body.path.trim()) {
+        file = resolve(body.path.trim().replace(/^~(?=$|\/)/, homedir()));
+        if (!existsSync(file)) throw HttpError.badRequest(`${file} does not exist`);
+      } else {
+        throw HttpError.badRequest('send a path, or a name and the kubeconfig content');
+      }
+      const files = [...new Set([...settings.get().clusters.kubeconfigs, file])];
+      settings.update({ clusters: { kubeconfigs: files } });
+      registry.extraKubeconfigs = files;
+      await registry.reload();
+      res.status(201).json({ files, contexts: visible(), currentContext: registry.currentContext });
+    }),
+  );
+  router.delete(
+    '/kubeconfigs',
+    handle(async (req, res) => {
+      const file = query(req, 'path');
+      if (!file) throw HttpError.badRequest('path is required');
+      const files = settings.get().clusters.kubeconfigs.filter((entry) => entry !== file);
+      settings.update({ clusters: { kubeconfigs: files } });
+      registry.extraKubeconfigs = files;
+      await registry.reload();
+      res.json({ files, contexts: visible(), currentContext: registry.currentContext });
     }),
   );
 

@@ -12,7 +12,8 @@ import { StatusChip } from './StatusChip.tsx';
 import { Button } from './ui/Button.tsx';
 import { Modal } from './ui/Modal.tsx';
 import { askEntry, copyEntry, copyText, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
-import { editContainer } from '../lib/edits.ts';
+import { editContainer, resolveController } from '../lib/edits.ts';
+import { ConfigDataDetail } from './detail/ConfigDataDetail.tsx';
 import { Terminal as TerminalIcon } from 'lucide-react';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
@@ -75,6 +76,20 @@ export function ResourceDrawer({
   const [events, setEvents] = useState<EventShape[] | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [yamlDirty, setYamlDirty] = useState(false);
+  const [parent, setParent] = useState<{ kind: string; name: string } | undefined>(undefined);
+  useEffect(() => {
+    setParent(undefined);
+    if (!item || kind !== 'Pod') return;
+    let cancelled = false;
+    const owner = (item.metadata as { ownerReferences?: Array<{ kind?: string; name?: string }> } | undefined)?.ownerReferences?.[0];
+    if (owner?.kind !== 'ReplicaSet') return;
+    void resolveController(context, item).then((controller) => {
+      if (!cancelled && controller && controller.kind !== 'ReplicaSet') setParent({ kind: controller.kind, name: controller.name });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item, kind, context]);
   const yamlApi = useRef<{ apply: () => Promise<void>; discard: () => void } | null>(null);
   /** What to do once unsaved YAML is resolved. */
   const [pending, setPending] = useState<(() => void) | null>(null);
@@ -376,9 +391,20 @@ export function ResourceDrawer({
               onOpenWorkspace={(id) => onNavigate?.({ kind: 'Pod', workspace: id })}
               onForward={onForward ? (port) => onForward(item, port) : undefined}
               onShell={onShell ? (container) => onShell(item, container) : undefined}
+              parent={parent}
               onEditContainer={async (container, change) => {
                 const where = await editContainer(context, item, container, change);
                 toast.success(where);
+                onDeleted?.();
+              }}
+            />
+          ) : kind === 'ConfigMap' || kind === 'Secret' ? (
+            <ConfigDataDetail
+              key={`${namespace}/${name}`}
+              kind={kind}
+              object={item as never}
+              onPatchMetadata={async (patch) => {
+                await api.patch(context, kind, name, { metadata: patch }, namespace || undefined);
                 onDeleted?.();
               }}
             />

@@ -116,9 +116,11 @@ interface PodDetailProps {
   /** Opens the port-forward dialog, on this port. */
   readonly onForward?: ((port: number) => void) | undefined;
   readonly onShell?: ((container: string) => void) | undefined;
+  /** The workload above the immediate owner (ReplicaSet → Deployment), when resolved. */
+  readonly parent?: { kind: string; name: string } | undefined;
 }
 
-export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell }: PodDetailProps) {
+export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent }: PodDetailProps) {
   const storage = detectObjectStorage(pod.spec?.containers as never);
   const statuses = pod.status?.containerStatuses ?? [];
   const initStatuses = pod.status?.initContainerStatuses ?? [];
@@ -202,7 +204,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
             ['QoS class', pod.status?.qosClass ?? '-'],
             ['Restart policy', pod.spec?.restartPolicy ?? '-'],
             ['Priority class', pod.spec?.priorityClassName ?? '-'],
-            ['Service account', pod.spec?.serviceAccountName ?? '-', true],
+            ['Service account', pod.spec?.serviceAccountName ?? '-', true, onNavigate && pod.spec?.serviceAccountName ? () => onNavigate({ kind: 'ServiceAccount', name: pod.spec?.serviceAccountName ?? '', namespace: pod.metadata?.namespace ?? '' }) : undefined],
             ['Started', pod.status?.startTime ? age(pod.status.startTime) + ' ago' : '-'],
             ['Created', pod.metadata?.creationTimestamp ? age(pod.metadata.creationTimestamp) + ' ago' : '-'],
             ['UID', pod.metadata?.uid ?? '-', true],
@@ -212,16 +214,16 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
 
       {pod.metadata?.ownerReferences?.length ? (
         <Section title="Controlled by">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {pod.metadata.ownerReferences.map((owner) => (
-              <span
-                key={owner.name}
-                className="rounded-md border border-line bg-raised px-2 py-1 font-mono text-[11.5px] text-primary"
-              >
-                <span className="text-secondary">{owner.kind}/</span>
-                {owner.name}
-              </span>
+              <RefChip key={owner.name} kind={owner.kind ?? ''} name={owner.name ?? ''} testId="owner-link" onOpen={onNavigate ? () => onNavigate({ kind: owner.kind ?? '', name: owner.name ?? '', namespace: pod.metadata?.namespace ?? '' }) : undefined} />
             ))}
+            {parent ? (
+              <>
+                <span className="text-tertiary">→</span>
+                <RefChip kind={parent.kind} name={parent.name} testId="parent-link" onOpen={onNavigate ? () => onNavigate({ kind: parent.kind, name: parent.name, namespace: pod.metadata?.namespace ?? '' }) : undefined} />
+              </>
+            ) : null}
           </div>
         </Section>
       ) : null}
@@ -309,6 +311,8 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
               onEditContainer={onEditContainer}
               onForward={onForward}
               onShell={onShell}
+              onNavigate={onNavigate}
+              namespace={pod.metadata?.namespace ?? ''}
               onOpenLogs={onOpenLogs}
             />
           ))}
@@ -320,6 +324,12 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
           <div className="space-y-1">
             {pod.spec.volumes.map((volume) => {
               const kind = Object.keys(volume).find((key) => key !== 'name') ?? 'unknown';
+              const source = volume[kind] as Record<string, unknown> | undefined;
+              const ref =
+                kind === 'configMap' ? { kind: 'ConfigMap', name: String(source?.['name'] ?? '') }
+                : kind === 'secret' ? { kind: 'Secret', name: String(source?.['secretName'] ?? '') }
+                : kind === 'persistentVolumeClaim' ? { kind: 'PersistentVolumeClaim', name: String(source?.['claimName'] ?? '') }
+                : null;
               return (
                 <div
                   key={volume.name}
@@ -328,6 +338,9 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
                   <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-primary">
                     {volume.name}
                   </span>
+                  {ref && ref.name ? (
+                    <RefChip kind={ref.kind} name={ref.name} testId="volume-link" onOpen={onNavigate ? () => onNavigate({ kind: ref.kind, name: ref.name, namespace: pod.metadata?.namespace ?? '' }) : undefined} />
+                  ) : null}
                   <span className="shrink-0 rounded-xs bg-overlay px-1.5 py-[1px] font-mono text-[10.5px] text-tertiary">
                     {kind}
                   </span>
@@ -364,6 +377,8 @@ function ContainerCard({
   onEditContainer,
   onForward,
   onShell,
+  onNavigate,
+  namespace = '',
 
 }: {
   status: ContainerStatus;
@@ -372,6 +387,8 @@ function ContainerCard({
   onEditContainer?: ((container: string, change: ContainerChange) => Promise<void>) | undefined;
   onForward?: ((port: number) => void) | undefined;
   onShell?: ((container: string) => void) | undefined;
+  onNavigate?: ((target: { kind: string; name?: string; namespace?: string }) => void) | undefined;
+  namespace?: string;
 }) {
   const state = status.state?.waiting
     ? status.state.waiting.reason ?? 'Waiting'
@@ -548,7 +565,17 @@ function ContainerCard({
                           </>
                         )
                       : entry.valueFrom
-                        ? `← ${describeValueFrom(entry.valueFrom)}`
+                        ? (() => {
+                            const ref = refOf(entry.valueFrom);
+                            return ref && onNavigate ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="text-tertiary">←</span>
+                                <RefChip kind={ref.kind} name={ref.name} hint={ref.key} testId="env-link" onOpen={() => onNavigate({ kind: ref.kind, name: ref.name, namespace })} />
+                              </span>
+                            ) : (
+                              `← ${describeValueFrom(entry.valueFrom)}`
+                            );
+                          })()
                         : ''}
                   </dd>
                 </div>
@@ -563,6 +590,33 @@ function ContainerCard({
 }
 
 /** Where an env var comes from, named the way the manifest names it. */
+/** The object an env var reads from, as a navigation target. */
+function refOf(source: unknown): { kind: string; name: string; key: string } | null {
+  if (!source || typeof source !== 'object') return null;
+  const from = source as Record<string, { name?: string; key?: string } | undefined>;
+  if (from['secretKeyRef']?.name) return { kind: 'Secret', name: from['secretKeyRef'].name, key: from['secretKeyRef'].key ?? '' };
+  if (from['configMapKeyRef']?.name) return { kind: 'ConfigMap', name: from['configMapKeyRef'].name, key: from['configMapKeyRef'].key ?? '' };
+  return null;
+}
+
+/** A chip that opens another object. The kind is dimmed, the name is the link. */
+function RefChip({ kind, name, hint, onOpen, testId }: { kind: string; name: string; hint?: string; onOpen?: (() => void) | undefined; testId?: string }) {
+  const body = (
+    <>
+      <span className="text-secondary">{kind}/</span>
+      {name}
+      {hint ? <span className="text-tertiary"> · {hint}</span> : null}
+    </>
+  );
+  return onOpen ? (
+    <button type="button" data-testid={testId} onClick={onOpen} className="rounded-md border border-line bg-raised px-2 py-1 font-mono text-[11.5px] text-primary transition-colors duration-100 hover:border-accent hover:text-accent">
+      {body}
+    </button>
+  ) : (
+    <span className="rounded-md border border-line bg-raised px-2 py-1 font-mono text-[11.5px] text-primary">{body}</span>
+  );
+}
+
 function describeValueFrom(source: unknown): string {
   if (!source || typeof source !== 'object') return 'valueFrom';
   const from = source as Record<string, { name?: string; key?: string; fieldPath?: string; resource?: string }>;
