@@ -1,4 +1,4 @@
-import { logger } from '@odin/logger';
+import { logger } from '@mjolnir/logger';
 import { ApiError, type ClusterTransport } from './transport.ts';
 import { LineSplitter, type LogLine, parseLogLine } from './log-line.ts';
 

@@ -4,15 +4,15 @@ Research notes feeding stage 2 of [MIGRATION.md](MIGRATION.md).
 
 ## Licensing — read this first
 
-| Project | License | What that means for Odin |
+| Project | License | What that means for Mjolnir |
 |---|---|---|
-| [Freelens](https://github.com/freelensapp/freelens) | **MIT** | Code can be reused directly, with attribution. Compatible with Odin. |
+| [Freelens](https://github.com/freelensapp/freelens) | **MIT** | Code can be reused directly, with attribution. Compatible with Mjolnir. |
 | [Leapp](https://github.com/Noovolari/leapp) | **MPL-2.0** | **Design reference only.** Do not copy source. |
 
 MPL-2.0 is file-level copyleft: any file containing Leapp code stays MPL-2.0 and
 carries source-disclosure obligations, even inside an otherwise-MIT project.
 Architecture and concepts are not copyrightable, so we can learn from the model
-freely — but every line in `@odin/cloud` must be ours.
+freely — but every line in `@mjolnir/cloud` must be ours.
 
 ## Freelens
 
@@ -26,17 +26,17 @@ It is the closest thing to a reference implementation of this product category.
 Their split maps almost one-to-one onto the plan already written, which is
 reassuring, and sharpens it in three places:
 
-| Freelens package | Lesson for Odin |
+| Freelens package | Lesson for Mjolnir |
 |---|---|
-| `kube-object` | Object modelling lives in its own package, isolated from UI. Matches `@odin/schemas`. |
+| `kube-object` | Object modelling lives in its own package, isolated from UI. Matches `@mjolnir/schemas`. |
 | `list-layout` | **The important one.** One generic resource-list abstraction drives every resource type. It is how they support 40+ kinds without 40 components — and the reason the source app has a 704-line `ResourceViewer`. |
-| `metrics` | Metrics is its own package, not a field on each resource. Worth splitting out of `@odin/k8s`. |
+| `metrics` | Metrics is its own package, not a field on each resource. Worth splitting out of `@mjolnir/k8s`. |
 | `logger` | Structured logging as a first-class package, not `console.log` scattered through routes. |
 | `routing` | Routes as data, which is what makes their command palette and deep links cheap. |
 
 ### Features worth taking
 
-1. **Hotbar / pinned clusters** — pin frequently used clusters for one-click switching. Directly useful given Odin targets multi-account users.
+1. **Hotbar / pinned clusters** — pin frequently used clusters for one-click switching. Directly useful given Mjolnir targets multi-account users.
 2. **kubectl version management per cluster** — bundle and select a kubectl matching the cluster version. Solves a real class of "works on my machine" bugs with older clusters.
 3. **Shell sync** — inherit the user's actual shell environment in the embedded terminal. A constant source of complaints in every tool that gets it wrong.
 4. **Download logs to file** — they treat it as a distinct feature with its own tests, not a `data:` URI afterthought.
@@ -47,7 +47,7 @@ reassuring, and sharpens it in three places:
 
 - **The dependency-injection architecture.** `register-injectables-main.ts` /
   `register-injectables-renderer.ts` and injection tokens throughout are a Lens
-  inheritance that suits a large team and a plugin marketplace. For Odin it is
+  inheritance that suits a large team and a plugin marketplace. For Mjolnir it is
   ceremony that buys nothing yet.
 - **The extension system**, for now. It is a large, permanent API commitment.
   Revisit once the core is stable; designing for it prematurely distorts
@@ -61,7 +61,7 @@ Noovolari, the company behind it, [shut down](https://blog.leapp.cloud/noovolari
 the commercial Pro and Team products went offline on 30 June 2024. The OSS repo
 is still maintained but the cadence has slowed. Their users need a new home, and
 nobody has combined cluster viewing with cloud access management in one app —
-which is the clearest differentiator Odin has against Lens, Freelens and k9s.
+which is the clearest differentiator Mjolnir has against Lens, Freelens and k9s.
 
 ### The domain model to learn from
 
@@ -100,16 +100,16 @@ Session types observed in their model:
 - Configuration and secrets stored separately, so config is portable and
   secrets are not
 
-Odin should beat this on one axis: surface impending expiry *in the UI before a
+Mjolnir should beat this on one axis: surface impending expiry *in the UI before a
 call fails*, rather than letting the user discover it through an error.
 
 ## Effect on the plan
 
-- `@odin/schemas` stays as designed — Freelens validates isolating object
+- `@mjolnir/schemas` stays as designed — Freelens validates isolating object
   modelling from UI.
-- **Add `@odin/metrics` and `@odin/logger`** as separate packages in stage 2.
+- **Add `@mjolnir/metrics` and `@mjolnir/logger`** as separate packages in stage 2.
 - **Build the generic list-layout abstraction early**, before porting resource
   screens. Porting first and abstracting later reproduces the 704-line component
   we are trying to escape.
-- `@odin/cloud` models `Session` and `Integration` as distinct concepts from day
+- `@mjolnir/cloud` models `Session` and `Integration` as distinct concepts from day
   one, with chaining as a parent pointer — written from scratch, MPL-clean.

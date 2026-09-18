@@ -1,6 +1,6 @@
 # Migration plan
 
-Odin is a TypeScript rewrite of a ~17,300-line JavaScript codebase (6,900 lines
+Mjolnir is a TypeScript rewrite of a ~17,300-line JavaScript codebase (6,900 lines
 of Express server, 10,400 of React). This is the order the work goes in and why.
 
 ## Decisions taken
@@ -19,7 +19,7 @@ down (`item?.status?.containerStatuses?.[0]?.state?.waiting?.reason`). That styl
 never throws, which sounds safe but means a shape change shows up as a silently
 blank column instead of an error anyone can act on.
 
-`@odin/schemas` replaces it with lenient parsing that is still *total*: a list of
+`@mjolnir/schemas` replaces it with lenient parsing that is still *total*: a list of
 500 pods containing 2 unreadable ones renders 498 rows and reports 2 skipped.
 Nothing throws, nothing blanks, and the mismatch is logged with the raw object.
 
@@ -27,15 +27,15 @@ Nothing throws, nothing blanks, and the mismatch is logged with the raw object.
 
 ### 1. Foundation — done
 - Workspace, strict TS, Playwright harness
-- `@odin/schemas`: lenient parsing, quantity arithmetic, core object schemas
+- `@mjolnir/schemas`: lenient parsing, quantity arithmetic, core object schemas
 
 ### 2. Core migration
-- `@odin/k8s` — typed cluster client, kubeconfig and context handling
-- `@odin/server` — split `server.js` (~70 routes) into routers:
+- `@mjolnir/k8s` — typed cluster client, kubeconfig and context handling
+- `@mjolnir/server` — split `server.js` (~70 routes) into routers:
   `k8s`, `aws`, `azure`, `helm`, `argocd`, `security`, `metrics`, `topology`
-- `@odin/web` — port React components to TS, decomposing the three oversized
+- `@mjolnir/web` — port React components to TS, decomposing the three oversized
   ones (`ArgoCD` 1,192 lines, `ResourceViewer` 704, `App` 662)
-- `@odin/desktop` — Electron main and preload, with a real IPC contract
+- `@mjolnir/desktop` — Electron main and preload, with a real IPC contract
 
 ### 3. Log viewer
 Rebuilt rather than ported. The source version is a one-shot `axios.get`, so it

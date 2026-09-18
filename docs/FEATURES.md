@@ -1,6 +1,6 @@
 # Feature plan
 
-What Odin builds, what inspired it, and where we deliberately do it differently.
+What Mjolnir builds, what inspired it, and where we deliberately do it differently.
 Nothing here is a port — both reference apps get things wrong that are worth
 fixing rather than inheriting.
 
@@ -13,11 +13,11 @@ Leapp manages cloud credentials but knows nothing about clusters. So the daily
 loop for anyone on EKS is: notice a call failed, switch to a credentials tool,
 refresh a session, come back, retry.
 
-In Odin an EKS cluster records which cloud session authenticates it. Selecting
+In Mjolnir an EKS cluster records which cloud session authenticates it. Selecting
 the cluster activates that session if it is inactive, refreshes it if it is near
 expiry, and says so in the UI. The user never learns that two concepts existed.
 
-Everything in `@odin/cloud` exists to make that one interaction work.
+Everything in `@mjolnir/cloud` exists to make that one interaction work.
 
 ## Log viewer
 

@@ -1,6 +1,6 @@
 import { createPublicKey, verify as verifySignature } from 'node:crypto';
 import { z } from 'zod';
-import { logger } from '@odin/logger';
+import { logger } from '@mjolnir/logger';
 import type { Tier } from './entitlements.ts';
 
 const log = logger.child('licensing');

@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { aggregatePodLogs, streamPodLogs, type LogLine } from '@odin/k8s';
-import { logger } from '@odin/logger';
+import { aggregatePodLogs, streamPodLogs, type LogLine } from '@mjolnir/k8s';
+import { logger } from '@mjolnir/logger';
 import type { ClusterRegistry } from './clusters.ts';
 
 const log = logger.child('log-socket');

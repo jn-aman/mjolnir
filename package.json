@@ -1,8 +1,8 @@
 {
-  "name": "odin",
+  "name": "mjolnir",
   "version": "0.1.0",
   "private": true,
-  "description": "See your whole cluster in one window \u2014 a native desktop app for Kubernetes, cloud access, and containers",
+  "description": "See your whole cluster in one window — a native desktop app for Kubernetes, cloud access, and containers",
   "author": {
     "name": "Aman Jain",
     "email": "jain.aman1497@gmail.com"
@@ -23,17 +23,18 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "dev": "npm run dev --workspace @odin/server & npm run dev --workspace @odin/web",
+    "dev": "npm run dev --workspace @mjolnir/server & npm run dev --workspace @mjolnir/web",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report",
-    "lint:no-js": "! find packages apps e2e -type f \\( -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \\) -not -path '*/node_modules/*' -not -path '*/dist/*' | grep . || (echo 'JavaScript source files found \u2014 Odin is TypeScript only' && exit 1)",
+    "lint:no-js": "! find packages apps e2e -type f \\( -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \\) -not -path '*/node_modules/*' -not -path '*/dist/*' | grep . || (echo 'JavaScript source files found — Mjolnir is TypeScript only' && exit 1)",
     "verify": "npm run lint:no-js && npm run typecheck && npm test"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.10.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }

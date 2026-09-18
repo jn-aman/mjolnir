@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { logger } from '@odin/logger';
-import { setSchemaReporter } from '@odin/schemas';
+import { logger } from '@mjolnir/logger';
+import { setSchemaReporter } from '@mjolnir/schemas';
 import { ClusterRegistry } from './clusters.ts';
 import { errorHandler } from './http.ts';
 import { attachLogSocket } from './log-socket.ts';
@@ -16,7 +16,7 @@ export interface ServerHandle {
   close(): Promise<void>;
 }
 
-export async function startServer(port = Number(process.env['ODIN_PORT'] ?? 0)): Promise<ServerHandle> {
+export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0)): Promise<ServerHandle> {
   // Route schema mismatches into the app log rather than losing them.
   setSchemaReporter((message, detail) => {
     log.child('schema').warn(message, { context: detail.context });

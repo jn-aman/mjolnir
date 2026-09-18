@@ -6,8 +6,8 @@ import {
   type ResourceDefinition,
   configForContext,
   loadKubeconfig,
-} from '@odin/k8s';
-import { logger } from '@odin/logger';
+} from '@mjolnir/k8s';
+import { logger } from '@mjolnir/logger';
 
 const log = logger.child('clusters');
 

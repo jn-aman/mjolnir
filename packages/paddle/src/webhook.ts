@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { logger } from '@odin/logger';
+import { logger } from '@mjolnir/logger';
 
 const log = logger.child('paddle:webhook');
 

@@ -6,7 +6,7 @@ import { expect, test } from './fixtures/app.ts';
  */
 test.describe('app shell', () => {
   test('launches and reaches the demo cluster', async ({ window }) => {
-    await expect(window).toHaveTitle(/Odin/);
+    await expect(window).toHaveTitle(/Mjolnir/);
     await expect(window.getByTestId('cluster-name')).toContainText('demo');
     await expect(window.getByTestId('connection-status')).toHaveAttribute('data-state', 'connected');
   });

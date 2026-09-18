@@ -1,5 +1,5 @@
 import { KubeConfig } from '@kubernetes/client-node';
-import { logger } from '@odin/logger';
+import { logger } from '@mjolnir/logger';
 import { homedir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -25,7 +25,7 @@ export type Provider = 'eks' | 'aks' | 'gke' | 'kind' | 'minikube' | 'k3s' | 'op
 /**
  * Infer the provider from a context.
  *
- * Purely cosmetic — it drives an icon and, for EKS, which cloud session Odin
+ * Purely cosmetic — it drives an icon and, for EKS, which cloud session Mjolnir
  * offers to bind. It must never gate functionality, because the heuristics are
  * guesses and a wrong guess should cost an icon, not access to a cluster.
  */
@@ -48,7 +48,7 @@ export function inferProvider(server: string | null, contextName: string, cluste
  * KUBECONFIG may list several files separated by the platform path delimiter,
  * and kubectl merges them left to right. Tools that read only ~/.kube/config
  * silently miss clusters for anyone using that convention, which is common in
- * exactly the multi-account setups Odin targets.
+ * exactly the multi-account setups Mjolnir targets.
  */
 export function kubeconfigPaths(env: NodeJS.ProcessEnv = process.env): string[] {
   const configured = env['KUBECONFIG'];

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
-import { ApiError } from '@odin/k8s';
-import { logger } from '@odin/logger';
+import { ApiError } from '@mjolnir/k8s';
+import { logger } from '@mjolnir/logger';
 
 const log = logger.child('http');
 

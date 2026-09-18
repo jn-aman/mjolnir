@@ -1,6 +1,6 @@
 <div align="center">
 
-# Odin
+# Mjolnir
 
 **See your whole cluster in one window.**
 
@@ -18,14 +18,14 @@ the order of work and the reasoning behind it.
 
 | Package | What it is | State |
 |---|---|---|
-| `@odin/schemas` | Zod schemas and quantity arithmetic for the Kubernetes API | Working |
-| `@odin/k8s` | Typed cluster client | Kubeconfig, transport, logs, watch |
-| `@odin/cloud` | Multi-account AWS/Azure session management | Not started |
-| `@odin/licensing` | Licence key verification and tier gating | In progress |
-| `@odin/docker` | Local Docker engine client | Not started |
-| `@odin/server` | Express API, split by domain | Not started |
-| `@odin/web` | React client | Not started |
-| `@odin/desktop` | Electron shell | Not started |
+| `@mjolnir/schemas` | Zod schemas and quantity arithmetic for the Kubernetes API | Working |
+| `@mjolnir/k8s` | Typed cluster client | Kubeconfig, transport, logs, watch |
+| `@mjolnir/cloud` | Multi-account AWS/Azure session management | Not started |
+| `@mjolnir/licensing` | Licence key verification and tier gating | In progress |
+| `@mjolnir/docker` | Local Docker engine client | Not started |
+| `@mjolnir/server` | Express API, split by domain | Not started |
+| `@mjolnir/web` | React client | Not started |
+| `@mjolnir/desktop` | Electron shell | Not started |
 
 ## Development
 
@@ -43,5 +43,5 @@ unit tests are reserved for pure logic such as quantity parsing.
 ## Licence
 
 [Elastic License 2.0](LICENSE) — source-available. You can read, modify and
-build Odin; you may not offer it as a hosted service or circumvent its licence
+build Mjolnir; you may not offer it as a hosted service or circumvent its licence
 key. See [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) for the free/Pro split.

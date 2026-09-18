@@ -1,5 +1,5 @@
 import type { KubeConfig } from '@kubernetes/client-node';
-import { logger } from '@odin/logger';
+import { logger } from '@mjolnir/logger';
 import https from 'node:https';
 import http from 'node:http';
 import type { Readable } from 'node:stream';
@@ -63,7 +63,7 @@ function buildQuery(query: RequestOptions['query']): string {
 /**
  * Authenticated HTTP to one cluster's API server.
  *
- * This sits below the generated API clients on purpose. Two things Odin needs
+ * This sits below the generated API clients on purpose. Two things Mjolnir needs
  * are awkward through them: listing an arbitrary group/version/plural with one
  * code path for core and non-core resources, and holding a log response open as
  * a stream. Both are trivial against the raw agent that `applyToHTTPSOptions`

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { readPodLogs } from '@odin/k8s';
+import { readPodLogs } from '@mjolnir/k8s';
 import type { ClusterRegistry } from '../clusters.ts';
 import { handle, param, query, queryBoolean, queryNumber } from '../http.ts';
 

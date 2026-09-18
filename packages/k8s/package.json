@@ -1,5 +1,5 @@
 {
-  "name": "@odin/k8s",
+  "name": "@mjolnir/k8s",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
   "scripts": { "build": "tsc -b" },
   "dependencies": {
     "@kubernetes/client-node": "^2.0.0",
-    "@odin/logger": "*",
-    "@odin/schemas": "*",
+    "@mjolnir/logger": "*",
+    "@mjolnir/schemas": "*",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

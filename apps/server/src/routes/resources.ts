@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { RESOURCES, collectionPath, resolveResource } from '@odin/k8s';
+import { RESOURCES, collectionPath, resolveResource } from '@mjolnir/k8s';
 import type { ClusterRegistry } from '../clusters.ts';
 import { HttpError, handle, param, query } from '../http.ts';
 

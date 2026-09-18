@@ -37,7 +37,7 @@ export class Logger {
 
   constructor(options: LoggerOptions = {}) {
     this.#level = options.level ?? 'info';
-    this.#scope = options.scope ?? 'odin';
+    this.#scope = options.scope ?? 'mjolnir';
     this.#transports = options.transports ?? [consoleTransport()];
     this.#fields = options.fields ?? {};
   }
@@ -121,5 +121,5 @@ export function ringBufferTransport(capacity = 500): Transport & { records: () =
 }
 
 export const logger = new Logger({
-  level: (process.env['ODIN_LOG_LEVEL'] as Level | undefined) ?? 'info',
+  level: (process.env['MJOLNIR_LOG_LEVEL'] as Level | undefined) ?? 'info',
 });

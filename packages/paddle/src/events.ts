@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Plan } from '@odin/licensing';
+import type { Plan } from '@mjolnir/licensing';
 
 /**
  * Paddle notification envelope.

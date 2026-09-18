@@ -2,15 +2,15 @@
 
 ## Licence
 
-Odin is licensed under the **Elastic License 2.0**, replacing the MIT licence
+Mjolnir is licensed under the **Elastic License 2.0**, replacing the MIT licence
 used by earlier versions.
 
 MIT could not work here: it grants everyone the right to delete the licence
-check, rebuild, and redistribute the result as "Odin Free", legally. Elastic
+check, rebuild, and redistribute the result as "Mjolnir Free", legally. Elastic
 License 2.0 keeps the source public and readable while explicitly prohibiting
 the three things that would break a paid product:
 
-1. Providing Odin to third parties as a hosted or managed service
+1. Providing Mjolnir to third parties as a hosted or managed service
 2. **Circumventing the licence key functionality**
 3. Removing or obscuring licensing, copyright or other notices
 
@@ -57,7 +57,7 @@ Everything a working developer needs day to day:
 - **One cloud account** — EKS and AKS import, as today
 
 The structured-log table stays free on purpose. It is the most visible thing
-Odin does that Lens and Freelens do not, and it is worth more as a reason to
+Mjolnir does that Lens and Freelens do not, and it is worth more as a reason to
 switch than as a line item on a pricing page.
 
 ### Pro
@@ -86,7 +86,7 @@ under the same account.
 **How the one-time plan works — the perpetual fallback model**, as used by
 JetBrains, Sublime Text and Tower:
 
-- You pay once and own Odin permanently
+- You pay once and own Mjolnir permanently
 - You receive every update released in the following 12 months
 - After 12 months the app keeps working forever, at the newest version you were
   entitled to. Nothing expires, nothing degrades
@@ -119,7 +119,7 @@ Shape:
   fall back to free; the app keeps working
 - For lifetime keys, an expired update entitlement is **not** a licence
   expiry — the token's version ceiling is what gates new builds
-- The key lives in the **OS keychain**, like every other secret Odin holds
+- The key lives in the **OS keychain**, like every other secret Mjolnir holds
 
 Being honest about the limit: a determined user can patch any desktop binary.
 The licence check makes paying the path of least resistance for honest users. It
@@ -151,7 +151,7 @@ someone else opens it.
 ### Signing and notarization are not optional
 
 On macOS 15 and later, an unsigned or un-notarized app downloaded from the web
-shows **"Odin is damaged and can't be opened. You should move it to the Trash."**
+shows **"Mjolnir is damaged and can't be opened. You should move it to the Trash."**
 That is Gatekeeper, and to the person seeing it, it is indistinguishable from a
 broken build. For a paid product it is fatal.
 
@@ -162,7 +162,7 @@ Requirements:
 2. **Developer ID Application certificate** from that account
 3. **Notarization** via `notarytool` with an App Store Connect API key, then
    **stapling** the ticket so the DMG validates offline
-4. **Hardened runtime** with entitlements for what Odin actually does — spawning
+4. **Hardened runtime** with entitlements for what Mjolnir actually does — spawning
    `kubectl` and shell processes, and JIT for the embedded terminal
 5. Every **nested binary** in the bundle must be signed too, including the
    bundled Trivy
@@ -185,7 +185,7 @@ changing it later breaks the update path for every existing install.
 
 1. ~~Settle the licence question~~ — done, Elastic License 2.0
 2. Apple Developer enrolment — start now, it gates the first shareable build
-3. `@odin/licensing` — Ed25519 verification, tier gating, keychain storage
+3. `@mjolnir/licensing` — Ed25519 verification, tier gating, keychain storage
 4. Feature gates at the package boundary, not sprinkled through the UI
 5. electron-builder config, signing, notarization, stapling
 6. Auto-update

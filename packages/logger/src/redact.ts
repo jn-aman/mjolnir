@@ -1,7 +1,7 @@
 /**
  * Redaction for anything on its way out of the process.
  *
- * Odin handles kubeconfigs, bearer tokens, AWS credentials and Secret objects.
+ * Mjolnir handles kubeconfigs, bearer tokens, AWS credentials and Secret objects.
  * Those must never reach a log file, a crash report, or a model prompt. The
  * policy here is deliberately blunt: match broadly, accept false positives, and
  * never trade a leak for a prettier log line.

@@ -5,7 +5,7 @@ import {
   type ObjectCache,
   makeInformer,
 } from '@kubernetes/client-node';
-import { logger } from '@odin/logger';
+import { logger } from '@mjolnir/logger';
 import type { ClusterTransport } from './transport.ts';
 import { type ResourceDefinition, collectionPath } from './resources.ts';
 

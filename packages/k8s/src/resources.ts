@@ -1,7 +1,7 @@
 /**
  * The resource registry.
  *
- * One table describing every built-in kind Odin knows about, so screens, the
+ * One table describing every built-in kind Mjolnir knows about, so screens, the
  * command palette, routing and the generic list all read from the same source
  * rather than each hard-coding API groups. Adding a kind is a row here, not a
  * component.
