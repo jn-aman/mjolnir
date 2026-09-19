@@ -86,17 +86,27 @@ describe('verifyLicense', () => {
     expect(status.tier).toBe('free');
   });
 
-  it('never expires a lifetime licence, even long past its update entitlement', () => {
+  it('keeps a licence valid long past its update entitlement', () => {
     const key = issue({
-      plan: 'lifetime',
-      expiresAt: null,
+      plan: 'annual',
+      expiresAt: nowSeconds + 30 * DAY,
       updatesUntil: nowSeconds - 3650 * DAY,
     });
     const status = verifyLicense(key, { publicKeyPem, now: NOW });
-    // The bug this guards: collapsing "updates ran out" into "licence expired",
-    // which silently turns a perpetual purchase into a subscription.
+    // The bug this guards: collapsing "updates ran out" into "licence
+    // expired", which takes Pro away from somebody who is still paying.
     expect(status.kind).toBe('valid');
     expect(status.tier).toBe('pro');
+  });
+
+  it('refuses a licence with no end date rather than reading it as forever', () => {
+    // An absent end date is what a truncated or malformed payload looks like.
+    // It used to mean "lifetime", which is the wrong way to fail: the
+    // generous reading belongs to the plan, not to a missing field.
+    const key = issue({ plan: 'annual', expiresAt: null, updatesUntil: nowSeconds + DAY });
+    const status = verifyLicense(key, { publicKeyPem, now: NOW });
+    expect(status.kind).toBe('invalid');
+    expect(status.tier).toBe('free');
   });
 });
 
@@ -104,9 +114,9 @@ describe('coversRelease', () => {
   const claims = {
     jti: 'lic_1',
     email: 'user@example.com',
-    plan: 'lifetime',
+    plan: 'annual',
     iat: nowSeconds,
-    expiresAt: null,
+    expiresAt: nowSeconds + 365 * DAY,
     updatesUntil: nowSeconds,
     customerId: 'ctm_1',
   } satisfies LicenseClaims;

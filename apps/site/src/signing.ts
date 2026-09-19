@@ -1,9 +1,7 @@
 import { createHash, createPrivateKey, randomBytes, randomUUID, sign as signBytes, timingSafeEqual } from 'node:crypto';
 import type { Lease } from '@mjolnir/account';
 import type { LicenseClaims } from '@mjolnir/licensing';
-import { logger } from '@mjolnir/logger';
 
-const log = logger.child('signing');
 
 /**
  * Minting leases, and the tokens that get you one.
@@ -17,7 +15,6 @@ const log = logger.child('signing');
 
 export interface Signer {
   signLease(input: { claims: LicenseClaims; deviceId: string; days: number; seats?: { total: number; used: number } }): { token: string; nonce: string; notAfter: number };
-  signPerpetual(claims: LicenseClaims): string;
 }
 
 export function createSigner(privateKeyPem: string): Signer {
@@ -38,18 +35,6 @@ export function createSigner(privateKeyPem: string): Signer {
       return { token: envelope(lease), nonce, notAfter };
     },
 
-    /**
-     * A key with no expiry and no device, for someone who bought a lifetime
-     * licence.
-     *
-     * A lifetime purchase that stops working when a server goes away is not a
-     * lifetime purchase, so this exists and is offered openly. It is the one
-     * artefact here that cannot be taken back, which is exactly what was sold.
-     */
-    signPerpetual(claims) {
-      log.info('perpetual licence minted', { jti: claims.jti });
-      return envelope(claims);
-    },
   };
 }
 

@@ -39,7 +39,15 @@ test.describe('log viewer', () => {
   test('pauses following when the reader scrolls up, and resumes on demand', async ({ window }) => {
     await openLogs(window, window.getByTestId('resource-row').first());
 
-    await window.getByTestId('log-body').hover();
+    // There has to be something to scroll away from. With a handful of lines
+    // the view already fits, follow stays on correctly, and the assertion
+    // below would be measuring the fixture rather than the behaviour.
+    const body = window.getByTestId('log-body');
+    await expect
+      .poll(async () => body.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 20_000 })
+      .toBeGreaterThan(100);
+
+    await body.hover();
     await window.mouse.wheel(0, -600);
     // Scrolling away is how a person says "stop moving"; nothing else should
     // have to be clicked for the lines to hold still.

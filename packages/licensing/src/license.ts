@@ -5,7 +5,16 @@ import type { Tier } from './entitlements.ts';
 
 const log = logger.child('licensing');
 
-export type Plan = 'monthly' | 'annual' | 'lifetime';
+/**
+ * What somebody is on.
+ *
+ * `trial` is a plan rather than a flag beside one, so every place that asks
+ * "what does this person have" gets the same answer in the same shape. A
+ * trial that was a boolean on the side would be checked in four places and
+ * forgotten in a fifth, and the fifth is the one that decides whether a
+ * feature works.
+ */
+export type Plan = 'trial' | 'monthly' | 'annual';
 
 /**
  * The signed body of a licence key.
@@ -20,11 +29,11 @@ export const LicenseClaimsSchema = z.object({
   jti: z.string().min(1),
   /** Who it was issued to. Shown in the UI so a user can confirm their own key. */
   email: z.string().min(1),
-  plan: z.enum(['monthly', 'annual', 'lifetime']),
+  plan: z.enum(['trial', 'monthly', 'annual']),
   /** Issued-at, seconds since epoch. */
   iat: z.number().int().nonnegative(),
   /**
-   * Subscription end, seconds since epoch. Null for lifetime, which does not
+   * Subscription end, seconds since epoch. Never null: every plan ends, and
    * expire.
    */
   expiresAt: z.number().int().nonnegative().nullable(),
@@ -123,10 +132,17 @@ export function verifyLicense(key: string, options: VerifyOptions): LicenseStatu
   const now = options.now ?? new Date();
   const nowSeconds = Math.floor(now.getTime() / 1000);
 
-  // A lifetime licence never expires. Its updatesUntil governs which builds it
-  // covers, which is an updater concern, not an entitlement one.
-  if (claims.plan === 'lifetime' || claims.expiresAt === null) {
-    return { kind: 'valid', tier: 'pro', claims };
+  /*
+   * Every licence has an end date now that lifetime is gone.
+   *
+   * A missing one used to mean "forever", which was right when a perpetual
+   * plan existed and is a hole without one: an absent field is exactly what a
+   * malformed or truncated payload looks like, and reading it as unlimited
+   * entitlement is the wrong way round. The signature already stops a forged
+   * claim, and this stops a broken one being read generously.
+   */
+  if (claims.expiresAt === null) {
+    return { kind: 'invalid', tier: 'free', reason: 'no end date on the licence' };
   }
 
   if (nowSeconds <= claims.expiresAt) {
@@ -149,10 +165,10 @@ export function verifyLicense(key: string, options: VerifyOptions): LicenseStatu
 /**
  * Whether a build is covered by a licence.
  *
- * Only meaningful for lifetime keys: the app keeps working forever, but a
- * release published after the update entitlement lapsed is not included. The
- * updater uses this to stop offering builds the user has not paid for, rather
- * than to stop the app running.
+ * Kept separate from the entitlement because the two lapse for different
+ * reasons: a subscription that ends stops granting Pro, and a licence that is
+ * still inside its grace period should not be offered a build published after
+ * it lapsed. The updater reads this, not the entitlement.
  */
 export function coversRelease(claims: LicenseClaims, releasedAt: Date): boolean {
   return Math.floor(releasedAt.getTime() / 1000) <= claims.updatesUntil;

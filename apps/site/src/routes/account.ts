@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { logger } from '@mjolnir/logger';
 import type { Account, Store } from '../db.ts';
-import { claimsFor, issueLease, view } from '../licensing.ts';
+import { issueLease, requestExtension, view } from '../licensing.ts';
 import { hashToken, type Signer } from '../signing.ts';
 
 const log = logger.child('account');
@@ -60,6 +60,25 @@ export function accountRoutes(store: Store, signer: Signer): Router {
       return;
     }
     res.json(outcome);
+  });
+
+  /**
+   * More time, for somebody still evaluating.
+   *
+   * 200 when it was granted, 202 when it was recorded and somebody will look.
+   * Not an error either way: asking for more time is not a failure, and a red
+   * message for it reads as a refusal.
+   */
+  router.post('/licence/extend', (req, res) => {
+    const auth = authenticate(req);
+    if (!auth) return unauthorised(res);
+    const reason = String(((req.body ?? {}) as Record<string, unknown>)['reason'] ?? '').trim();
+    const outcome = requestExtension(store, auth.account, reason);
+    if (outcome.ok) {
+      res.json({ ok: true, grantedDays: outcome.grantedDays, expiresAt: outcome.expiresAt });
+      return;
+    }
+    res.status(outcome.error === 'already_asked' ? 202 : 409).json(outcome);
   });
 
   router.post('/token/revoke', (req, res) => {
@@ -124,23 +143,6 @@ export function accountRoutes(store: Store, signer: Signer): Router {
     });
   });
 
-  /**
-   * A licence key with no expiry, for a lifetime purchase.
-   *
-   * Offered rather than hidden. Someone who paid once should not need this
-   * service to exist in ten years, and saying so is the difference between a
-   * lifetime licence and a subscription with a long first period.
-   */
-  router.post('/licence/perpetual', (req, res) => {
-    const auth = authenticate(req);
-    if (!auth) return unauthorised(res);
-    const subscription = store.subscriptionFor(auth.account.id);
-    if (!subscription || subscription.plan !== 'lifetime') {
-      res.status(403).json({ error: 'not_lifetime', error_description: 'Perpetual keys are for lifetime licences.' });
-      return;
-    }
-    res.json({ key: signer.signPerpetual(claimsFor(auth.account, subscription)) });
-  });
 
   return router;
 }

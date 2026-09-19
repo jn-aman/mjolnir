@@ -15,7 +15,6 @@ export type PaddleEnvironment = 'sandbox' | 'production';
 export const SANDBOX_CATALOGUE: PriceCatalogue = {
   monthly: 'pri_01m2t7znx0td7q4cyd6sjwf623',
   annual: 'pri_01m2t7zp5prmfsrstmm8h289c2',
-  lifetime: 'pri_01m2t7zpftkzfykbpsya3kam68',
 };
 
 export const SANDBOX_PRODUCT_ID = 'pro_01m2t7zmxqh2mhqz3ys2kdsrjp';
@@ -65,12 +64,10 @@ export function loadPaddleConfig(env: NodeJS.ProcessEnv = process.env): PaddleCo
       ? {
           monthly: require('PADDLE_PRICE_MONTHLY'),
           annual: require('PADDLE_PRICE_ANNUAL'),
-          lifetime: require('PADDLE_PRICE_LIFETIME'),
         }
       : {
           monthly: env['PADDLE_PRICE_MONTHLY']?.trim() || SANDBOX_CATALOGUE.monthly,
           annual: env['PADDLE_PRICE_ANNUAL']?.trim() || SANDBOX_CATALOGUE.annual,
-          lifetime: env['PADDLE_PRICE_LIFETIME']?.trim() || SANDBOX_CATALOGUE.lifetime,
         };
 
   if (missing.length > 0) throw new PaddleConfigError(missing);
@@ -80,7 +77,7 @@ export function loadPaddleConfig(env: NodeJS.ProcessEnv = process.env): PaddleCo
 
 /** Display metadata for the upgrade screen. Amounts are in cents. */
 export interface PlanPresentation {
-  readonly plan: 'monthly' | 'annual' | 'lifetime';
+  readonly plan: 'monthly' | 'annual';
   readonly label: string;
   readonly amountCents: number;
   readonly cadence: string;
@@ -101,12 +98,5 @@ export const PLAN_PRESENTATION: readonly PlanPresentation[] = [
     amountCents: 9000,
     cadence: 'per year',
     note: 'Two months free compared with monthly.',
-  },
-  {
-    plan: 'lifetime',
-    label: 'Lifetime',
-    amountCents: 14_900,
-    cadence: 'once',
-    note: 'Yours permanently, with 12 months of updates included.',
   },
 ];

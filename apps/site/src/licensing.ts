@@ -9,6 +9,23 @@ const log = logger.child('licensing');
 /** How long a lease lasts. Short enough that cancelling bites, long enough to fly with. */
 export const LEASE_DAYS = 7;
 
+/**
+ * The trial, and what happens when somebody asks for more of it.
+ *
+ * Thirty days, started by signing in rather than by asking for it. A trial
+ * somebody has to request is a trial most people never start, and the whole
+ * point is to find out whether this is any good on a real cluster, which
+ * takes longer than an afternoon.
+ *
+ * The first extension is granted on the spot. Somebody still asking after
+ * thirty days is somebody still trying, and refusing them costs a customer to
+ * save nothing. The second is a conversation, and the request is recorded so
+ * there is something to have it about.
+ */
+export const TRIAL_DAYS = 30;
+export const EXTENSION_DAYS = 14;
+export const AUTOMATIC_EXTENSIONS = 1;
+
 export interface DeviceView {
   readonly id: string;
   readonly name: string;
@@ -68,7 +85,15 @@ export function issueLease(
     };
   }
 
-  const subscription = store.subscriptionFor(account.id);
+  /*
+   * A trial starts by signing in, not by asking.
+   *
+   * The first time an account asks for a licence and has none, it gets thirty
+   * days. Nothing in the app has to know about it: the trial is a
+   * subscription with a plan of `trial`, so every check that asks what
+   * somebody has gets the same answer in the same shape.
+   */
+  const subscription = store.subscriptionFor(account.id) ?? startTrial(store, account);
   if (!subscription) {
     return {
       ok: false,
@@ -111,17 +136,107 @@ export function issueLease(
 /**
  * The claims a licence carries.
  *
- * `expiresAt` and `updatesUntil` stay separate because the two plans fail
- * differently: a subscription that lapses stops granting Pro, and a lifetime
- * licence never stops granting Pro but does stop covering new versions.
+ * `expiresAt` and `updatesUntil` stay separate because they lapse for
+ * different reasons: the first decides whether Pro works at all, the second
+ * decides which builds this licence covers, and collapsing them means a
+ * lapsed update entitlement takes Pro away from somebody still paying.
  */
+/**
+ * Thirty days, once.
+ *
+ * Returns null for an account that has already had one and let it lapse:
+ * a trial that restarts itself is not a trial, it is the product.
+ */
+export function startTrial(store: Store, account: Account, now = Math.floor(Date.now() / 1000)): Subscription | null {
+  if (store.hadTrial(account.id)) return null;
+
+  const subscription: Subscription = {
+    id: newId('sub'),
+    accountId: account.id,
+    plan: 'trial',
+    status: 'active',
+    expiresAt: now + TRIAL_DAYS * 86_400,
+    // Updates for as long as the trial runs, and no longer: a lapsed trial
+    // should stop offering new versions, not keep quietly upgrading.
+    updatesUntil: now + TRIAL_DAYS * 86_400,
+    seats: DEFAULT_SEATS,
+    paddleSubscriptionId: null,
+  };
+  store.saveSubscription(subscription);
+  log.info('trial started', { account: account.id, days: TRIAL_DAYS });
+  return subscription;
+}
+
+export type ExtensionOutcome =
+  | { readonly ok: true; readonly grantedDays: number; readonly expiresAt: number }
+  | { readonly ok: false; readonly error: 'not_on_trial' | 'already_asked'; readonly description: string };
+
+/**
+ * More time, asked for by somebody still evaluating.
+ *
+ * The first ask is granted immediately and the rest are recorded as pending,
+ * so nobody is blocked on a reply at the moment they most want to keep going,
+ * and nobody extends forever without a person looking.
+ */
+export function requestExtension(store: Store, account: Account, reason: string, now = Math.floor(Date.now() / 1000)): ExtensionOutcome {
+  const subscription = store.subscriptionFor(account.id) ?? store.lastSubscription(account.id);
+  if (!subscription || subscription.plan !== 'trial') {
+    return {
+      ok: false,
+      error: 'not_on_trial',
+      description: 'This account is not on a trial, so there is nothing to extend.',
+    };
+  }
+
+  const already = store.extensionsFor(account.id);
+  const granted = already.filter((entry) => entry.status === 'granted').length;
+  const pending = already.some((entry) => entry.status === 'pending');
+
+  if (granted >= AUTOMATIC_EXTENSIONS || pending) {
+    if (!pending) {
+      store.saveExtension({
+        id: newId('ext'),
+        accountId: account.id,
+        requestedAt: new Date(now * 1000).toISOString(),
+        reason: reason.slice(0, 500),
+        days: EXTENSION_DAYS,
+        status: 'pending',
+        decidedAt: null,
+      });
+    }
+    return {
+      ok: false,
+      error: 'already_asked',
+      description:
+        'We have your request and will come back to you. Everything on the free tier keeps working in the meantime, and nothing in your cluster is touched.',
+    };
+  }
+
+  // From now rather than from the old expiry, so asking late is not punished
+  // by an extension that has already half elapsed.
+  const from = Math.max(subscription.expiresAt ?? now, now);
+  const expiresAt = from + EXTENSION_DAYS * 86_400;
+  store.saveSubscription({ ...subscription, status: 'active', expiresAt, updatesUntil: expiresAt });
+  store.saveExtension({
+    id: newId('ext'),
+    accountId: account.id,
+    requestedAt: new Date(now * 1000).toISOString(),
+    reason: reason.slice(0, 500),
+    days: EXTENSION_DAYS,
+    status: 'granted',
+    decidedAt: new Date(now * 1000).toISOString(),
+  });
+  log.info('trial extended', { account: account.id, days: EXTENSION_DAYS });
+  return { ok: true, grantedDays: EXTENSION_DAYS, expiresAt };
+}
+
 export function claimsFor(account: Account, subscription: Subscription): LicenseClaims {
   return {
     jti: subscription.id,
     email: account.email,
     plan: subscription.plan,
     iat: Math.floor(Date.now() / 1000),
-    expiresAt: subscription.plan === 'lifetime' ? null : subscription.expiresAt,
+    expiresAt: subscription.expiresAt,
     updatesUntil: subscription.updatesUntil,
     customerId: account.customerId ?? newId('ctm'),
   };

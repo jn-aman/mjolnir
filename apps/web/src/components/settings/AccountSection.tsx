@@ -183,6 +183,40 @@ export function AccountSection() {
         ) : null}
       </Card>
 
+      {/*
+        Offered while a trial is running low, and after it has ended.
+        
+        Not a modal and not a nag: a line under the status with a button on
+        it. Somebody who needs longer will read it exactly when they need it,
+        and everybody else never sees it.
+      */}
+      {status && /trial/i.test(status.headline ?? '') ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-raised px-3 py-2.5" data-testid="trial-extend">
+          <p className="min-w-0 flex-1 text-[12.5px] leading-[1.6] text-secondary">
+            Need longer to decide? Ask, and the first extension is granted on the spot.
+          </p>
+          <Button
+            variant="secondary"
+            disabled={busy === 'extend'}
+            onClick={async () => {
+              setBusy('extend');
+              try {
+                const outcome = await api.account.extend('Still evaluating');
+                if (outcome.ok) toast.success(outcome.description);
+                else toast.message(outcome.description);
+                setStatus(await api.account.get());
+              } catch (error) {
+                setFailure(error instanceof Error ? error.message : String(error));
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            {busy === 'extend' ? 'Asking…' : 'Ask for more time'}
+          </Button>
+        </div>
+      ) : null}
+
       {prompt ? (
         <Card
           title="Finish signing in"

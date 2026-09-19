@@ -46,7 +46,22 @@ export function aiRoutes(context: ToolContext, flags: { value(id: string): boole
       res.setHeader('x-accel-buffering', 'no');
       res.flushHeaders();
       const controller = new AbortController();
-      req.on('close', () => controller.abort());
+      /*
+       * The response closing means the reader left. The request closing does
+       * not mean anything of the sort.
+       *
+       * This listened on `req`, and an IncomingMessage emits `close` once its
+       * body has been read, which `express.json()` does before this handler
+       * even runs. So the signal fired immediately on every call and aborted
+       * the model mid-sentence: "Test failed: This operation was aborted",
+       * every time, for a provider that was answering perfectly well.
+       *
+       * `writableEnded` is what tells a client that hung up apart from a
+       * stream that finished normally, which also closes the response.
+       */
+      res.on('close', () => {
+        if (!res.writableEnded) controller.abort();
+      });
       const emit = (event: AgentEvent) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       };
@@ -54,11 +69,28 @@ export function aiRoutes(context: ToolContext, flags: { value(id: string): boole
         const run = config.provider === 'anthropic' ? runAnthropic : runOpenAi;
         await run(config, parsed.data.messages, context, parsed.data.context ?? null, emit, controller.signal);
       } catch (error) {
-        emit({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+        emit({ type: 'error', message: describe(error) });
       }
       res.end();
     }),
   );
 
   return router;
+}
+
+/**
+ * A failure in words somebody can act on.
+ *
+ * An AbortError's own message is "This operation was aborted", which says
+ * nothing about what to do and reads like a bug in this app rather than a
+ * provider that did not answer.
+ */
+function describe(error: unknown): string {
+  if (error instanceof Error && error.name === 'AbortError') {
+    return 'The provider did not answer in time, or the request was cancelled. Check the base URL and try again.';
+  }
+  if (error instanceof Error && /fetch failed|ENOTFOUND|ECONNREFUSED/i.test(error.message)) {
+    return 'Could not reach the provider. Check the base URL and that this machine can reach it.';
+  }
+  return error instanceof Error ? error.message : String(error);
 }

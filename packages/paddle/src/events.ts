@@ -65,13 +65,11 @@ export const TransactionDataSchema = z.looseObject({
 export interface PriceCatalogue {
   readonly monthly: string;
   readonly annual: string;
-  readonly lifetime: string;
 }
 
 export function planForPrice(priceId: string, catalogue: PriceCatalogue): Plan | null {
   if (priceId === catalogue.monthly) return 'monthly';
   if (priceId === catalogue.annual) return 'annual';
-  if (priceId === catalogue.lifetime) return 'lifetime';
   return null;
 }
 
@@ -116,7 +114,7 @@ export type LicenseAction =
       readonly kind: 'issue';
       readonly customerId: string;
       readonly plan: Plan;
-      /** Subscription end, or null for a lifetime purchase. */
+      /** Subscription end. Every plan has one. */
       readonly expiresAt: Date | null;
       readonly updatesUntil: Date;
       /** Machines this licence covers, from the quantity that was paid for. */
@@ -128,7 +126,6 @@ export type LicenseAction =
   | { readonly kind: 'revoke'; readonly customerId: string; readonly reason: string }
   | { readonly kind: 'ignore'; readonly reason: string };
 
-const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 function parseDate(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
@@ -163,21 +160,16 @@ export function actionFor(
       const plan = planForPrice(priceId, catalogue);
       if (!plan) return { kind: 'ignore', reason: `unknown price ${priceId}` };
 
-      // Recurring plans are provisioned from subscription events, which carry
-      // the authoritative period end. Handling them here too would issue a
-      // licence twice on the first payment.
-      if (plan !== 'lifetime') {
-        return { kind: 'ignore', reason: 'recurring plan is handled by subscription events' };
-      }
-
-      return {
-        kind: 'issue',
-        customerId,
-        plan: 'lifetime',
-        expiresAt: null,
-        updatesUntil: new Date(now.getTime() + YEAR_MS),
-        seats: seatsFrom(transaction.items),
-      };
+      /*
+       * Every plan is recurring now, so a completed transaction provisions
+       * nothing on its own.
+       *
+       * Subscription events carry the authoritative period end and arrive for
+       * the same payment. Issuing from here as well would grant a licence
+       * twice on the first charge, with two different end dates, and the one
+       * that happened to be written last would win.
+       */
+      return { kind: 'ignore', reason: 'recurring plan is handled by subscription events' };
     }
 
     case 'subscription.created':
@@ -188,7 +180,7 @@ export function actionFor(
 
       const priceId = firstPriceId(subscription.items);
       const plan = priceId ? planForPrice(priceId, catalogue) : null;
-      if (!plan || plan === 'lifetime') {
+      if (!plan) {
         return { kind: 'ignore', reason: 'not a recurring plan' };
       }
 

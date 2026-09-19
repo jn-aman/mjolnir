@@ -464,7 +464,7 @@ function Licence() {
           <span className={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${pro ? 'bg-accent-subtle text-accent' : 'border border-line bg-raised text-secondary'}`} data-testid="licence-tier">{pro ? 'Pro' : 'Free'}</span>
           <div className="text-[12.5px] text-secondary">
             {status?.kind === 'valid' || status?.kind === 'grace' ? (
-              <>Licensed to <span className="font-mono text-primary">{status.email}</span>, {status.plan}{status.expiresAt ? `, until ${new Date(status.expiresAt).toLocaleDateString()}` : ', lifetime'}.{status.kind === 'grace' ? ' Past its end date, inside the grace period.' : ''}</>
+              <>Licensed to <span className="font-mono text-primary">{status.email}</span>, {status.plan}{status.expiresAt ? `, until ${new Date(status.expiresAt).toLocaleDateString()}` : ''}.{status.kind === 'grace' ? ' Past its end date, inside the grace period.' : ''}</>
             ) : status?.kind === 'expired' ? (
               <>The licence for {status.email} has expired.</>
             ) : status?.kind === 'unconfigured' ? (

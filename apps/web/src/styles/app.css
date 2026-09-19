@@ -474,3 +474,19 @@
 .cell-pinned-header.cell-covering {
   box-shadow: -10px 0 12px -10px var(--shadow-colour, rgb(0 0 0 / 0.45));
 }
+
+/*
+ * Radix poppers, above everything they float over.
+ *
+ * A z-index on the content does nothing: Radix renders it inside a wrapper it
+ * positions itself, and that wrapper is the element that stacks. So a tooltip
+ * carrying `z-[95]` sat underneath a sticky table header on `z-10`, and the
+ * class looked like it should have worked, which is the worst kind of wrong.
+ *
+ * One rule on the wrapper rather than a class per component, because tooltips,
+ * dropdowns, popovers and selects all use it and all had the same bug waiting
+ * in them.
+ */
+[data-radix-popper-content-wrapper] {
+  z-index: 95 !important;
+}

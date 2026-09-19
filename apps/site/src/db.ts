@@ -19,6 +19,24 @@ const log = logger.child('db');
  * replica to fail over to. Litestream to object storage, continuously.
  */
 
+/**
+ * A request to keep evaluating past the trial.
+ *
+ * Kept rather than auto-granted forever: the first extension is automatic
+ * because somebody who asks after thirty days is somebody still trying, and
+ * refusing them costs a customer to save nothing. The second is a
+ * conversation, and a row here is what starts it.
+ */
+export interface TrialExtension {
+  readonly id: string;
+  readonly accountId: string;
+  readonly requestedAt: string;
+  readonly reason: string;
+  readonly days: number;
+  readonly status: 'granted' | 'pending' | 'refused';
+  readonly decidedAt: string | null;
+}
+
 export interface Account {
   readonly id: string;
   readonly email: string;
@@ -39,9 +57,9 @@ export interface Account {
 export interface Subscription {
   readonly id: string;
   readonly accountId: string;
-  readonly plan: 'monthly' | 'annual' | 'lifetime';
+  readonly plan: 'trial' | 'monthly' | 'annual';
   readonly status: 'active' | 'past_due' | 'cancelled' | 'refunded';
-  /** Seconds since epoch. Null for lifetime. */
+  /** Seconds since epoch. Every plan ends, so this is only null on bad data. */
   readonly expiresAt: number | null;
   readonly updatesUntil: number;
   /** Machines this licence covers at once. Five by default, bought in blocks. */
@@ -286,6 +304,19 @@ const SCHEMA = `
   create index if not exists scim_users_account on scim_users(account_id);
   create index if not exists scim_users_external on scim_users(organisation_id, external_id);
 
+  -- Somebody asking to keep evaluating. The first is granted on the spot;
+  -- after that it is a conversation and this is the record of it.
+  create table if not exists trial_extensions (
+    id text primary key,
+    account_id text not null references accounts(id),
+    requested_at text not null,
+    reason text not null,
+    days integer not null,
+    status text not null,
+    decided_at text
+  );
+  create index if not exists trial_extensions_account on trial_extensions(account_id);
+
   -- Every lease ever issued, so a support question has an answer and a
   -- revoked device can be told apart from one that never asked.
   create table if not exists leases (
@@ -462,7 +493,7 @@ export class Store {
       .prepare(
         `select * from subscriptions
          where account_id = ? and status in ('active', 'past_due')
-         order by case plan when 'lifetime' then 0 when 'annual' then 1 else 2 end,
+         order by case plan when 'annual' then 0 when 'monthly' then 1 else 2 end,
                   coalesce(expires_at, 9999999999) desc
          limit 1`,
       )
@@ -678,6 +709,61 @@ export class Store {
     if (Number(row['attempts']) >= 5) return 'too-many';
     this.#db.prepare('delete from email_codes where email = ?').run(address);
     return 'ok';
+  }
+
+  // ---- trials ---------------------------------------------------------
+
+  /**
+   * Whether this account has ever had a trial, live or lapsed.
+   *
+   * `subscriptionFor` only returns a live one, so asking it would restart the
+   * trial every time a lapsed account opened the app, which is not a trial.
+   */
+  hadTrial(accountId: string): boolean {
+    const row = this.#db
+      .prepare("select 1 as found from subscriptions where account_id = ? and plan = 'trial' limit 1")
+      .get(accountId) as { found?: number } | undefined;
+    return Boolean(row?.found);
+  }
+
+  /** The most recent subscription, live or not, for deciding what to offer. */
+  lastSubscription(accountId: string): Subscription | null {
+    const row = this.#db
+      .prepare('select * from subscriptions where account_id = ? order by expires_at desc nulls first limit 1')
+      .get(accountId) as Row | undefined;
+    return row ? toSubscription(row) : null;
+  }
+
+  extensionsFor(accountId: string): TrialExtension[] {
+    return (
+      this.#db.prepare('select * from trial_extensions where account_id = ? order by requested_at').all(accountId) as Row[]
+    ).map((row) => ({
+      id: String(row['id']),
+      accountId: String(row['account_id']),
+      requestedAt: String(row['requested_at']),
+      reason: String(row['reason']),
+      days: Number(row['days']),
+      status: String(row['status']) as TrialExtension['status'],
+      decidedAt: row['decided_at'] == null ? null : String(row['decided_at']),
+    }));
+  }
+
+  saveExtension(extension: TrialExtension): void {
+    this.#db
+      .prepare(
+        `insert into trial_extensions (id, account_id, requested_at, reason, days, status, decided_at)
+         values (?, ?, ?, ?, ?, ?, ?)
+         on conflict(id) do update set status = excluded.status, decided_at = excluded.decided_at`,
+      )
+      .run(
+        extension.id,
+        extension.accountId,
+        extension.requestedAt,
+        extension.reason,
+        extension.days,
+        extension.status,
+        extension.decidedAt,
+      );
   }
 
   // ---- scim -----------------------------------------------------------

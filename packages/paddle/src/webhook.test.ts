@@ -112,7 +112,6 @@ describe('actionFor', () => {
   const catalogue: PriceCatalogue = {
     monthly: 'pri_monthly',
     annual: 'pri_annual',
-    lifetime: 'pri_lifetime',
   };
 
   const notify = (eventType: string, data: unknown) =>
@@ -123,20 +122,19 @@ describe('actionFor', () => {
       data,
     });
 
-  it('issues a lifetime licence with no expiry', () => {
+  it('provisions nothing from a payment, because every plan is recurring', () => {
+    // Subscription events carry the authoritative period end and arrive for
+    // the same payment. Issuing from both would grant a licence twice on the
+    // first charge, with two different end dates.
     const action = actionFor(
       notify('transaction.completed', {
         customer_id: 'ctm_1',
-        items: [{ price: { id: 'pri_lifetime' } }],
+        items: [{ price: { id: 'pri_monthly' } }],
       }),
       catalogue,
       NOW,
     );
-    expect(action.kind).toBe('issue');
-    if (action.kind !== 'issue') throw new Error('expected issue');
-    expect(action.plan).toBe('lifetime');
-    expect(action.expiresAt).toBeNull();
-    expect(action.updatesUntil.getTime()).toBeGreaterThan(NOW.getTime());
+    expect(action.kind).toBe('ignore');
   });
 
   it('ignores a recurring transaction, leaving it to subscription events', () => {

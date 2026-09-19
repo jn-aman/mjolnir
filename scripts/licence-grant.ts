@@ -9,7 +9,7 @@ import { signLicense, type Plan } from '@mjolnir/licensing';
  * Give someone every feature.
  *
  *   npm run licence -- --init                     make a signing key pair
- *   npm run licence -- --email a@b.c              lifetime key for that email
+ *   npm run licence -- --email a@b.c              annual key for that email
  *   npm run licence -- --email a@b.c --plan annual
  *   npm run licence -- --list                     who has been granted
  *
@@ -56,7 +56,7 @@ if (args.has('list')) {
 
 const email = args.get('email');
 if (!email || !email.includes('@')) {
-  console.error('usage: --init | --list | --email <address> [--plan lifetime|annual|monthly] [--months N]');
+  console.error('usage: --init | --list | --email <address> [--plan annual|monthly] [--months N]');
   process.exit(2);
 }
 if (!existsSync(privatePath)) {
@@ -74,8 +74,8 @@ const key = signLicense(
     email,
     plan,
     iat: now,
-    expiresAt: plan === 'lifetime' ? null : end,
-    updatesUntil: plan === 'lifetime' ? now + 365 * 86_400 * 100 : end,
+    expiresAt: end,
+    updatesUntil: end,
     customerId: `granted:${email}`,
   },
   readFileSync(privatePath, 'utf8'),

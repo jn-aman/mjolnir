@@ -70,6 +70,22 @@ export function accountRoutes(account: AccountStore): Router {
     }),
   );
 
+  /**
+   * Asking for longer, from inside the app.
+   *
+   * Here rather than on the website, because the moment somebody wants it is
+   * the moment the banner appears in front of them, and sending them to a
+   * browser to fill in a form is how a request does not get made.
+   */
+  router.post(
+    '/extend',
+    handle(async (req, res) => {
+      const reason = String(((req.body ?? {}) as { reason?: unknown }).reason ?? '').trim();
+      const outcome = await account.requestExtension(reason);
+      res.status(outcome.ok ? 200 : outcome.pending ? 202 : 409).json(outcome);
+    }),
+  );
+
   router.post('/sign-out', handle(async (_req, res) => res.json(await account.signOut())));
 
   /** The machines on this account, and which of them hold a seat. */

@@ -585,6 +585,12 @@ export const api = {
   },
   account: {
     get: () => request<AccountStatus>('/api/account'),
+    /** Asks for more trial. 200 granted, 202 recorded for a person to look at. */
+    extend: (reason: string) =>
+      request<{ ok: boolean; pending: boolean; description: string; days?: number }>('/api/account/extend', {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
     signIn: (choice: { provider?: SignInProvider['id']; emailHint?: string } = {}) =>
       request<SignInPrompt>('/api/account/sign-in', { method: 'POST', body: JSON.stringify(choice) }),
     /** Resolves when the person approves in their browser, or it expires. */

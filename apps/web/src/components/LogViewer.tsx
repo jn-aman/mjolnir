@@ -1,4 +1,14 @@
-import { normalizeStructured, parseStructured } from '@mjolnir/k8s';
+/*
+ * The pure entry, not the package root.
+ *
+ * `@mjolnir/k8s` reaches a transport built on node:https and the Kubernetes
+ * client. Importing a *value* from the root drags all of that into the
+ * renderer bundle, where it cannot load, and the app then fails to mount at
+ * all: the boot splash stays up and every end-to-end test fails at once.
+ * Every other import of this package in the web app is `import type`, which
+ * is erased, and this one was the first that was not.
+ */
+import { normalizeStructured, parseStructured } from '@mjolnir/k8s/log-line';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Download, Maximize2, Minimize2, MoreHorizontal, Regex, Search, WrapText } from 'lucide-react';

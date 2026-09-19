@@ -20,9 +20,10 @@ createRoot(host).render(
 const boot = document.getElementById('boot');
 if (boot) {
   requestAnimationFrame(() => {
-    boot.style.transition = 'opacity 260ms ease-out';
     boot.style.opacity = '0';
+    // Toward the viewer, so the app is revealed rather than uncovered.
+    boot.style.transform = 'scale(1.04)';
     boot.style.pointerEvents = 'none';
-    setTimeout(() => boot.remove(), 320);
+    setTimeout(() => boot.remove(), 300);
   });
 }

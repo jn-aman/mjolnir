@@ -9,7 +9,7 @@ const log = logger.child('lease');
  * A licence, issued to one machine, for about a week.
  *
  * A licence key on its own cannot be taken back. Cancel a subscription and the
- * signed key keeps working until the date inside it; refund a lifetime
+ * signed key keeps working until the date inside it; refund a
  * purchase and it works forever. A lease fixes that without giving up offline
  * operation: it is the same signed claims with three additions, and the app
  * renews it while it can.
@@ -146,6 +146,22 @@ export function describeLease(status: LeaseStatus): { tier: Tier; headline: stri
       // No detail. The email is already beside the headline, and repeating it
       // underneath is a sentence that says nothing twice.
       const claims: LicenseClaims = status.lease.claims;
+      /*
+       * A trial says how long is left, and nothing else does.
+       *
+       * On a paid plan the renewal date is the billing system's business and
+       * putting a countdown on it reads as a threat. On a trial it is the
+       * whole point: somebody is deciding, and "eleven days left" is the fact
+       * they are deciding with.
+       */
+      if (claims.plan === 'trial') {
+        const days = Math.max(0, Math.ceil(((claims.expiresAt ?? 0) * 1000 - Date.now()) / 86_400_000));
+        return {
+          tier: 'pro',
+          headline: days === 1 ? 'Trial, one day left' : `Trial, ${days} days left`,
+          detail: 'Everything is on. When it ends the free tier keeps working, nothing is deleted and no cluster is touched.',
+        };
+      }
       return { tier: 'pro', headline: `Pro, ${claims.plan}` };
     }
     case 'grace':
@@ -155,6 +171,12 @@ export function describeLease(status: LeaseStatus): { tier: Tier; headline: stri
         detail: `Mjolnir has not been able to reach the licence server. Pro continues until ${status.graceEndsAt.toDateString()}.`,
       };
     case 'expired':
-      return { tier: 'free', headline: 'Pro has lapsed', detail: 'The licence expired and could not be renewed. Everything on the free tier still works.' };
+      return status.lease.claims.plan === 'trial'
+        ? {
+            tier: 'free',
+            headline: 'Your trial has ended',
+            detail: 'Everything on the free tier still works. If you need longer to decide, ask for an extension.',
+          }
+        : { tier: 'free', headline: 'Pro has lapsed', detail: 'The licence expired and could not be renewed. Everything on the free tier still works.' };
   }
 }

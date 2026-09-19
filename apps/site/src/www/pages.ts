@@ -125,10 +125,12 @@ export function pricing(): string {
       <article class="card" style="border-color:color-mix(in oklab, var(--accent) 45%, var(--line))">
         <p class="eyebrow" style="color:var(--accent)">Pro</p>
         <h3 style="font-size:28px;margin:0 0 4px">&pound;7<span class="muted" style="font-size:14px;font-weight:400"> / month</span></h3>
-        <p class="muted" style="margin:0 0 14px">Per person, up to five machines</p>
+        <p class="muted" style="margin:0 0 14px">Or &pound;70 a year, two months free</p>
         <p>Everything free, plus what broke, certificates, drift, time travel, cluster-wide image scanning, and writes:
           scale, restart, edit, cordon, drain, delete.</p>
-        <a class="btn primary" style="margin-top:14px" href="/download">Start free</a>
+        <p style="margin-top:10px;color:var(--fg)"><strong>30 days free</strong>, and it starts when you sign in rather
+          than when you ask. No card.</p>
+        <a class="btn primary" style="margin-top:14px" href="/download">Start the trial</a>
       </article>
       <article class="card">
         <p class="eyebrow">Team</p>
@@ -155,6 +157,11 @@ export function pricing(): string {
         <h3>Cancelling is not a cliff</h3>
         <p>Stop paying and the free tier keeps working. Nothing is deleted, no cluster is touched, and reading a cluster
           costs nothing forever.</p>
+      </article>
+      <article class="card">
+        <h3>Thirty days is not always enough</h3>
+        <p>If you are still evaluating when it runs out, ask from inside the app. The first extension is granted on the
+          spot: somebody still trying after a month is somebody still trying.</p>
       </article>
     </div>
   </div>

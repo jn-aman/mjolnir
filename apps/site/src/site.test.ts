@@ -57,13 +57,13 @@ async function signIn(deviceId: string, email: string, name = 'A machine') {
   return { tokens: tokens.body, accountId: String(verified.body['accountId']), userCode: String(code.body['user_code']) };
 }
 
-function giveSubscription(store: Store, accountId: string, seats: number, plan: 'monthly' | 'lifetime' = 'monthly') {
+function giveSubscription(store: Store, accountId: string, seats: number, plan: 'monthly' | 'annual' = 'monthly') {
   store.saveSubscription({
     id: newId('sub'),
     accountId,
     plan,
     status: 'active',
-    expiresAt: plan === 'lifetime' ? null : Math.floor(Date.now() / 1000) + 30 * 86_400,
+    expiresAt: Math.floor(Date.now() / 1000) + (plan === 'annual' ? 365 : 30) * 86_400,
     updatesUntil: Math.floor(Date.now() / 1000) + 365 * 86_400,
     seats,
     paddleSubscriptionId: null,
@@ -122,12 +122,49 @@ describe('signing in', () => {
 });
 
 describe('licences and seats', () => {
-  it('refuses a lease when nothing has been paid for, and says the free tier is fine', async () => {
-    const { tokens } = await signIn('dev-free-1', 'free@example.com');
+  it('starts a trial on the first licence request rather than refusing', async () => {
+    const { tokens, accountId } = await signIn('dev-free-1', 'free@example.com');
     const lease = await post('/api/licence/lease', { refresh_token: tokens['refresh_token'] });
-    expect(lease.status).toBe(402);
-    expect(lease.body['error']).toBe('no_subscription');
-    expect(String(lease.body['description'])).toMatch(/free tier still works/i);
+
+    // A trial somebody has to ask for is a trial most people never start, and
+    // the point is to find out whether this works on a real cluster.
+    expect(lease.status).toBe(200);
+    const subscription = site.store.subscriptionFor(accountId);
+    expect(subscription?.plan).toBe('trial');
+    const days = Math.round(((subscription?.expiresAt ?? 0) - Date.now() / 1000) / 86_400);
+    expect(days).toBe(30);
+  });
+
+  it('does not start a second trial for an account whose first one lapsed', async () => {
+    const { tokens, accountId } = await signIn('dev-lapsed-1', 'lapsed@example.com');
+    await post('/api/licence/lease', { refresh_token: tokens['refresh_token'] });
+
+    // Expire it the way time would.
+    const trial = site.store.subscriptionFor(accountId)!;
+    site.store.saveSubscription({ ...trial, expiresAt: Math.floor(Date.now() / 1000) - 86_400, status: 'cancelled' });
+
+    const again = await post('/api/licence/lease', { refresh_token: tokens['refresh_token'] });
+    // A trial that restarts itself is not a trial, it is the product.
+    expect(again.status).toBe(402);
+    expect(again.body['error']).toBe('no_subscription');
+    expect(String(again.body['description'])).toMatch(/free tier still works/i);
+  });
+
+  it('grants the first extension on the spot and records the next as a request', async () => {
+    const { tokens, accountId } = await signIn('dev-ext-1', 'ext@example.com');
+    await post('/api/licence/lease', { refresh_token: tokens['refresh_token'] });
+    const before = site.store.subscriptionFor(accountId)!.expiresAt ?? 0;
+
+    const first = await post('/api/licence/extend', { refresh_token: tokens['refresh_token'], reason: 'Still rolling it out to the platform team' });
+    expect(first.status).toBe(200);
+    expect(first.body['grantedDays']).toBe(14);
+    expect(site.store.subscriptionFor(accountId)!.expiresAt).toBeGreaterThan(before);
+
+    // The second is a conversation, and nobody is blocked while it happens.
+    const second = await post('/api/licence/extend', { refresh_token: tokens['refresh_token'], reason: 'One more please' });
+    expect(second.status).toBe(202);
+    expect(String(second.body['description'])).toMatch(/come back to you/i);
+    expect(site.store.extensionsFor(accountId).some((entry) => entry.status === 'pending')).toBe(true);
   });
 
   it('issues a lease that verifies offline against the public key', async () => {

@@ -317,6 +317,44 @@ export class AccountStore {
     return this.status();
   }
 
+  /**
+   * Asks for more trial, and takes the new lease straight away when granted.
+   *
+   * Renewing here rather than waiting for the next scheduled refresh: the
+   * person is looking at the banner they just acted on, and a button that
+   * works but changes nothing for an hour is a button that did not work.
+   */
+  async requestExtension(reason: string): Promise<{ ok: boolean; pending: boolean; description: string; days?: number }> {
+    const store = await this.#store();
+    const saved = await store.read();
+    if (!saved) return { ok: false, pending: false, description: 'Sign in first, then ask.' };
+
+    try {
+      const response = await this.#post('/api/licence/extend', { refresh_token: saved.refreshToken, reason });
+      const payload = (response.body ?? {}) as { grantedDays?: number; description?: string };
+      if (response.status === 200) {
+        await this.renew(true);
+        return {
+          ok: true,
+          pending: false,
+          days: payload.grantedDays ?? 0,
+          description: `Your trial has ${payload.grantedDays ?? 0} more days.`,
+        };
+      }
+      return {
+        ok: false,
+        pending: response.status === 202,
+        description: payload.description ?? 'We could not record that request.',
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        pending: false,
+        description: error instanceof Error ? error.message : 'The licence service is not reachable.',
+      };
+    }
+  }
+
   /** The machines on this account, refreshed from the service. */
   async devices(): Promise<DeviceView[]> {
     const store = await this.#store();

@@ -90,7 +90,7 @@ describe('verifyLease', () => {
     const token = issue();
     const [body, signature] = token.split('.');
     const tampered = JSON.parse(Buffer.from(body ?? '', 'base64url').toString('utf8')) as Lease;
-    const forged = { ...tampered, claims: { ...tampered.claims, plan: 'lifetime' as const, expiresAt: null } };
+    const forged = { ...tampered, claims: { ...tampered.claims, plan: 'annual' as const, expiresAt: null } };
     const swapped = `${Buffer.from(JSON.stringify(forged), 'utf8').toString('base64url')}.${signature ?? ''}`;
     expect(verifyLease(swapped, options).kind).toBe('invalid');
   });

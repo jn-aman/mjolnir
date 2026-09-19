@@ -20,7 +20,7 @@ const PRODUCT_DESCRIPTION =
   'Multi-account cloud access, log aggregation, security scanning and background monitoring for Mjolnir.';
 
 interface PlanSpec {
-  readonly plan: 'monthly' | 'annual' | 'lifetime';
+  readonly plan: 'monthly' | 'annual';
   readonly name: string;
   readonly description: string;
   /** Lowest denomination, cents for USD. */
@@ -45,16 +45,6 @@ const PLANS: readonly PlanSpec[] = [
     amount: '9000',
     billingCycle: { interval: 'year', frequency: 1 },
     customData: { plan: 'annual' },
-  },
-  {
-    plan: 'lifetime',
-    name: 'Lifetime',
-    description: 'Mjolnir Pro, perpetual licence with 12 months of updates',
-    amount: '14900',
-    // No billing cycle is what makes it one-time. The perpetual-fallback terms
-    // live in the licence token, not in Paddle.
-    billingCycle: null,
-    customData: { plan: 'lifetime', updates_months: 12 },
   },
 ];
 

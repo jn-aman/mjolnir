@@ -37,15 +37,34 @@
       fail; it is markup and one keyframe.
     -->
     <div id="boot" aria-hidden>
-      <div class="boot-mark">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M3.4 6.1A2.1 2.1 0 0 1 5.5 4h13A2.1 2.1 0 0 1 20.6 6.1v3.3A2.1 2.1 0 0 1 18.5 11.5h-13A2.1 2.1 0 0 1 3.4 9.4V6.1Zm9.7.4-3 3.1h1.9l-.5 1.9 3-3.2h-1.9l.5-1.8Z"/>
-          <path d="M10.6 12.6h2.8v7.5a1.4 1.4 0 0 1-2.8 0v-7.5Z"/>
-        </svg>
+      <div class="boot-stage">
+        <span class="boot-ring boot-ring-1"></span>
+        <span class="boot-ring boot-ring-2"></span>
+        <span class="boot-glow"></span>
+        <div class="boot-mark">
+          <svg viewBox="0 0 24 24" width="54" height="54" fill="currentColor">
+            <path class="boot-head" fill-rule="evenodd" clip-rule="evenodd" d="M3.4 6.1A2.1 2.1 0 0 1 5.5 4h13A2.1 2.1 0 0 1 20.6 6.1v3.3A2.1 2.1 0 0 1 18.5 11.5h-13A2.1 2.1 0 0 1 3.4 9.4V6.1Zm9.7.4-3 3.1h1.9l-.5 1.9 3-3.2h-1.9l.5-1.8Z"/>
+            <path class="boot-haft" d="M10.6 12.6h2.8v7.5a1.4 1.4 0 0 1-2.8 0v-7.5Z"/>
+          </svg>
+        </div>
       </div>
-      <div class="boot-word">Mjolnir</div>
+      <div class="boot-word">
+        <span style="--i:0">M</span><span style="--i:1">j</span><span style="--i:2">o</span><span style="--i:3">l</span><span style="--i:4">n</span><span style="--i:5">i</span><span style="--i:6">r</span>
+      </div>
     </div>
     <style>
+      /*
+       * The first thing anybody sees.
+       *
+       * It has to be markup and keyframes, with nothing to load and nothing
+       * that can fail, because it runs before a single byte of the app has
+       * parsed. So: no images, no fonts, no script. One inline SVG and CSS.
+       *
+       * The motion is one idea rather than four: the hammer strikes, and the
+       * ring is what the strike sends out. A spinner would say "waiting"; this
+       * says what the app is called and does it in the time the app takes to
+       * start, which on a warm launch is over before it repeats.
+       */
       #boot {
         position: fixed;
         inset: 0;
@@ -53,32 +72,145 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 14px;
-        background: var(--surface-ground, #fbfcfe);
+        gap: 22px;
+        background:
+          radial-gradient(58% 48% at 50% 42%, rgba(77, 111, 240, 0.10), transparent 70%),
+          #fbfcfe;
         z-index: 200;
-        animation: boot-out 0.24s ease-out 0.05s both;
+        /* Scales away rather than dissolving, so the app arrives from behind
+           it instead of the splash merely ceasing to exist. */
+        transition: opacity 240ms ease-out, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
       }
-      [data-theme='dark'] #boot { background: #0a0d14; }
+      [data-theme='dark'] #boot {
+        background:
+          radial-gradient(60% 50% at 50% 42%, rgba(78, 110, 235, 0.16), transparent 70%),
+          #0a0d14;
+      }
+      /*
+       * The system's answer, for the instant before anything has read a
+       * preference. The script above sets data-theme from storage, and this
+       * covers the case where storage says nothing at all: a white flash on a
+       * dark desktop is the worst frame of a launch and it is the first one.
+       */
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) #boot {
+          background:
+            radial-gradient(60% 50% at 50% 42%, rgba(78, 110, 235, 0.16), transparent 70%),
+            #0a0d14;
+        }
+        :root:not([data-theme='light']) .boot-word { color: #7e879b; }
+        :root:not([data-theme='light']) #boot::after {
+          background-image: linear-gradient(rgba(150, 170, 220, 0.08) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(150, 170, 220, 0.08) 1px, transparent 1px);
+        }
+      }
+      #boot::after {
+        /* A faint field, so the mark sits on something rather than in a void. */
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(rgba(125, 140, 180, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(125, 140, 180, 0.07) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(52% 44% at 50% 45%, #000, transparent 72%);
+        -webkit-mask-image: radial-gradient(52% 44% at 50% 45%, #000, transparent 72%);
+      }
+      .boot-stage {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 200px;
+        height: 200px;
+      }
+      .boot-glow {
+        position: absolute;
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(77, 111, 240, 0.34), transparent 72%);
+        filter: blur(6px);
+        animation: boot-glow 1.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      }
+      .boot-ring {
+        position: absolute;
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(96, 127, 245, 0.55);
+        opacity: 0;
+        /* Sent out by the strike, so it starts when the hammer lands. */
+        animation: boot-ring 1.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+      }
+      .boot-ring-2 { animation-delay: 0.26s; }
       .boot-mark {
-        width: 48px;
-        height: 48px;
-        border-radius: 15px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position: relative;
+        width: 96px;
+        height: 96px;
+        border-radius: 28px;
+        display: grid;
+        place-items: center;
         color: #fff;
-        background: linear-gradient(145deg, #7d9aff, #2f52d8);
-        box-shadow: 0 1px 0 rgb(255 255 255 / 0.25) inset, 0 10px 28px rgb(47 82 216 / 0.42);
-        animation: boot-pulse 1.7s ease-in-out infinite;
+        background: linear-gradient(145deg, #8aa3ff, #2f52d8);
+        box-shadow:
+          0 1px 0 rgb(255 255 255 / 0.3) inset,
+          0 20px 60px rgb(47 82 216 / 0.5);
+        transform-origin: 50% 88%;
+        animation: boot-strike 1.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      }
+      .boot-head {
+        transform-origin: 50% 32%;
+        animation: boot-spark 1.9s ease-in-out infinite;
       }
       .boot-word {
-        font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
-        letter-spacing: 0.01em;
+        position: relative;
+        display: flex;
+        gap: 1px;
+        font: 600 16px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.16em;
         color: #6b7385;
       }
-      @keyframes boot-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-      @keyframes boot-out { from { opacity: 1; } to { opacity: 1; } }
-      @media (prefers-reduced-motion: reduce) { .boot-mark { animation: none; } }
+      [data-theme='dark'] .boot-word { color: #7e879b; }
+      .boot-word span {
+        /* Each letter arrives just after the one before it, so the word
+           assembles rather than fades. */
+        animation: boot-letter 1.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+        animation-delay: calc(var(--i) * 45ms);
+      }
+
+      @keyframes boot-strike {
+        0%, 100% { transform: rotate(-7deg) translateY(-3px); }
+        18% { transform: rotate(4deg) translateY(2px) scale(1.04); }
+        26% { transform: rotate(0deg) translateY(0) scale(1); }
+        60% { transform: rotate(-7deg) translateY(-3px); }
+      }
+      @keyframes boot-spark {
+        0%, 14%, 100% { opacity: 1; }
+        20% { opacity: 0.55; }
+        30% { opacity: 1; }
+      }
+      @keyframes boot-ring {
+        0%, 14% { opacity: 0; transform: scale(0.6); }
+        24% { opacity: 0.85; }
+        70%, 100% { opacity: 0; transform: scale(2.5); }
+      }
+      @keyframes boot-glow {
+        0%, 100% { opacity: 0.55; transform: scale(0.94); }
+        24% { opacity: 1; transform: scale(1.05); }
+      }
+      @keyframes boot-letter {
+        0%, 10% { opacity: 0.25; transform: translateY(2px); }
+        30%, 100% { opacity: 1; transform: translateY(0); }
+      }
+
+      /*
+       * Still says the name, still says the app is starting, and moves for
+       * nobody who asked it not to.
+       */
+      @media (prefers-reduced-motion: reduce) {
+        .boot-mark, .boot-ring, .boot-glow, .boot-head, .boot-word span { animation: none; }
+        .boot-ring { display: none; }
+        .boot-word span { opacity: 1; }
+      }
     </style>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
