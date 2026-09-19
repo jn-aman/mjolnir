@@ -11,6 +11,7 @@ import { deviceRoutes } from './routes/device.ts';
 import { accountRoutes } from './routes/account.ts';
 import { paddleRoutes } from './routes/paddle.ts';
 import { authRoutes } from './routes/auth.ts';
+import { scimRoutes } from './routes/scim.ts';
 import { OAuth, type OAuthConfig } from './auth/oauth.ts';
 
 const log = logger.child('site');
@@ -77,12 +78,16 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
     log.warn('no Paddle webhook secret, so payments will not be accepted');
   }
 
-  app.use(express.json({ limit: '1mb' }));
+  // SCIM sends `application/scim+json`, which the ordinary JSON parser
+  // ignores, so the body would arrive undefined and every provisioning call
+  // would look like a malformed request.
+  app.use(express.json({ limit: '1mb', type: ['application/json', 'application/scim+json'] }));
   app.get('/health', (_req, res) => res.json({ ok: true }));
 
   app.use('/api/device', deviceRoutes(store, { verificationUri, apiUrl: publicUrl, oauthProviders: oauth.available() }));
   app.use('/api', accountRoutes(store, signer));
   app.use('/api/auth', authRoutes(store, options.sendEmail, oauth));
+  app.use('/scim/v2', scimRoutes(store, { publicUrl }));
 
   // Abandoned sign-ins and spent codes do not accumulate.
   const sweeper = setInterval(() => {

@@ -244,7 +244,10 @@ GET  /api/auth/oauth/:provider/callback      and comes back here
 
 GET  /api/org/:id/sso           an organisation's Okta settings
 POST /api/org/:id/sso/verify    prove a domain with a DNS TXT record
-     /scim/v2/Users             Okta deprovisioning frees the seat
+GET  /scim/v2/ServiceProviderConfig          what Okta reads before it will set up
+GET  /scim/v2/ResourceTypes
+GET  /scim/v2/Schemas
+     /scim/v2/Users                          the directory owns who has a seat
 ```
 
 Paddle stays the merchant of record. Card changes, invoices and cancellation
@@ -281,7 +284,7 @@ will want.
 | `apps/site`: the service itself | done, 19 tests through HTTP |
 | Paddle webhook: payment becomes a subscription | done, not yet run against Paddle |
 | GitHub, Google and Okta callbacks | done, 18 tests through HTTP |
-| SCIM deprovisioning | not started |
+| SCIM deprovisioning | done, 16 tests through HTTP |
 | Deployment of api.mjolnir.sh | not started |
 
 ### Configuring the browser providers
@@ -335,6 +338,52 @@ Five properties, each with a test that fails if it is removed:
 - **A tenant may only vouch for domains its organisation has verified.**
   Without that check, anyone able to configure an Okta tenant could have it
   assert a stranger's address.
+
+### SCIM, and why it is the part that sells
+
+Provisioning is a convenience. Deprovisioning is the reason an organisation
+asks for SCIM at all, because "we removed them in Okta three weeks ago and
+they still have a licence" is a finding in an audit rather than a support
+ticket, and it is the question every security review asks before a deal
+closes.
+
+So the important line is short. Setting `active` to false:
+
+1. revokes every device on that account, which frees the seat that second
+   rather than whenever the last lease happens to lapse,
+2. marks the account, so `issueLease` refuses to hand out another one,
+3. and leaves the lease already on their laptop working until it expires.
+
+Step three is not a gap, it is the stated revocation window. A lease is signed
+and offline-verifiable, which is the whole reason the app keeps working on a
+plane, and the cost of that is that we cannot reach into one already issued.
+The window is a week because `LEASE_DAYS` is seven. Making it shorter makes
+offboarding faster and flying worse; that trade is the number, and it is the
+number to argue about if a customer needs a different one.
+
+Deactivating does **not** delete the account. Someone who leaves a company and
+comes back, or who has a personal licence on the same address, should not find
+their history erased by an offboarding script. A `DELETE` removes them from
+the directory and suspends the account, and the account itself survives.
+
+Only the User resource is implemented. `/scim/v2/Groups` answers 501, because
+plans are not per-group yet and an endpoint that accepts writes and silently
+does nothing with them is worse than one that says what it is.
+
+Setting a tenant up is a conversation, not a form, and there is a script for
+it rather than a half-finished admin UI that would still need the call:
+
+```
+npm run org -- --create "Acme" --domain acme.com     prints the DNS TXT record
+npm run org -- --id org_x --verify acme.com          once the record is there
+npm run org -- --id org_x --sso https://acme.okta.com/oauth2/default                           --client-id A --client-secret B
+npm run org -- --id org_x --enforce                  everyone on the domain
+npm run org -- --id org_x --scim-token               printed once, hashed here
+npm run org -- --list
+```
+
+Verifying a domain decides where every sign-in on it is routed, so it goes in
+only once the TXT record has actually been seen.
 
 ### Running it
 

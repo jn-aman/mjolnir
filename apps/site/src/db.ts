@@ -26,6 +26,14 @@ export interface Account {
   /** Paddle customer id, once they have paid for anything. */
   readonly customerId: string | null;
   readonly organisationId: string | null;
+  /**
+   * Set when the organisation's directory has removed them.
+   *
+   * Separate from deleting the account, because somebody who leaves a company
+   * and comes back, or who has a personal licence on the same address, should
+   * not have their history erased by an offboarding script.
+   */
+  readonly suspended: boolean;
 }
 
 export interface Subscription {
@@ -62,6 +70,24 @@ export interface Organisation {
   readonly ssoClientId: string | null;
   readonly ssoClientSecret: string | null;
   readonly enforceSso: boolean;
+  /** Hashed, like every other bearer token here. Null until SCIM is set up. */
+  readonly scimTokenHash: string | null;
+}
+
+export interface ScimUser {
+  /** Our id for the resource, which is what Okta stores and sends back. */
+  readonly id: string;
+  readonly organisationId: string;
+  readonly accountId: string;
+  /** Okta's `userName`, which for every tenant worth having is the email. */
+  readonly userName: string;
+  /** Okta's own id for the person, so a rename does not orphan the row. */
+  readonly externalId: string | null;
+  readonly displayName: string | null;
+  /** False once the organisation has deprovisioned them. */
+  readonly active: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 export interface Identity {
@@ -120,7 +146,8 @@ const SCHEMA = `
     email text not null unique,
     created_at text not null,
     customer_id text,
-    organisation_id text references organisations(id)
+    organisation_id text references organisations(id),
+    suspended integer not null default 0
   );
   create index if not exists accounts_customer on accounts(customer_id);
 
@@ -130,7 +157,8 @@ const SCHEMA = `
     sso_issuer text,
     sso_client_id text,
     sso_client_secret text,
-    enforce_sso integer not null default 0
+    enforce_sso integer not null default 0,
+    scim_token_hash text
   );
 
   -- A domain belongs to one organisation, and only after it is proved.
@@ -237,6 +265,27 @@ const SCHEMA = `
   );
   create index if not exists oauth_states_expiry on oauth_states(expires_at);
 
+  -- Who the organisation's directory says exists.
+  --
+  -- This is the half of enterprise sign-on that gets forgotten. Okta
+  -- provisioning is a convenience; Okta *deprovisioning* is the reason it gets
+  -- bought, because "we removed them in Okta three weeks ago and they still
+  -- have a seat" is a finding in an audit rather than a support ticket.
+  create table if not exists scim_users (
+    id text primary key,
+    organisation_id text not null references organisations(id),
+    account_id text not null references accounts(id),
+    user_name text not null,
+    external_id text,
+    display_name text,
+    active integer not null default 1,
+    created_at text not null,
+    updated_at text not null
+  );
+  create unique index if not exists scim_users_name on scim_users(organisation_id, user_name);
+  create index if not exists scim_users_account on scim_users(account_id);
+  create index if not exists scim_users_external on scim_users(organisation_id, external_id);
+
   -- Every lease ever issued, so a support question has an answer and a
   -- revoked device can be told apart from one that never asked.
   create table if not exists leases (
@@ -256,11 +305,36 @@ export class Store {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.#db = new DatabaseSync(path);
     this.#db.exec(SCHEMA);
+    this.#migrate();
     log.info('store ready', { path });
   }
 
   close(): void {
     this.#db.close();
+  }
+
+  /**
+   * Columns added after a database already existed.
+   *
+   * `create table if not exists` does nothing to a table that is already
+   * there, so a column added to the schema above never reaches a deployed
+   * database. Adding them here, ignoring the error when they are already
+   * present, is the whole of what a migration framework would do for the
+   * first several years of this service.
+   */
+  #migrate(): void {
+    const added: Array<[string, string]> = [
+      ['organisations', 'scim_token_hash text'],
+      ['accounts', 'suspended integer not null default 0'],
+    ];
+    for (const [table, column] of added) {
+      try {
+        this.#db.exec(`alter table ${table} add column ${column}`);
+        log.info('column added', { table, column });
+      } catch {
+        // Already there. That is the expected case on every start but one.
+      }
+    }
   }
 
   get raw(): DatabaseSync {
@@ -299,12 +373,18 @@ export class Store {
       createdAt: new Date().toISOString(),
       customerId: null,
       organisationId: this.organisationForEmail(email)?.id ?? null,
+      suspended: false,
     };
     this.#db
       .prepare('insert into accounts (id, email, created_at, customer_id, organisation_id) values (?, ?, ?, ?, ?)')
       .run(account.id, account.email, account.createdAt, account.customerId, account.organisationId);
     log.info('account created', { id: account.id });
     return account;
+  }
+
+  /** Switches an account off, or back on, without losing anything. */
+  suspendAccount(accountId: string, suspended: boolean): void {
+    this.#db.prepare('update accounts set suspended = ? where id = ?').run(suspended ? 1 : 0, accountId);
   }
 
   setCustomerId(accountId: string, customerId: string): void {
@@ -600,6 +680,86 @@ export class Store {
     return 'ok';
   }
 
+  // ---- scim -----------------------------------------------------------
+
+  /** The organisation that this SCIM bearer token belongs to, if any. */
+  organisationByScimToken(tokenHash: string): Organisation | null {
+    const row = this.#db.prepare('select * from organisations where scim_token_hash = ?').get(tokenHash) as Row | undefined;
+    return row ? toOrganisation(row) : null;
+  }
+
+  setScimToken(organisationId: string, tokenHash: string | null): void {
+    this.#db.prepare('update organisations set scim_token_hash = ? where id = ?').run(tokenHash, organisationId);
+  }
+
+  scimUser(organisationId: string, id: string): ScimUser | null {
+    const row = this.#db.prepare('select * from scim_users where organisation_id = ? and id = ?').get(organisationId, id) as Row | undefined;
+    return row ? toScimUser(row) : null;
+  }
+
+  scimUserByName(organisationId: string, userName: string): ScimUser | null {
+    const row = this.#db
+      .prepare('select * from scim_users where organisation_id = ? and user_name = ?')
+      .get(organisationId, normaliseEmail(userName)) as Row | undefined;
+    return row ? toScimUser(row) : null;
+  }
+
+  /** Whether the directory has switched this person off. Absent means it never knew them. */
+  scimUserForAccount(accountId: string): ScimUser | null {
+    const row = this.#db.prepare('select * from scim_users where account_id = ? order by updated_at desc limit 1').get(accountId) as Row | undefined;
+    return row ? toScimUser(row) : null;
+  }
+
+  /** A page of the directory, filtered the one way SCIM clients actually filter. */
+  scimUsers(organisationId: string, options: { userName?: string; externalId?: string; startIndex?: number; count?: number } = {}): { total: number; items: ScimUser[] } {
+    const clauses = ['organisation_id = ?'];
+    const values: Array<string | number> = [organisationId];
+    if (options.userName !== undefined) {
+      clauses.push('user_name = ?');
+      values.push(normaliseEmail(options.userName));
+    }
+    if (options.externalId !== undefined) {
+      clauses.push('external_id = ?');
+      values.push(options.externalId);
+    }
+    const where = clauses.join(' and ');
+    const total = Number((this.#db.prepare(`select count(*) as n from scim_users where ${where}`).get(...values) as { n: number }).n);
+    // SCIM counts from one, not zero. Getting this wrong loses the first
+    // person in the directory, silently, forever.
+    const offset = Math.max(1, options.startIndex ?? 1) - 1;
+    const limit = Math.min(Math.max(options.count ?? 100, 0), 200);
+    const rows = this.#db
+      .prepare(`select * from scim_users where ${where} order by created_at limit ? offset ?`)
+      .all(...values, limit, offset) as Row[];
+    return { total, items: rows.map(toScimUser) };
+  }
+
+  saveScimUser(user: ScimUser): void {
+    this.#db
+      .prepare(
+        `insert into scim_users (id, organisation_id, account_id, user_name, external_id, display_name, active, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         on conflict(id) do update set
+           user_name = excluded.user_name, external_id = excluded.external_id, display_name = excluded.display_name,
+           active = excluded.active, updated_at = excluded.updated_at`,
+      )
+      .run(
+        user.id,
+        user.organisationId,
+        user.accountId,
+        normaliseEmail(user.userName),
+        user.externalId,
+        user.displayName,
+        user.active ? 1 : 0,
+        user.createdAt,
+        user.updatedAt,
+      );
+  }
+
+  deleteScimUser(organisationId: string, id: string): boolean {
+    return Number(this.#db.prepare('delete from scim_users where organisation_id = ? and id = ?').run(organisationId, id).changes) > 0;
+  }
+
   // ---- oauth states ---------------------------------------------------
 
   saveOAuthState(state: OAuthState): void {
@@ -660,6 +820,7 @@ function toAccount(row: Row): Account {
     createdAt: String(row['created_at']),
     customerId: row['customer_id'] === null ? null : String(row['customer_id']),
     organisationId: row['organisation_id'] === null ? null : String(row['organisation_id']),
+    suspended: Number(row['suspended'] ?? 0) === 1,
   };
 }
 
@@ -698,6 +859,21 @@ function toOrganisation(row: Row): Organisation {
     ssoClientId: row['sso_client_id'] === null ? null : String(row['sso_client_id']),
     ssoClientSecret: row['sso_client_secret'] === null ? null : String(row['sso_client_secret']),
     enforceSso: Number(row['enforce_sso']) === 1,
+    scimTokenHash: row['scim_token_hash'] == null ? null : String(row['scim_token_hash']),
+  };
+}
+
+function toScimUser(row: Row): ScimUser {
+  return {
+    id: String(row['id']),
+    organisationId: String(row['organisation_id']),
+    accountId: String(row['account_id']),
+    userName: String(row['user_name']),
+    externalId: row['external_id'] == null ? null : String(row['external_id']),
+    displayName: row['display_name'] == null ? null : String(row['display_name']),
+    active: Number(row['active']) === 1,
+    createdAt: String(row['created_at']),
+    updatedAt: String(row['updated_at']),
   };
 }
 

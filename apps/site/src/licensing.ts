@@ -25,6 +25,7 @@ export interface DeviceView {
 export type LeaseOutcome =
   | { readonly ok: true; readonly lease: string; readonly seats: { total: number; used: number }; readonly devices: DeviceView[] }
   | { readonly ok: false; readonly error: 'no_subscription'; readonly description: string }
+  | { readonly ok: false; readonly error: 'deprovisioned'; readonly description: string }
   | {
       /**
        * Every seat is taken. The list comes with it, because "no seats left"
@@ -50,6 +51,23 @@ export function issueLease(
   account: Account,
   device: { id: string; name: string; platform: string; appVersion: string },
 ): LeaseOutcome {
+  /*
+   * The directory has the last word.
+   *
+   * This is above the subscription check on purpose: an organisation that
+   * offboarded someone does not want to hear that their seat was fine, it
+   * wants them not to have one. Sitting here rather than at sign-in means it
+   * also catches a machine that was already signed in when they were removed,
+   * on its next renewal.
+   */
+  if (account.suspended) {
+    return {
+      ok: false,
+      error: 'deprovisioned',
+      description: 'Your organisation has removed your access to Mjolnir. Everything on the free tier still works.',
+    };
+  }
+
   const subscription = store.subscriptionFor(account.id);
   if (!subscription) {
     return {

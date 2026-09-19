@@ -53,7 +53,10 @@ export function accountRoutes(store: Store, signer: Signer): Router {
     if (!outcome.ok) {
       // A seat limit is a 409: the request was understood, the state refuses
       // it, and the body carries what to do about it.
-      res.status(outcome.error === 'seat_limit' ? 409 : 402).json(outcome);
+      // A seat limit is a 409, a removed person is a 403, and no subscription
+      // is a 402. Three different things to do about it, three statuses.
+      const status = outcome.error === 'seat_limit' ? 409 : outcome.error === 'deprovisioned' ? 403 : 402;
+      res.status(status).json(outcome);
       return;
     }
     res.json(outcome);
