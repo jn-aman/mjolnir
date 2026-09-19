@@ -285,7 +285,7 @@ will want.
 | Paddle webhook: payment becomes a subscription | done, not yet run against Paddle |
 | GitHub, Google and Okta callbacks | done, 18 tests through HTTP |
 | SCIM deprovisioning | done, 16 tests through HTTP |
-| Deployment of api.mjolnir.sh | not started |
+| Deployment of api.mjolnir.sh | running on the VM, waiting on DNS |
 
 ### Configuring the browser providers
 
@@ -385,7 +385,38 @@ npm run org -- --list
 Verifying a domain decides where every sign-in on it is routed, so it goes in
 only once the TXT record has actually been seen.
 
-### Running it
+### Deployed
+
+`npm run deploy:site` puts it on the box. It builds the workspace packages
+here, ships the source, and runs it as a container beside the Cloudflare
+tunnel on the tunnel's own Docker network.
+
+**Beside the tunnel, not on the host**, for two reasons. A container on that
+box cannot reach a host port, because the firewall does not allow it. And
+being on the tunnel's network means nothing is published on the host at all:
+there is no port to find, and the only way in is through Cloudflare.
+
+The signing key is generated on the server and never leaves it. It is
+bind-mounted read-only, and the deploy reads the *image's* gid to chown it,
+because a bind mount carries numeric ids across unchanged and the host user
+and the image user are not the same number. That one cost an EACCES with
+nothing to say why.
+
+**The script does not touch the tunnel.** A connector already runs in the
+Unleash stack, and the ingress rules live in Cloudflare rather than in a file
+on the box. An earlier version of this script installed a second connector on
+the same token, which makes Cloudflare load-balance across both: half of
+every request for `unleash.mjolnir.sh` would arrive at a connector with no
+route to Unleash and come back 502.
+
+Still to do by hand, both in a browser:
+
+1. Point `mjolnir.sh` at Cloudflare. It is registered and has no nameservers,
+   so nothing on it resolves yet.
+2. Add the public hostname `api.mjolnir.sh` to the tunnel, pointing at
+   `http://mjolnir-site:8787`.
+
+### Running it locally
 
 ```
 MJOLNIR_DB=/tmp/site.db PORT=8787 node apps/site/dist/main.js

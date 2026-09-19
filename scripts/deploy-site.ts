@@ -36,6 +36,15 @@ import { join } from 'node:path';
 const HOST = process.env['MJOLNIR_HOST'] ?? 'ubuntu@vm.aman.wiki';
 const KEY = process.env['MJOLNIR_SSH_KEY'] ?? `${process.env['HOME']}/Downloads/ssh-key-2026-02-21.key`;
 const REMOTE = '/opt/mjolnir';
+/**
+ * The Docker network the Cloudflare tunnel is on.
+ *
+ * The site runs beside the tunnel rather than on the host, because a
+ * container on this box cannot reach a host port: the firewall does not allow
+ * it. Being on the tunnel's network also means nothing is published on the
+ * host at all, so there is no port to find and the only way in is Cloudflare.
+ */
+const NETWORK = process.env['MJOLNIR_TUNNEL_NETWORK'] ?? 'unleash-mjolnir_unleash';
 const PORT = process.env['MJOLNIR_SITE_PORT'] ?? '8787';
 const PUBLIC_URL = process.env['MJOLNIR_PUBLIC_URL'] ?? 'https://api.mjolnir.sh';
 const NODE_MAJOR = '24';
@@ -46,6 +55,7 @@ const SHIP = [
   'package-lock.json',
   'tsconfig.base.json',
   'apps/site',
+  'deploy',
   'packages/account',
   'packages/brand',
   'packages/endpoints',
@@ -76,7 +86,7 @@ function ssh(script: string): string {
 function sendSecret(remotePath: string, body: string): void {
   execFileSync(
     'ssh',
-    [...SSH_ARGS, HOST, `sudo install -d -m 700 "$(dirname ${remotePath})" && sudo tee ${remotePath} >/dev/null && sudo chmod 600 ${remotePath}`],
+    [...SSH_ARGS, HOST, `sudo install -d -m 750 -o root -g ubuntu "$(dirname ${remotePath})" && sudo tee ${remotePath} >/dev/null && sudo chmod 600 ${remotePath}`],
     { input: body, encoding: 'utf8' },
   );
 }
@@ -85,7 +95,22 @@ function step(message: string): void {
   console.log(`\n== ${message}`);
 }
 
-// ---- 1. the tarball -------------------------------------------------------
+// ---- 1. build, then pack --------------------------------------------------
+
+/*
+ * The workspace packages are built here, not on the server.
+ *
+ * Each one's `main` points at `dist/index.js`, so `import '@mjolnir/paddle'`
+ * resolves there and nowhere else: Node has no way to know the source is next
+ * door. That output is plain JavaScript with no native code in it, so a build
+ * made here runs anywhere, and building it here rather than there keeps the
+ * TypeScript toolchain off a box whose job is to hold a signing key.
+ *
+ * Built every time rather than reused, because the failure mode of shipping a
+ * stale `dist` is a server running code nobody can find in the repository.
+ */
+step('Building the workspace packages');
+execFileSync('npm', ['run', 'build', '--workspaces', '--if-present'], { cwd: root, stdio: 'inherit' });
 
 step('Packing what the site needs');
 const staging = mkdtempSync(join(tmpdir(), 'mjolnir-deploy-'));
@@ -97,12 +122,12 @@ execFileSync(
     tarball,
     '-C',
     root,
-    // Excluded rather than filtered afterwards: a Mac's node_modules is not
-    // what arm64 needs, and shipping dist would ship a build of whatever the
-    // laptop happened to have lying around.
+    // node_modules is excluded because a Mac's is not what arm64 needs. `dist`
+    // is not excluded: it was rebuilt a moment ago, and it is what the imports
+    // actually resolve to.
     '--exclude=node_modules',
-    '--exclude=dist',
     '--exclude=*.tsbuildinfo',
+    '--exclude=*.map',
     '--exclude=.DS_Store',
     ...SHIP,
   ],
@@ -123,7 +148,10 @@ fi
 echo "node $(node -v)"
 sudo install -d -m 755 -o ubuntu -g ubuntu ${REMOTE}
 sudo install -d -m 700 -o ubuntu -g ubuntu /var/lib/mjolnir
-sudo install -d -m 700 /etc/mjolnir
+# Traversable by the service user, readable by nobody else. The key inside it
+# is group-readable so the process can read it; everything else stays 600, so
+# the tokens in site.env remain root-only.
+sudo install -d -m 750 -o root -g ubuntu /etc/mjolnir
 `),
 );
 
@@ -138,7 +166,16 @@ tar -xzf /tmp/mjolnir-site.tar.gz
 rm -f /tmp/mjolnir-site.tar.gz
 # --omit=dev keeps the test runner and the toolchain off a production box; the
 # site needs express, zod and the workspace links and nothing else.
-npm install --omit=dev --ignore-scripts --no-audit --no-fund 2>&1 | tail -3
+npm install --omit=dev --ignore-scripts --no-audit --no-fund 2>&1 | tail -2
+# Every workspace package the site imports must have its built output, or
+# the import resolves to a file that is not there and systemd restarts it
+# forever.
+missing=""
+for p in account brand endpoints licensing logger paddle schemas; do
+  [ -f "packages/$p/dist/index.js" ] || missing="$missing $p"
+done
+[ -z "$missing" ] || { echo "MISSING BUILD OUTPUT:$missing"; exit 1; }
+echo "built output present for every package"
 echo "workspace links: $(ls node_modules/@mjolnir 2>/dev/null | tr '\\n' ' ')"
 `),
 );
@@ -166,6 +203,7 @@ step('Configuration');
 const settings = [
   `PORT=${PORT}`,
   'MJOLNIR_DB=/var/lib/mjolnir/site.db',
+  'MJOLNIR_LICENCE_KEY_FILE=/etc/mjolnir/licence-signing.key',
   `MJOLNIR_PUBLIC_URL=${PUBLIC_URL}`,
   `MJOLNIR_VERIFY_URI=${process.env['MJOLNIR_VERIFY_URI'] ?? 'https://mjolnir.sh/device'}`,
 ];
@@ -178,81 +216,65 @@ console.log(`  /etc/mjolnir/site.env written, root only, ${settings.length} sett
 
 // ---- 6. the service -------------------------------------------------------
 
-step('The service');
-ssh(`set -euo pipefail
-sudo tee /etc/systemd/system/mjolnir-site.service >/dev/null <<'UNIT'
-[Unit]
-Description=Mjolnir licence service
-After=network-online.target
-Wants=network-online.target
+step('Building and starting the container');
+process.stdout.write(
+  ssh(`set -euo pipefail
+cd ${REMOTE}
 
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=${REMOTE}/apps/site
-EnvironmentFile=/etc/mjolnir/site.env
-EnvironmentFile=/etc/mjolnir/licence.env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning src/main.ts
-Restart=always
-RestartSec=3
+if ! sudo docker network inspect ${NETWORK} >/dev/null 2>&1; then
+  echo "network ${NETWORK} does not exist; is the tunnel stack up?"
+  exit 1
+fi
 
-# It faces the public internet and needs one directory and one key.
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/mjolnir
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-RestrictSUIDSGID=true
-LockPersonality=true
+# The systemd unit from an earlier shape of this deployment, removed rather
+# than left running beside the container listening on the same port.
+if systemctl list-unit-files mjolnir-site.service >/dev/null 2>&1; then
+  sudo systemctl disable --now mjolnir-site >/dev/null 2>&1 || true
+  sudo rm -f /etc/systemd/system/mjolnir-site.service /etc/mjolnir/licence.env
+  sudo systemctl daemon-reload
+  echo "removed the old systemd unit"
+fi
 
-[Install]
-WantedBy=multi-user.target
-UNIT
+sudo docker compose --env-file /etc/mjolnir/site.env -f deploy/site.compose.yml build --quiet 2>&1 | tail -3
 
-# The key is passed as an environment variable from a root-only file, so the
-# unit itself holds no secret and the key never sits in the repository.
-sudo awk 'BEGIN{printf "MJOLNIR_LICENCE_PRIVATE_KEY="} {printf "%s\\\\n", $0} END{print ""}' /etc/mjolnir/licence-signing.key | sudo tee /etc/mjolnir/licence.env >/dev/null
-sudo chmod 600 /etc/mjolnir/licence.env
-sudo systemctl daemon-reload
-sudo systemctl enable --now mjolnir-site >/dev/null 2>&1
-sudo systemctl restart mjolnir-site
-`);
-console.log('  mjolnir-site installed and started');
+# The key is bind-mounted, and a bind mount carries numeric ids across
+# unchanged. The host's own user happens to be gid 1001 here and the image's
+# is 1000, so a file the host user could read was one the container could not,
+# which fails as EACCES with nothing to say why. The gid is read off the image
+# rather than written down, so this keeps working if the base image renumbers.
+KEYGID=$(sudo docker run --rm --entrypoint id mjolnir/site:local -g)
+sudo chown "root:$KEYGID" /etc/mjolnir/licence-signing.key
+sudo chmod 640 /etc/mjolnir/licence-signing.key
+echo "signing key readable by gid $KEYGID, which is the image's"
+
+sudo docker compose --env-file /etc/mjolnir/site.env -f deploy/site.compose.yml up -d --force-recreate 2>&1 | tail -4
+`),
+);
 
 // ---- 7. the tunnel --------------------------------------------------------
 
-const token = process.env['CLOUDFLARE_TUNNEL_TOKEN'];
-if (token) {
-  step('The Cloudflare tunnel');
-  process.stdout.write(
-    ssh(`set -euo pipefail
-if ! command -v cloudflared >/dev/null; then
-  sudo mkdir -p --mode=0755 /usr/share/keyrings
-  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
-  sudo apt-get update >/dev/null 2>&1
-  sudo apt-get install -y cloudflared >/dev/null 2>&1
-fi
-cloudflared --version 2>&1 | head -1
+/*
+ * The tunnel is deliberately not touched.
+ *
+ * A connector is already running in the Unleash stack on this box, and the
+ * ingress rules live in Cloudflare rather than in a file here. Installing a
+ * second connector on the same token, which an earlier version of this script
+ * did, means Cloudflare load-balances across both: half of every request for
+ * `unleash.mjolnir.sh` would arrive at a connector with no route to Unleash
+ * and come back 502.
+ *
+ * So this prints what the route should be and leaves the tunnel alone.
+ */
+step('The tunnel');
+process.stdout.write(
+  ssh(`set -euo pipefail
+running=$(sudo docker ps --filter ancestor=cloudflare/cloudflared:latest --format '{{.Names}}' | head -1)
+echo "connector: \${running:-none found}"
+sudo docker exec "$running" cloudflared --version 2>/dev/null | head -1 || true
 `),
-  );
-  sendSecret('/etc/mjolnir/cloudflared.token', token);
-  process.stdout.write(
-    ssh(`set -euo pipefail
-if systemctl list-unit-files cloudflared.service >/dev/null 2>&1 && systemctl is-enabled cloudflared >/dev/null 2>&1; then
-  echo "cloudflared service already installed"
-else
-  sudo cloudflared service install "$(sudo cat /etc/mjolnir/cloudflared.token)" 2>&1 | tail -2
-fi
-sudo systemctl enable --now cloudflared >/dev/null 2>&1 || true
-`),
-  );
-} else {
-  console.log('\nNo CLOUDFLARE_TUNNEL_TOKEN in the environment, so the tunnel was left alone.');
-}
+);
+console.log(`  add this public hostname to the tunnel in Cloudflare:`);
+console.log(`    ${new URL(PUBLIC_URL).hostname}  ->  http://mjolnir-site:${PORT}`);
 
 // ---- 8. does it actually work ---------------------------------------------
 
@@ -260,13 +282,15 @@ step('Checking');
 process.stdout.write(
   ssh(`set -euo pipefail
 sleep 2
-echo "health:  $(curl -sS -m 5 http://127.0.0.1:${PORT}/health || echo unreachable)"
-echo "service: $(systemctl is-active mjolnir-site)"
-echo "tunnel:  $(systemctl is-active cloudflared 2>/dev/null || echo 'not installed')"
+echo "container: $(sudo docker inspect -f '{{.State.Status}}' mjolnir-site 2>/dev/null || echo missing)"
+# Asked for from another container on the tunnel's own network, which is the
+# path a real request takes. Checking from the host would prove something
+# different from what matters.
+echo "health via the tunnel network: $(sudo docker run --rm --network ${NETWORK} curlimages/curl:latest -sS -m 5 http://mjolnir-site:${PORT}/health 2>&1 | tail -1)"
 echo "--- recent log ---"
-sudo journalctl -u mjolnir-site -n 15 --no-pager -o cat
+sudo docker logs mjolnir-site --tail 12 2>&1
 `),
 );
 
 rmSync(staging, { recursive: true, force: true });
-console.log(`\nDone. ${PUBLIC_URL} works once the tunnel's hostname points at http://localhost:${PORT}.`);
+console.log(`\nDone. ${PUBLIC_URL} works once that hostname is on the tunnel and mjolnir.sh resolves.`);

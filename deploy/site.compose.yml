@@ -1,0 +1,55 @@
+# The licence service, beside the tunnel that reaches it.
+#
+# A separate file from the Unleash stack on purpose: that stack works, and a
+# deployment of this should never be able to take it down. They share one
+# thing, the network, which is declared external here so this file cannot
+# create or destroy it.
+services:
+  mjolnir-site:
+    build:
+      context: ..
+      dockerfile: apps/site/Dockerfile
+    image: mjolnir/site:local
+    container_name: mjolnir-site
+    restart: unless-stopped
+    # No ports. The tunnel reaches it by name on the shared network, so there
+    # is nothing published on the host and no way in except through Cloudflare.
+    environment:
+      TZ: UTC
+      PORT: "8787"
+      MJOLNIR_DB: /data/site.db
+      MJOLNIR_PUBLIC_URL: ${MJOLNIR_PUBLIC_URL:-https://api.mjolnir.sh}
+      MJOLNIR_VERIFY_URI: ${MJOLNIR_VERIFY_URI:-https://mjolnir.sh/device}
+      MJOLNIR_LICENCE_KEY_FILE: /run/secrets/licence-key
+      PADDLE_WEBHOOK_SECRET: ${PADDLE_WEBHOOK_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - state:/data
+      # Read-only, and the file stays owned by root on the host. The one
+      # artefact here that cannot be rebuilt from Paddle and a sign-in is this
+      # key, so the container gets to read it and nothing more.
+      - /etc/mjolnir/licence-signing.key:/run/secrets/licence-key:ro
+    networks:
+      - tunnel
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  state:
+
+networks:
+  tunnel:
+    external: true
+    name: ${MJOLNIR_TUNNEL_NETWORK:-unleash-mjolnir_unleash}

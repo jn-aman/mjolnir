@@ -135,6 +135,26 @@ function oauthApp(prefix: string): { clientId: string; clientSecret: string } | 
  * minute ago, and the matching public key is written out for the app to trust.
  */
 function signingKey(): string {
+  /*
+   * A path, in preference to the key itself.
+   *
+   * Two reasons, and the second is the important one. A PEM is multi-line, and
+   * every layer between a secret manager and a process has its own opinion
+   * about what a backslash-n in an environment variable means; systemd's
+   * EnvironmentFile and this code disagreed, and the result was a key that
+   * decoded to nothing with an OpenSSL error that says only "unsupported".
+   *
+   * The second reason is that a key in the environment is readable from
+   * /proc/<pid>/environ, turns up in crash reports and in anything that dumps
+   * its own configuration, and is inherited by every child process. A path is
+   * none of those things.
+   */
+  const fromFile = process.env['MJOLNIR_LICENCE_KEY_FILE'];
+  if (fromFile) {
+    if (!existsSync(fromFile)) throw new Error(`MJOLNIR_LICENCE_KEY_FILE points at ${fromFile}, which is not there`);
+    return readFileSync(fromFile, 'utf8');
+  }
+
   const fromEnv = process.env['MJOLNIR_LICENCE_PRIVATE_KEY'];
   if (fromEnv) return fromEnv.replace(/\\n/g, '\n');
 
