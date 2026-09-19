@@ -26,6 +26,9 @@
       "path": "./packages/paddle"
     },
     {
+      "path": "./packages/account"
+    },
+    {
       "path": "./apps/web"
     },
     {

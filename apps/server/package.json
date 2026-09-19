@@ -4,17 +4,20 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
-  "bin": { "mjolnir-mcp": "./dist/mcp/stdio.js" },
+  "bin": {
+    "mjolnir-mcp": "./dist/mcp/stdio.js"
+  },
   "scripts": {
     "build": "tsc -b",
     "dev": "tsc -b && node dist/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
-    "@mjolnir/k8s": "*",
+    "@mjolnir/account": "*",
     "@mjolnir/demo": "*",
     "@mjolnir/endpoints": "*",
     "@mjolnir/flags": "*",
+    "@mjolnir/k8s": "*",
     "@mjolnir/licensing": "*",
     "@mjolnir/logger": "*",
     "@mjolnir/schemas": "*",

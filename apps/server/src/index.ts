@@ -24,6 +24,8 @@ import { dockerRoutes } from './routes/docker.ts';
 import { scanRoutes } from './routes/scan.ts';
 import { helmRoutes } from './routes/helm.ts';
 import { storageRoutes } from './routes/storage.ts';
+import { accountRoutes } from './routes/account.ts';
+import { AccountStore } from './account.ts';
 import { flagRoutes } from './routes/flags.ts';
 import { updateRoutes } from './routes/updates.ts';
 import { telemetryRoutes } from './routes/telemetry.ts';
@@ -66,6 +68,12 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   const flags = new FlagStore(settings, APP_VERSION);
   flags.start();
 
+  // The account is what a subscription hangs off. It is never on the path to
+  // reaching a cluster: every call it makes can fail forever and the app still
+  // opens, still connects, and still honours the lease it already has.
+  const account = new AccountStore(APP_VERSION);
+  account.start();
+
   const telemetry = new Telemetry(settings, APP_VERSION);
   telemetry.start();
   telemetry.record('app.launch', { channel: settings.get().updates.channel });
@@ -86,6 +94,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/telemetry', telemetryRoutes(telemetry, settings));
   app.use('/api/updates', updateRoutes(settings));
   app.use('/api/licence', licenceRoutes(settings));
+  app.use('/api/account', accountRoutes(account));
   app.use('/api/docker', dockerRoutes());
   app.use('/api/scan', scanRoutes());
   app.use('/api/helm', helmRoutes(registry));
@@ -154,6 +163,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
       flags.stop();
       telemetry.stop();
       await telemetry.flush();
+      account.stop();
       await registry.shutdown();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

@@ -147,6 +147,49 @@ export interface UpdateView {
   state: { status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'current' | 'error' | 'unsupported'; version?: string; percent?: number; error?: string; checkedAt?: string };
 }
 
+export interface AccountStatus {
+  signedIn: boolean;
+  email: string;
+  tier: 'free' | 'pro';
+  headline: string;
+  detail?: string;
+  lease: 'none' | 'invalid' | 'wrong-device' | 'valid' | 'grace' | 'expired';
+  expiresAt?: string;
+  plan?: string;
+  seats?: { total: number; used: number };
+  device: { id: string; name: string; fingerprint: string };
+  /** Where the refresh token is kept. Shown, not implied. */
+  identity?: { provider: 'email' | 'github' | 'google' | 'okta'; email: string; handle?: string; organisation?: string };
+  credentialStore: 'keychain' | 'file';
+  lastError?: string;
+  lastCheckedAt?: string;
+}
+
+export interface SignInProvider {
+  id: 'email' | 'github' | 'google' | 'okta';
+  label: string;
+  detail: string;
+  enterprise: boolean;
+}
+
+export interface SignInPrompt {
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete: string;
+  expiresIn: number;
+  interval: number;
+  /** What this person may use, decided by the site rather than fixed here. */
+  providers: SignInProvider[];
+  /** Set when an organisation allows exactly one way in, and says whose rule it is. */
+  enforcement: string | null;
+}
+
+export interface SignInResult {
+  ok: boolean;
+  failure: { error: string; description: string } | null;
+  status: AccountStatus;
+}
+
 export interface LicenceStatus {
   kind: 'none' | 'valid' | 'grace' | 'expired' | 'invalid' | 'unconfigured';
   tier: 'free' | 'pro';
@@ -352,6 +395,17 @@ export const api = {
   },
   ai: {
     tools: () => request<{ tools: Array<{ name: string; description: string; kind: 'read' | 'write' }> }>('/api/ai/tools'),
+  },
+  account: {
+    get: () => request<AccountStatus>('/api/account'),
+    signIn: (choice: { provider?: SignInProvider['id']; emailHint?: string } = {}) =>
+      request<SignInPrompt>('/api/account/sign-in', { method: 'POST', body: JSON.stringify(choice) }),
+    /** Resolves when the person approves in their browser, or it expires. */
+    wait: () => request<SignInResult>('/api/account/sign-in/wait', { method: 'POST' }),
+    cancel: () => request<AccountStatus>('/api/account/sign-in/cancel', { method: 'POST' }),
+    signOut: () => request<AccountStatus>('/api/account/sign-out', { method: 'POST' }),
+    refresh: () => request<AccountStatus>('/api/account/refresh', { method: 'POST' }),
+    billing: () => request<{ url: string; signedIn: boolean; email: string }>('/api/account/billing'),
   },
   licence: {
     get: () => request<LicenceStatus>('/api/licence'),

@@ -1,13 +1,36 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "./src", "outDir": "./dist", "types": ["node"] },
-  "include": ["src/**/*"],
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*"
+  ],
   "references": [
-    { "path": "../../packages/schemas" },
-    { "path": "../../packages/logger" },
-    { "path": "../../packages/k8s" },
-    { "path": "../../packages/licensing" },
-    { "path": "../../packages/endpoints" },
-    { "path": "../../packages/flags" }
+    {
+      "path": "../../packages/schemas"
+    },
+    {
+      "path": "../../packages/logger"
+    },
+    {
+      "path": "../../packages/k8s"
+    },
+    {
+      "path": "../../packages/licensing"
+    },
+    {
+      "path": "../../packages/endpoints"
+    },
+    {
+      "path": "../../packages/flags"
+    },
+    {
+      "path": "../../packages/account"
+    }
   ]
 }

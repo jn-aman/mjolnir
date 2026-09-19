@@ -18,6 +18,7 @@ import {
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
+  UserRound,
   Trash2,
   Wrench,
   type LucideIcon,
@@ -34,6 +35,7 @@ import { Switch } from './ui/Switch.tsx';
 import { ConfirmDialog } from './ui/Modal.tsx';
 import { copyText } from './ui/ContextMenu.tsx';
 import { AskSave } from './ui/AskSave.tsx';
+import { AccountSection } from './settings/AccountSection.tsx';
 import { FlagsSection } from './settings/FlagsSection.tsx';
 import { PrivacySection } from './settings/PrivacySection.tsx';
 import { UpdatesSection } from './settings/UpdatesSection.tsx';
@@ -81,6 +83,7 @@ const APP_SECTIONS: readonly Section[] = [
   { id: 'general', label: 'General', icon: Settings2 },
   { id: 'ai', label: 'AI assistant', icon: Bot },
   { id: 'mcp', label: 'MCP server', icon: Plug },
+  { id: 'account', label: 'Account', icon: UserRound, flag: 'account.sign-in' },
   { id: 'licence', label: 'Licence', icon: BadgeCheck },
   { id: 'flags', label: 'Feature flags', icon: Flag },
   { id: 'updates', label: 'Updates', icon: Download },
@@ -235,6 +238,7 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
             {section === 'general' ? <General theme={theme} onTheme={onTheme} settings={settings} /> : null}
             {section === 'ai' ? <Ai settings={settings} onSave={save} /> : null}
             {section === 'mcp' ? <Mcp settings={settings} meta={meta} onSave={save} onRefresh={refresh} /> : null}
+            {section === 'account' ? <AccountSection /> : null}
             {section === 'licence' ? <Licence /> : null}
             {section === 'flags' ? <FlagsSection settings={settings} onSave={save} /> : null}
             {section === 'updates' ? <UpdatesSection /> : null}

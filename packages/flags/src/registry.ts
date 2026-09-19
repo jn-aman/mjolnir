@@ -307,6 +307,23 @@ export const FLAGS: readonly FlagDefinition[] = [
     module: 'storage',
   },
   {
+    id: 'account.sign-in',
+    label: 'Sign in to an account',
+    description: 'Sign in with email, GitHub, Google or your organisation\u2019s Okta, so a subscription follows you between machines and a seat can be taken back.',
+    fallback: false,
+    stage: 'experimental',
+    module: 'mjolnir',
+    warning: 'The account service is not live yet, so signing in will not succeed.',
+  },
+  {
+    id: 'account.sso',
+    label: 'Enterprise sign-in',
+    description: 'Okta, with sign-in enforced for a domain so everyone in an organisation arrives as the same identity.',
+    fallback: false,
+    stage: 'internal',
+    module: 'mjolnir',
+  },
+  {
     id: 'docker.write',
     label: 'Container actions',
     description: 'Start, stop, restart and remove containers, images, volumes and networks through the local engine.',
