@@ -77,6 +77,20 @@ interface Section {
   readonly planned?: string;
   /** Present only when this flag is on. Settings for a module nobody has is noise. */
   readonly flag?: string;
+  /**
+   * Ours, not theirs.
+   *
+   * Some of what this app can do is decided by a flag server, and that is our
+   * problem to run rather than a thing to hand somebody a switchboard for. A
+   * person using Mjolnir should be oblivious to the existence of feature
+   * flags: a page of thirty-five toggles, half of them naming features that
+   * do not exist yet, is an invitation to break the app and then report the
+   * break.
+   *
+   * It stays reachable in development, because turning a flag off by hand is
+   * how the combinations get tested.
+   */
+  readonly internal?: boolean;
 }
 
 const APP_SECTIONS: readonly Section[] = [
@@ -85,7 +99,7 @@ const APP_SECTIONS: readonly Section[] = [
   { id: 'mcp', label: 'MCP server', icon: Plug },
   { id: 'account', label: 'Account', icon: UserRound, flag: 'account.sign-in' },
   { id: 'licence', label: 'Licence', icon: BadgeCheck },
-  { id: 'flags', label: 'Feature flags', icon: Flag },
+  { id: 'flags', label: 'Feature flags', icon: Flag, internal: true },
   { id: 'updates', label: 'Updates', icon: Download },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
   { id: 'cloud', label: 'Cloud access', icon: Cloud, flag: 'module.cloud', planned: 'Identities, sessions and where credentials are kept arrive with the Cloud access workspace.' },
@@ -141,7 +155,12 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
     .sort()
     .join(',');
   const sections = useMemo(
-    () => (scope === 'app' ? APP_SECTIONS : K8S_SECTIONS).filter((entry) => !entry.flag || flagValues[entry.flag] === true),
+    () =>
+      (scope === 'app' ? APP_SECTIONS : K8S_SECTIONS)
+        .filter((entry) => !entry.flag || flagValues[entry.flag] === true)
+        // `import.meta.env.DEV` is false in every packaged build, so an
+        // internal page cannot ship by being forgotten about.
+        .filter((entry) => !entry.internal || import.meta.env.DEV),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [scope, flagSignature],
   );

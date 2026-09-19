@@ -1,3 +1,4 @@
+import { normalizeStructured, parseStructured } from '@mjolnir/k8s';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Download, Maximize2, Minimize2, MoreHorizontal, Regex, Search, WrapText } from 'lucide-react';
@@ -88,6 +89,15 @@ export function LogViewer({
   const [useRegex, setUseRegex] = useState(false);
   const [mode, setMode] = useState<'highlight' | 'filter'>('highlight');
   const [wrap, setWrap] = useState(true);
+  /**
+   * Read the JSON, or show the bytes.
+   *
+   * On by default, because most services log JSON and a wall of it is the
+   * single most common reason a log viewer is unpleasant. Off is one click
+   * away, because sometimes the thing you need is the exact line, and because
+   * a parser that is always on is a parser you cannot check.
+   */
+  const [parsed, setParsed] = useState(true);
   const [follow, setFollow] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -119,6 +129,18 @@ export function LogViewer({
     if (mode !== 'filter' || !matcher) return cleaned;
     return cleaned.filter((line) => matcher.test(line.message));
   }, [lines, matcher, mode]);
+
+  /**
+   * Whether anything here is JSON at all.
+   *
+   * Sampled from the first fifty lines rather than all of them: a service
+   * either logs structured or it does not, and re-deciding on every new line
+   * of a busy stream would cost more than the feature.
+   */
+  const anyStructured = useMemo(
+    () => rows.slice(0, 50).some((line) => parseStructured(line.message) !== null),
+    [rows],
+  );
 
   const matchCount = useMemo(() => {
     if (!matcher) return 0;
@@ -279,6 +301,22 @@ export function LogViewer({
           already ended. Leaving it in an overflow menu hides the one button
           the feature exists for, at the one moment somebody is looking for it.
         */}
+        {/*
+          Only where there is JSON to read. A toggle that does nothing on a
+          service logging plain text is a control people click once.
+        */}
+        {anyStructured ? (
+          <Segmented
+            value={parsed ? 'parsed' : 'raw'}
+            onChange={(value) => setParsed(value === 'parsed')}
+            testId="log-parsed-group"
+            options={[
+              { value: 'parsed', label: 'Parsed' },
+              { value: 'raw', label: 'Raw' },
+            ]}
+          />
+        ) : null}
+
         <Segmented
           value={previous ? 'previous' : 'current'}
           onChange={(value) => setPrevious(value === 'previous')}
@@ -394,7 +432,8 @@ export function LogViewer({
             {virtualizer.getVirtualItems().map((item) => {
               const line = rows[item.index];
               if (!line) return null;
-              const level = LEVEL.exec(line.message)?.[1];
+              const structured = parsed ? parseStructured(line.message) : null;
+              const level = (structured ? normalizeStructured(structured).level?.toUpperCase() : undefined) ?? LEVEL.exec(line.message)?.[1];
               // The level gets its own column, so strip it from the message -
               // otherwise every warning reads "WARN WARN ...".
               const body = level
@@ -406,6 +445,18 @@ export function LogViewer({
               const continuation = /^\s{4,}at\s/.test(line.message);
 
               const json = body.trimStart().startsWith('{') ? body.trim() : undefined;
+              /*
+               * A structured line, read rather than printed.
+               *
+               * Most services log JSON, and a viewer that prints it raw shows
+               * a wall in which the four characters somebody is looking for
+               * are the same weight as `"loggerFqcn"` and a trace id. Parsed,
+               * the message is the sentence and everything else is a chip
+               * beside it. Raw is one click away, because sometimes the thing
+               * you want is the exact bytes.
+               */
+              const record = parsed ? parseStructured(body) : null;
+              const fields = record ? normalizeStructured(record) : null;
               const lineMenu: MenuEntry[] = [
                 askEntry('Explain this log line', `Explain this log line from pod ${pod} in namespace ${namespace} and whether it matters:\n\n${line.message.slice(0, 1500)}`),
                 SEPARATOR,
@@ -445,14 +496,41 @@ export function LogViewer({
                   >
                     {level ?? ''}
                   </span>
-                  <span
-                    className={wrap ? 'min-w-0 flex-1 whitespace-pre-wrap break-words' : 'flex-1 whitespace-pre'}
-                    style={{
-                      color: continuation ? 'var(--log-debug)' : 'var(--log-body)',
-                    }}
-                  >
-                    {body}
-                  </span>
+                  {fields ? (
+                    <span className={wrap ? 'flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5' : 'flex flex-1 items-baseline gap-x-2 overflow-hidden'}>
+                      <span
+                        className={wrap ? 'break-words' : 'shrink-0 whitespace-pre'}
+                        style={{ color: 'var(--log-body)' }}
+                      >
+                        {fields.message ?? body}
+                      </span>
+                      {/*
+                        Everything that is not the sentence, as chips.
+                        
+                        Ordered as the logger wrote them rather than sorted:
+                        the field a service puts first is usually the one it
+                        thinks matters, and alphabetising throws that away.
+                      */}
+                      {Object.entries(fields.rest)
+                        .slice(0, 12)
+                        .map(([key, value]) => (
+                          <span key={key} className="shrink-0 text-[11.5px] text-[var(--log-time)]">
+                            {key}
+                            <span className="opacity-60">=</span>
+                            <span style={{ color: 'var(--log-debug)' }}>{render(value)}</span>
+                          </span>
+                        ))}
+                    </span>
+                  ) : (
+                    <span
+                      className={wrap ? 'min-w-0 flex-1 whitespace-pre-wrap break-words' : 'flex-1 whitespace-pre'}
+                      style={{
+                        color: continuation ? 'var(--log-debug)' : 'var(--log-body)',
+                      }}
+                    >
+                      {body}
+                    </span>
+                  )}
                 </div>
                 </Menu>
               );
@@ -468,6 +546,17 @@ export function LogViewer({
       </div>
     </div>
   );
+}
+
+/** A field value on one line: short, and never the word "object". */
+function render(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'string') return value.length > 80 ? `${value.slice(0, 80)}…` : value;
+  if (typeof value === 'object') {
+    const text = JSON.stringify(value);
+    return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+  }
+  return String(value);
 }
 
 function Empty({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'error' }) {

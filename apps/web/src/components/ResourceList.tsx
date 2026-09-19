@@ -457,7 +457,7 @@ export function ResourceList({
             </div>
           ))}
 
-          <div className={`flex h-full items-center justify-end pl-2 ${overflowing ? 'cell-pinned-header' : ''} ${more.right ? 'cell-covering' : ''}`}>
+          <div className={`flex h-full items-center justify-end pl-2 pr-1.5 ${overflowing ? 'cell-pinned-header' : ''} ${more.right ? 'cell-covering' : ''}`}>
             {canColumns ? (
             <ColumnMenu
               all={all}
@@ -600,7 +600,7 @@ export function ResourceList({
                           {column.content(item)}
                         </OverflowTip>
                       ))}
-                      <div className={`flex h-full items-center justify-end pl-2 ${overflowing ? 'cell-pinned' : ''} ${more.right ? 'cell-covering' : ''}`} onClick={(event) => event.stopPropagation()}>
+                      <div className={`flex h-full items-center justify-end pl-2 pr-1.5 ${overflowing ? 'cell-pinned' : ''} ${more.right ? 'cell-covering' : ''}`} onClick={(event) => event.stopPropagation()}>
                         <RowActions entries={entries} name={item.metadata?.name ?? ''} />
                       </div>
                     </div>
