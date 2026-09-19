@@ -5,3 +5,4 @@ export * from './transport.ts';
 export * from './logs.ts';
 export * from './watch.ts';
 export * from './helm.ts';
+export * from './diagnose.ts';

@@ -103,13 +103,29 @@ Exit criterion: someone who is not you has paid, activated, and kept using it.
 Ranked by value over effort, which is not the same as by how interesting they
 are.
 
-### 1. "What broke?"
-One button on a failing workload that assembles recent events, the previous
-container's logs, the last rollout, node pressure, and whether a config change
-preceded it. **Highest value on this page and it needs no new integration** -
-every input is already in hand. It is also the clearest expression of what a
-desktop app can do that a dashboard cannot: hold everything at once and be
-opinionated about what to show.
+### 1. "What broke?" — built
+
+Fifteen rules over events, pod statuses, node conditions, replica sets and
+`managedFields`, ranked so the **cause sits above the symptom**: a rollout or
+a config change that preceded the failures outranks the failures, and those
+outrank the backoff loop they produced. `kubectl get events --sort-by` does
+the opposite, which is why the forty BackOff lines bury the one
+`CreateContainerConfigError` that explains them.
+
+Three things it does that a sorted event list cannot:
+
+- **Dates a change against a failure.** Nothing in the API links "the
+  deployment changed" to "the pods started failing"; a person does it by
+  eye. A first deploy is not reported, because nothing was replaced and
+  there is nothing to roll back to.
+- **Collapses one problem seen on many pods into one finding**, named for
+  the workload rather than for one of its replicas.
+- **Explains every term where it appears.** "BackOff" is not a word. Each
+  finding carries a plain sentence, the evidence it was read from, and what
+  to do next.
+
+Run against a live cluster it took 25ms warm, and it found a crash loop
+nobody had noticed.
 
 ### 2. Certificate and secret expiry
 Scan TLS Secrets, cert-manager Certificates and Ingress certs; surface in the

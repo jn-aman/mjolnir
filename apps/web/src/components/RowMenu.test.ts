@@ -105,7 +105,7 @@ describe('RowActionId', () => {
   it('covers every id the menu emits', () => {
     const emitted = new Set(ids(pod(), 'Pod').concat(ids({ metadata: { name: 'n' }, spec: {}, status: {} } as unknown as KubeItem, 'Node')));
     const handled: RowActionId[] = [
-      'open', 'pin', 'logs', 'logs-here', 'dock-logs', 'forward', 'shell', 'yaml', 'restart', 'scale',
+      'open', 'pin', 'diagnose', 'logs', 'logs-here', 'dock-logs', 'forward', 'shell', 'yaml', 'restart', 'scale',
       'filter-namespace', 'filter-node', 'cordon', 'uncordon', 'drain', 'taint', 'pause', 'resume', 'undo', 'delete',
     ];
     const extras = [...emitted].filter((id) => !handled.includes(id as RowActionId) && !id.startsWith('copy-') && id !== 'ask' && id !== 'scan');

@@ -22,7 +22,7 @@ import type { KubeItem } from './columns.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { podStatus, podProblem } from './columns.tsx';
 import { scanImage } from './ScanDialog.tsx';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, Siren } from 'lucide-react';
 
 /**
  * The right-click menu on a resource row.
@@ -41,6 +41,7 @@ export type RowActionId =
   | 'logs'
   | 'logs-here'
   | 'dock-logs'
+  | 'diagnose'
   | 'forward'
   | 'shell'
   | 'yaml'
@@ -77,6 +78,8 @@ export type FlagValues = Readonly<Record<string, boolean>>;
 const on = (flags: FlagValues | undefined, id: string): boolean => flags?.[id] ?? true;
 
 const SCALABLE = new Set(['Deployment', 'StatefulSet', 'ReplicaSet']);
+/** Kinds where "what broke" has pods underneath it to look at. */
+const WORKLOADS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob', 'Pod']);
 const RESTARTABLE = new Set(['Deployment', 'StatefulSet', 'DaemonSet']);
 
 const icon = (Icon: typeof FileText) => <Icon size={13} strokeWidth={1.9} />;
@@ -110,6 +113,16 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
     // the point: you read the pods while the deployment stays in front of you.
     ...(on(flags, 'ui.dock')
       ? [{ id: 'pin', label: 'Keep open in the dock', icon: icon(PinIcon), onSelect: () => act('pin') }]
+      : []),
+    /*
+     * Offered first when something is visibly wrong, because that is the
+     * moment the question is being asked. It reads events, restarts, node
+     * conditions and recent changes rather than one object, which is why it
+     * sits above "ask the assistant": it answers without a model and without
+     * a network round trip to one.
+     */
+    ...(on(flags, 'kubernetes.diagnose') && (problem || WORKLOADS.has(kind))
+      ? [{ id: 'diagnose', label: 'What broke?', icon: icon(Siren), onSelect: () => act('diagnose') }]
       : []),
     askEntry(isPod && problem ? 'Ask why it is failing' : 'Ask the assistant about this', askPrompt),
     ...(isPod

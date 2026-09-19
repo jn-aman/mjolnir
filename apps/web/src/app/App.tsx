@@ -28,6 +28,7 @@ import { openPinned, openTab, togglePinned } from '../lib/dockTabs.ts';
 import { CommandPalette } from '../components/CommandPalette.tsx';
 import { useFlags } from '../lib/flags.tsx';
 import { ToolPanel } from '../components/ToolPanel.tsx';
+import { DiagnosePanel } from '../components/DiagnosePanel.tsx';
 import { ScaleDialog } from '../components/ScaleDialog.tsx';
 import { KUBERNETES_MODULE, toolById } from '../lib/tools.ts';
 import { readRoute, writeRoute } from '../lib/route.ts';
@@ -68,6 +69,14 @@ export function App() {
   // Where the URL says we were, so a reload does not start over.
   const [route] = useState(readRoute);
   const [selection, setSelection] = useState<NavSelection>(route.selection ?? { kind: 'page', value: 'overview' });
+  /**
+   * The object "What broke?" was opened about, if it was opened from a row.
+   *
+   * Cleared when the tool is left, so coming back to it from the rail asks
+   * about the cluster again rather than silently answering about whatever was
+   * right-clicked twenty minutes ago.
+   */
+  const [diagnosing, setDiagnosing] = useState<{ kind: string; name: string; namespace?: string } | undefined>(undefined);
   const [kind, setKind] = useState(route.selection?.kind === 'resource' ? route.selection.value : 'Pod');
   const [namespaces, setNamespaces] = useState<string[]>(route.namespace ? route.namespace.split(',').filter(Boolean) : []);
   /** The one namespace to scope a server request to; empty means all, or several (filtered here). */
@@ -356,6 +365,7 @@ export function App() {
     (next: NavSelection) => {
       const leaving = latestView.current;
       viewMemory.current[viewKey(leaving.selection)] = { filter: leaving.filter, status: leaving.status, selected: leaving.selected, tab: leaving.tab };
+      if (!(next.kind === 'tool' && next.value === 'whatbroke')) setDiagnosing(undefined);
       setSelection(next);
       const remembered = viewMemory.current[viewKey(next)];
       if (next.kind === 'resource') setKind(next.value);
@@ -512,6 +522,32 @@ export function App() {
     });
     setDockCollapsed(false);
   }, []);
+
+  /**
+   * Logs for a pod named by something other than a row.
+   *
+   * A finding from "What broke?" knows the pod, often the container, and
+   * whether the interesting output is from the run that already ended. It does
+   * not have the object, so it cannot go through `openInDock`.
+   */
+  const openLogsFor = useCallback(
+    (target: { name: string; namespace?: string | undefined; container?: string | undefined; previous?: boolean }) => {
+      if (!context) return;
+      const ns = target.namespace ?? '';
+      addTab({
+        id: `logs:${context}:${ns}:${target.name}${target.previous ? ':previous' : ''}`,
+        kind: 'logs',
+        title: target.name,
+        subtitle: target.previous ? `${ns} · previous run` : ns,
+        context,
+        namespace: ns,
+        pod: target.name,
+        containers: target.container ? [target.container] : [],
+        ...(target.previous ? { previous: true } : {}),
+      });
+    },
+    [context, addTab],
+  );
 
   const openInDock = useCallback(
     (item: KubeItem, pin = false) => {
@@ -685,6 +721,12 @@ export function App() {
           return;
         case 'pin':
           pinToDock(item, kind);
+          return;
+        case 'diagnose':
+          // Scoped to this object, so it reads its pods and the events around
+          // them rather than the whole namespace.
+          setDiagnosing({ kind, name: item.metadata?.name ?? '', ...(item.metadata?.namespace ? { namespace: item.metadata.namespace } : {}) });
+          setSelection({ kind: 'tool', value: 'whatbroke' });
           return;
         case 'shell':
           openShell(item);
@@ -873,7 +915,15 @@ export function App() {
               <Overview context={context} cluster={current} onNavigate={navigate} onDecorChanged={() => void loadDecor()} />
             ) : null}
 
-            {view === 'tool' && tool?.id === 'helm' && context ? (
+            {view === 'tool' && tool?.id === 'whatbroke' && context ? (
+              <DiagnosePanel
+                context={context}
+                namespace={namespace || undefined}
+                focus={diagnosing}
+                onNavigate={navigate}
+                onOpenLogs={openLogsFor}
+              />
+            ) : view === 'tool' && tool?.id === 'helm' && context ? (
               <HelmPanel context={context} namespace={namespace || undefined} onNavigate={navigate} />
             ) : view === 'tool' && tool?.id === 'portforward' ? (
               <ForwardsPanel onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })} />

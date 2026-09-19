@@ -14,6 +14,7 @@ import { attachWatchSocket } from './watch-socket.ts';
 import { clusterRoutes } from './routes/clusters.ts';
 import { logRoutes } from './routes/logs.ts';
 import { metricRoutes } from './routes/metrics.ts';
+import { diagnoseRoutes } from './routes/diagnose.ts';
 import { resourceRoutes } from './routes/resources.ts';
 import { forwardRoutes } from './routes/forwards.ts';
 import { settingsRoutes } from './routes/settings.ts';
@@ -113,6 +114,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/forwards', forwardRoutes(forwards));
   app.use('/api/logs', logRoutes(registry));
   app.use('/api/metrics', metricRoutes(metrics));
+  app.use('/api/diagnose', diagnoseRoutes(registry, flags));
   app.use(errorHandler);
 
   /**

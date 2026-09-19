@@ -139,3 +139,24 @@ export function timezoneOptions(): Array<{ value: string; label: string; hint: s
     ...zones.map(({ zone, minutes }) => ({ value: zone, label: zone.replace(/_/g, ' '), hint: utcLabel(minutes) })),
   ];
 }
+
+/**
+ * A time in words: "4 minutes ago".
+ *
+ * Different from the `age` column on purpose. A table wants `4m` because it is
+ * scanned in a column of other numbers; a sentence wants words, because "api
+ * was rolled out 12m before this started" reads like a serial number.
+ */
+export function relativeTime(input: string | number | Date, now: number = Date.now()): string {
+  const at = input instanceof Date ? input.getTime() : typeof input === 'number' ? input : Date.parse(input);
+  if (!Number.isFinite(at)) return 'at an unknown time';
+  const seconds = Math.round((now - at) / 1000);
+  if (seconds < 0) return 'in the future';
+  if (seconds < 45) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return minutes === 1 ? 'a minute ago' : `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? 'an hour ago' : `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}

@@ -50,6 +50,14 @@ export interface DockTab {
   /** For terminal tabs: the container to exec into. */
   readonly container?: string | undefined;
   readonly source?: 'kubernetes' | 'docker' | undefined;
+  /**
+   * Open a log tab showing the run that already ended.
+   *
+   * "What broke?" almost always wants this one: the current container has not
+   * started, so its logs are empty, and the answer is in the output of the run
+   * that failed.
+   */
+  readonly previous?: boolean | undefined;
   /** For resource tabs: the object pinned here. */
   readonly resourceKind?: string | undefined;
   readonly name?: string | undefined;
@@ -320,6 +328,7 @@ export function Dock({
                   namespace={tab.namespace ?? ''}
                   pod={tab.pod}
                   containers={[...(tab.containers ?? [])]}
+                  initialPrevious={tab.previous}
                   expanded={false}
                   compact
                   onToggleExpand={() => onExpand(tab)}

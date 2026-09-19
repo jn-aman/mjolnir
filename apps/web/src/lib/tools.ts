@@ -180,6 +180,8 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Jump from any entry to the object, its logs or its YAML at that moment',
     ],
     today: [{ label: 'Recent events', command: 'kubectl get events -A --sort-by=.lastTimestamp' }],
+    built: true,
+    flag: 'kubernetes.diagnose',
   },
   {
     id: 'cloud',

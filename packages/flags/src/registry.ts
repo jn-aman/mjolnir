@@ -274,6 +274,14 @@ export const FLAGS: readonly FlagDefinition[] = [
     module: 'kubernetes',
   },
   {
+    id: 'kubernetes.diagnose',
+    label: 'What broke?',
+    description: 'Correlates events, restarts, node conditions and recent changes into one ranked answer, first cause first.',
+    fallback: true,
+    stage: 'beta',
+    module: 'kubernetes',
+  },
+  {
     id: 'scan.images',
     label: 'Image scanning',
     description: 'Scan a container image with Trivy and read the findings, with search, filters and CSV export.',

@@ -179,6 +179,44 @@ export interface AccountDevice {
   active: boolean;
 }
 
+export type DiagnosisSeverity = 'critical' | 'warning' | 'info';
+
+export interface DiagnosisFinding {
+  id: string;
+  rule: string;
+  severity: DiagnosisSeverity;
+  title: string;
+  detail: string;
+  fix?: string | null;
+  object: { kind: string; name: string; namespace?: string | null };
+  at?: string | null;
+  evidence: Array<{ source: string; text: string; at?: string | null }>;
+  actions: Array<{
+    label: string;
+    kind: 'logs' | 'previous-logs' | 'open' | 'events' | 'describe' | 'nodes';
+    target?: { kind: string; name: string; namespace?: string | null; container?: string | null } | null;
+  }>;
+  /** 0 a change someone made, 1 a failure, 2 a symptom, 3 background. */
+  cause: number;
+  /** Every object this covers. More than one means the same problem on several pods. */
+  affected?: string[];
+}
+
+export interface Diagnosis {
+  findings: DiagnosisFinding[];
+  timeline: Array<{
+    at: string;
+    severity: DiagnosisSeverity;
+    title: string;
+    detail: string;
+    object: { kind: string; name: string; namespace?: string | null };
+  }>;
+  summary: string;
+  healthy: boolean;
+  counts: { critical: number; warning: number; info: number };
+  scope: { namespace: string | null; kind: string | null; name: string | null };
+}
+
 export interface SignInProvider {
   id: 'email' | 'github' | 'google' | 'okta';
   label: string;
@@ -494,6 +532,24 @@ export const api = {
     release: (context: string, namespace: string, name: string, revision?: number) =>
       request<{ release: HelmReleaseFull; history: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${revision ? `?revision=${revision}` : ''}`),
   },
+  diagnose: {
+    /**
+     * What broke, for the cluster, a namespace, or one workload.
+     *
+     * Scoped by query rather than by path because the scope is genuinely
+     * optional at every level: "what broke in this cluster" is the question
+     * people ask first and it takes no arguments at all.
+     */
+    run: (context: string, scope: { namespace?: string; kind?: string; name?: string } = {}) => {
+      const query = new URLSearchParams();
+      if (scope.namespace) query.set('namespace', scope.namespace);
+      if (scope.kind) query.set('kind', scope.kind);
+      if (scope.name) query.set('name', scope.name);
+      const search = query.toString();
+      return request<Diagnosis>(`/api/diagnose/${encodeURIComponent(context)}${search ? `?${search}` : ''}`);
+    },
+  },
+
   scan: {
     status: () => request<{ available: boolean; path: string | null; install: string }>('/api/scan'),
     image: (image: string, force = false) => request<ScanReport>('/api/scan/image', { method: 'POST', body: JSON.stringify({ image, force }) }),
