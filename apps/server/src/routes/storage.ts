@@ -124,7 +124,7 @@ export function storageRoutes(settings: SettingsStore, forwards: ForwardManager)
       if (!key) throw HttpError.badRequest('key is required');
       const client = await clientFor(param(req, 'id'));
       const inline = query(req, 'inline') === '1';
-      const upstream = await wrap(() => client.getObject(param(req, 'bucket'), key, inline ? 'bytes=0-1048575' : undefined));
+      const upstream = await wrap(() => client.getObject(param(req, 'bucket'), key, inline ? 'bytes=0-4194303' : undefined));
       res.status(upstream.statusCode === 206 ? 200 : (upstream.statusCode ?? 200));
       res.setHeader('content-type', String(upstream.headers['content-type'] ?? 'application/octet-stream'));
       if (upstream.headers['content-length'] && !inline) res.setHeader('content-length', String(upstream.headers['content-length']));

@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode } from 'react';
+import { useState, type InputHTMLAttributes, type ReactNode } from 'react';
 
 interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   readonly id: string;
@@ -8,6 +8,8 @@ interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   readonly leading?: ReactNode;
   readonly trailing?: ReactNode;
   readonly error?: string;
+  /** Live rule: a sentence when the value is wrong, shown once the field was touched. */
+  readonly validate?: ((value: string) => string | null) | undefined;
   readonly mono?: boolean;
 }
 
@@ -25,10 +27,15 @@ export function Field({
   leading,
   trailing,
   error,
+  validate,
   mono = false,
   className = '',
   ...rest
 }: FieldProps) {
+  const [touched, setTouched] = useState(false);
+  const value = typeof rest.value === 'string' ? rest.value : typeof rest.defaultValue === 'string' ? rest.defaultValue : '';
+  const live = validate && (touched || value !== '') ? validate(value) : null;
+  const shown = error ?? live ?? undefined;
   return (
     <div className={className}>
       <label
@@ -39,7 +46,7 @@ export function Field({
       </label>
       <div
         className={`flex h-[30px] items-center gap-2 rounded-md border bg-sunken px-2.5 focus-within:border-focus ${
-          error ? 'border-[var(--status-error)]' : 'border-line'
+          shown ? 'border-[var(--status-error)]' : 'border-line'
         }`}
         style={{ transitionProperty: 'border-color', transitionDuration: '90ms' }}
       >
@@ -47,13 +54,18 @@ export function Field({
         <input
           id={id}
           {...rest}
+          onBlur={(event) => {
+            setTouched(true);
+            rest.onBlur?.(event);
+          }}
+          aria-invalid={shown ? true : undefined}
           className={`min-w-0 flex-1 bg-transparent text-[12.5px] text-primary outline-none placeholder:text-tertiary ${
             mono ? 'font-mono' : ''
           }`}
         />
         {trailing}
       </div>
-      {error ? <div className="mt-1.5 text-[11.5px] text-error">{error}</div> : null}
+      {shown ? <div className="mt-1.5 text-[11.5px] text-error" data-testid={`${id}-error`}>{shown}</div> : null}
     </div>
   );
 }

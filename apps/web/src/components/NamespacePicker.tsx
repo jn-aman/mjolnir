@@ -33,10 +33,10 @@ export function NamespacePicker({ all, selected, onChange }: NamespacePickerProp
           type="button"
           data-testid="namespace-select"
           aria-label="Namespaces"
-          className="group flex h-[30px] max-w-[300px] items-center gap-1.5 rounded-md border border-line bg-sunken pl-2.5 pr-2 text-[12.5px] text-primary outline-none hover:border-strong data-[state=open]:border-focus"
+          className="group flex h-[30px] w-[220px] items-center gap-1.5 rounded-md border border-line bg-sunken pl-2.5 pr-2 text-[12.5px] text-primary outline-none hover:border-strong data-[state=open]:border-focus"
         >
           {selected.length === 1 ? <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: tintFor(selected[0]) }} /> : null}
-          <span className="min-w-0 flex-1 truncate text-left font-mono">{label}</span>
+          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-left font-mono">{label}</span>
           {selected.length > 1 ? (
             <span className="flex max-w-[150px] gap-0.5 overflow-hidden">
               {selected.slice(0, 3).map((ns) => <span key={ns} aria-hidden className="h-[7px] w-[7px] rounded-full" style={{ background: tintFor(ns) }} />)}
@@ -104,7 +104,7 @@ export function NamespacePicker({ all, selected, onChange }: NamespacePickerProp
                   {active ? <Check size={10} strokeWidth={3} /> : null}
                 </span>
                 <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: tintFor(ns) }} />
-                <span className="min-w-0 flex-1 truncate font-mono">{ns}</span>
+                <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono">{ns}</span>
                 {!known ? <span className="text-[10px] uppercase tracking-wide text-tertiary">typed</span> : null}
               </DropdownMenu.CheckboxItem>
             );

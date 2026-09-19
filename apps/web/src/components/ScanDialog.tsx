@@ -128,10 +128,10 @@ export function ScanDialog({ image, onClose }: { image: string | null; onClose: 
                   <Menu key={`${f.id}:${f.package}:${f.target}`} label={f.id} entries={entries}>
                     <div className="grid grid-cols-[90px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] items-center gap-x-3 border-b border-subtle px-3 py-1.5 text-[12px] hover:bg-hover" data-testid="scan-finding">
                       <span className="flex items-center gap-1.5 text-secondary"><span aria-hidden className="h-[7px] w-[7px] rounded-full" style={{ background: SEVERITY_TONE[f.severity] }} />{f.severity.charAt(0) + f.severity.slice(1).toLowerCase()}</span>
-                      <span className="truncate font-mono text-primary">{f.id}{f.url ? <a href={f.url} target="_blank" rel="noreferrer" className="ml-1 inline-block align-middle text-tertiary hover:text-accent"><ExternalLink size={10} /></a> : null}</span>
-                      <span className="truncate font-mono text-secondary">{f.package}</span>
-                      <span className="truncate font-mono text-tertiary">{f.installed}{f.fixed ? <span className="text-ok"> → {f.fixed}</span> : ''}</span>
-                      <span className="truncate text-secondary" title={f.title}>{f.title}</span>
+                      <span className="break-words [overflow-wrap:anywhere] font-mono text-primary">{f.id}{f.url ? <a href={f.url} target="_blank" rel="noreferrer" className="ml-1 inline-block align-middle text-tertiary hover:text-accent"><ExternalLink size={10} /></a> : null}</span>
+                      <span className="break-words [overflow-wrap:anywhere] font-mono text-secondary">{f.package}</span>
+                      <span className="break-words [overflow-wrap:anywhere] font-mono text-tertiary">{f.installed}{f.fixed ? <span className="text-ok"> → {f.fixed}</span> : ''}</span>
+                      <span className="break-words [overflow-wrap:anywhere] text-secondary" title={f.title}>{f.title}</span>
                     </div>
                   </Menu>
                 );

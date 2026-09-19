@@ -199,7 +199,7 @@ function Row({ label, value, hint, action, muted = false }: { label: string; val
   return (
     <div className="flex items-center gap-3 text-[11.5px]">
       <span className="w-[86px] shrink-0 text-secondary">{label}</span>
-      <span className={`min-w-0 flex-1 truncate font-mono ${muted ? 'text-tertiary' : 'text-primary'}`} title={value}>
+      <span className={`min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono ${muted ? 'text-tertiary' : 'text-primary'}`} title={value}>
         {value}
         {hint ? <span className="ml-2 font-sans text-tertiary">{hint}</span> : null}
       </span>

@@ -15,6 +15,8 @@ import { askEntry, copyEntry, copyText, Menu, SEPARATOR, type MenuEntry } from '
 import { editContainer, resolveController } from '../lib/edits.ts';
 import { ConfigDataDetail } from './detail/ConfigDataDetail.tsx';
 import { Terminal as TerminalIcon } from 'lucide-react';
+import { KindMark } from './ui/KindMark.tsx';
+import { kindTint } from '../lib/kindIcons.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
 
@@ -166,9 +168,12 @@ export function ResourceDrawer({
       if (event.defaultPrevented) return;
       const target = event.target as Element | null;
       if (!target) return;
+      // Navigation is not "outside": going somewhere keeps this panel in the
+      // memory of the view you left, so it is there when you come back.
       if (
         target.closest('[data-testid="resource-drawer"]') ||
         target.closest('[data-testid="resource-row"]') ||
+        target.closest('[data-testid="sidebar"], [data-testid="module-rail"], [data-testid="cluster-strip"], [data-testid="title-bar"], [data-testid="dock"]') ||
         target.closest('[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"], [role="alertdialog"], [data-sonner-toaster], [cmdk-dialog]')
       ) {
         return;
@@ -299,21 +304,19 @@ export function ResourceDrawer({
         dragging={size.dragging}
         onPointerDown={size.onPointerDown}
       />
-      <header className="shrink-0 border-b border-line bg-raised px-4 pb-3 pt-3">
+      <header className="hero-band shrink-0 border-b border-line px-5 pb-4 pt-4" style={{ ['--hero-tint' as string]: kindTint(kind) }}>
         <Menu label={name} entries={headerMenu} testId="drawer-menu">
         <div className="flex items-start gap-3">
+          <KindMark kind={kind} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex items-center gap-2">
-              <span className="rounded-xs bg-accent-subtle px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-accent">
-                {kind}
-              </span>
-              {isPod && pod ? <StatusChip status={podStatus(pod as never)} /> : null}
+              {isPod && pod ? <StatusChip status={podStatus(pod as never)} /> : <span className="text-[11px] uppercase tracking-wide text-tertiary">{kind}</span>}
               <span className="text-[11px] text-tertiary">{age(item.metadata?.creationTimestamp)} old</span>
             </div>
-            <h2 data-testid="drawer-name" className="truncate font-mono text-[14px] text-primary">
+            <h2 data-testid="drawer-name" className="break-words [overflow-wrap:anywhere] font-mono text-[15px] font-medium text-primary">
               {name}
             </h2>
-            {namespace ? <p className="truncate text-[11.5px] text-tertiary">{namespace}</p> : null}
+            {namespace ? <p className="break-words [overflow-wrap:anywhere] text-[11.5px] text-tertiary">{namespace}</p> : null}
           </div>
           <Button iconOnly aria-label="Close" variant="ghost" onClick={() => guarded(onClose)} icon={<X size={15} strokeWidth={2} />} />
         </div>

@@ -74,8 +74,8 @@ export function DockerDrawer({ context, container, onClose, onOpenDock, menu }: 
                 <span className="rounded-xs bg-accent-subtle px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-accent">Container</span>
                 <StatusChip status={container.state.replace(/^./, (c) => c.toUpperCase())} tone={container.state === 'running' ? 'ok' : container.state === 'paused' ? 'warn' : 'neutral'} />
               </div>
-              <h2 data-testid="drawer-name" className="truncate font-mono text-[14px] text-primary">{container.name}</h2>
-              <p className="truncate text-[11.5px] text-tertiary">{container.image}</p>
+              <h2 data-testid="drawer-name" className="break-words [overflow-wrap:anywhere] font-mono text-[14px] text-primary">{container.name}</h2>
+              <p className="break-words [overflow-wrap:anywhere] text-[11.5px] text-tertiary">{container.image}</p>
             </div>
             <Button iconOnly aria-label="Close" variant="ghost" onClick={onClose} icon={<X size={15} strokeWidth={2} />} />
           </div>
@@ -108,7 +108,7 @@ export function DockerDrawer({ context, container, onClose, onOpenDock, menu }: 
               <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">Labels</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(container.labels).map(([k, v]) => (
-                  <span key={k} title={`${k}=${v}`} className="rounded-md border border-[var(--border-strong)] bg-overlay px-2 py-[3px] font-mono text-[11px]"><span className="text-secondary">{k}</span><span className="text-tertiary">=</span><span className="max-w-[220px] truncate text-primary">{v}</span></span>
+                  <span key={k} title={`${k}=${v}`} className="rounded-md border border-[var(--border-strong)] bg-overlay px-2 py-[3px] font-mono text-[11px]"><span className="text-secondary">{k}</span><span className="text-tertiary">=</span><span className="max-w-[220px] break-words [overflow-wrap:anywhere] text-primary">{v}</span></span>
                 ))}
               </div>
             </div>

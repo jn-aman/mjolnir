@@ -51,7 +51,7 @@ export function ToolPanel({ tool, section }: { readonly tool: ToolDefinition; re
               <div className="flex items-center gap-3 rounded-lg border border-line bg-raised px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-[11.5px] text-tertiary">{entry.label}</div>
-                  <code className="block truncate font-mono text-[12.5px] text-primary">{entry.command}</code>
+                  <code className="block break-words [overflow-wrap:anywhere] font-mono text-[12.5px] text-primary">{entry.command}</code>
                 </div>
                 <Button
                   variant="ghost"

@@ -101,7 +101,7 @@ export function Menu({ label, entries, children, testId = 'context-menu' }: Menu
         >
           {label ? (
             <>
-              <ContextMenu.Label className="truncate px-2 py-1 font-mono text-[11px] text-tertiary">{label}</ContextMenu.Label>
+              <ContextMenu.Label className="break-words [overflow-wrap:anywhere] px-2 py-1 font-mono text-[11px] text-tertiary">{label}</ContextMenu.Label>
               <Separator />
             </>
           ) : null}
@@ -127,7 +127,7 @@ export function Menu({ label, entries, children, testId = 'context-menu' }: Menu
                 }`}
               >
                 <span className="flex w-[14px] shrink-0 justify-center">{entry.icon}</span>
-                <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+                <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{entry.label}</span>
                 {entry.shortcut ? (
                   <kbd className="ml-4 shrink-0 font-sans text-[10.5px] text-tertiary">{entry.shortcut}</kbd>
                 ) : null}

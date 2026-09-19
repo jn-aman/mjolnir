@@ -6,6 +6,7 @@ import { Button } from './ui/Button.tsx';
 import { Field } from './ui/Field.tsx';
 import { api, type ForwardRecord } from '../lib/api.ts';
 import type { KubeItem } from './columns.tsx';
+import { port as portRule } from '../lib/validate.ts';
 
 /**
  * `kubectl port-forward`, from the pod's own list of ports.
@@ -143,8 +144,9 @@ export function PortForwardDialog({ context, pod, onClose, onStarted }: PortForw
                     className="w-[84px]"
                     value={local[String(row.port)] ?? ''}
                     onChange={(event) => setLocal((current) => ({ ...current, [String(row.port)]: event.target.value }))}
+                    validate={portRule}
                   />
-                  <Button data-testid={`forward-${row.port}`} disabled={busy === row.port || forwardedPorts.has(row.port)} onClick={() => void start(row.port)}>
+                  <Button data-testid={`forward-${row.port}`} disabled={busy === row.port || forwardedPorts.has(row.port) || portRule(local[String(row.port)] ?? '') !== null} onClick={() => void start(row.port)}>
                     {busy === row.port ? 'Starting…' : 'Forward'}
                   </Button>
                 </>
@@ -163,11 +165,12 @@ export function PortForwardDialog({ context, pod, onClose, onStarted }: PortForw
           className="w-[140px]"
           value={custom}
           onChange={(event) => setCustom(event.target.value)}
+          validate={(v) => (v ? portRule(v) : null)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && Number(custom) > 0) void start(Number(custom));
+            if (event.key === 'Enter' && custom && !portRule(custom)) void start(Number(custom));
           }}
         />
-        <Button disabled={!(Number(custom) > 0) || busy !== null} onClick={() => void start(Number(custom))}>
+        <Button disabled={!custom || portRule(custom) !== null || busy !== null} onClick={() => void start(Number(custom))}>
           Forward
         </Button>
       </div>

@@ -49,10 +49,16 @@ export function toneFor(status: string): StatusTone {
 }
 
 const TONE_CLASS: Record<StatusTone, string> = {
-  ok: 'bg-ok-bg text-ok',
-  warn: 'bg-warn-bg text-warn',
-  error: 'bg-error-bg text-error',
-  neutral: 'bg-overlay text-tertiary',
+  ok: 'bg-ok-bg text-ok border-[var(--status-ok-border)]',
+  warn: 'bg-warn-bg text-warn border-[color-mix(in_oklab,var(--status-warn)_35%,transparent)]',
+  error: 'bg-error-bg text-error border-[var(--status-error-border)]',
+  neutral: 'bg-overlay text-secondary border-line',
+};
+const TONE_DOT: Record<StatusTone, string> = {
+  ok: 'var(--status-ok)',
+  warn: 'var(--status-warn)',
+  error: 'var(--status-error)',
+  neutral: 'var(--text-tertiary)',
 };
 
 interface StatusChipProps {
@@ -66,8 +72,10 @@ export function StatusChip({ status, tone }: StatusChipProps) {
     <span
       data-testid="status-chip"
       data-tone={resolved}
-      className={`inline-flex shrink-0 items-center rounded-xs px-[7px] py-[2px] text-[11.5px] font-medium ${TONE_CLASS[resolved]}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-[9px] py-[3px] text-[11.5px] font-medium ${TONE_CLASS[resolved]}`}
+      style={{ boxShadow: '0 1px 0 var(--highlight) inset' }}
     >
+      <span aria-hidden className={`glow-dot ${resolved === 'ok' && status === 'Running' ? 'breathe' : ''}`} style={{ ['--dot' as string]: TONE_DOT[resolved], ...(resolved === 'neutral' ? { boxShadow: 'none' } : {}) }} />
       {status}
     </span>
   );

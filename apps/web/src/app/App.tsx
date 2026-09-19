@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { toast, Toaster } from 'sonner';
 import type { ClusterContext, ResourceDefinition, WatchState } from '@mjolnir/k8s';
 import { AnimatePresence, motion } from 'motion/react';
-import { Circle, Command as CommandIcon, Moon, Plus, Search, Sparkles, Sun, Zap } from 'lucide-react';
+import { Ban, Circle, CirclePlay, Command as CommandIcon, Copy, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Plus, RotateCw, Search, Sparkles, Sun, Tag, Trash2, Zap } from 'lucide-react';
 import { api, type ClustersResponse } from '../lib/api.ts';
 import { useTheme } from '../lib/theme.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
-import { ResourceList } from '../components/ResourceList.tsx';
+import { ResourceList, type BulkAction } from '../components/ResourceList.tsx';
 import { ResourceDrawer } from '../components/ResourceDrawer.tsx';
 import { Sidebar, type NavSelection } from '../components/Sidebar.tsx';
 import { NamespacePicker } from '../components/NamespacePicker.tsx';
@@ -27,10 +27,14 @@ import { ToolPanel } from '../components/ToolPanel.tsx';
 import { ScaleDialog } from '../components/ScaleDialog.tsx';
 import { KUBERNETES_MODULE, toolById } from '../lib/tools.ts';
 import { readRoute, writeRoute } from '../lib/route.ts';
+import { useLiveCounts, useLiveList, useLiveState } from '../lib/live.ts';
+import { parse as parseYamlText } from 'yaml';
+import { dnsSubdomain, labelKey, labelValue, namespaceName } from '../lib/validate.ts';
 import { offsetMinutes, timezoneOptions, useTimezone, utcLabel } from '../lib/time.ts';
 import { Globe } from 'lucide-react';
 import { drainNode, rolloutUndo, setPaused, setSchedulable, setTaints } from '../lib/edits.ts';
-import { ConfirmDialog } from '../components/ui/Modal.tsx';
+import { askAssistant, copyText } from '../components/ui/ContextMenu.tsx';
+import { ConfirmDialog, Modal } from '../components/ui/Modal.tsx';
 import { TaintDialog } from '../components/TaintDialog.tsx';
 import { CreateDialog } from '../components/CreateDialog.tsx';
 import { PortForwardDialog } from '../components/PortForwardDialog.tsx';
@@ -62,10 +66,45 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<KubeItem | null>(null);
+  /**
+   * What each view looked like when you left it: the filter, the status
+   * filter, the open object and its tab. Coming back restores all of it, so
+   * the sidebar is a way to move between places, not a reset button.
+   */
+  const viewMemory = useRef<Record<string, { filter: string; status: string; selected: string | null; tab: string | undefined }>>({});
+  const viewKey = (sel: NavSelection) => `${sel.kind}:${sel.value}`;
+  // Read at click time, not from a closure that may be a render behind.
+  const latestView = useRef({ selection, filter: '', status: '', selected: null as string | null, tab: undefined as string | undefined });
   const [pendingName, setPendingName] = useState<string | null>(route.selected ?? null);
   const [drawerTab, setDrawerTab] = useState<string | undefined>(route.tab);
   const [podMetrics, setPodMetrics] = useState<MetricsResponse | null>(null);
   const sidebar = useResizable({ key: 'sidebar', initial: 212, min: 160, max: 420, direction: 'right' });
+  /** full: rail, strip and sidebar. compact: sidebar as icons. hidden: content only. */
+  const [chrome, setChrome] = useState<'full' | 'compact' | 'hidden'>(() => {
+    try {
+      const stored = localStorage.getItem('mjolnir.chrome');
+      return stored === 'compact' || stored === 'hidden' ? stored : 'full';
+    } catch {
+      return 'full';
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('mjolnir.chrome', chrome);
+    } catch {
+      // fine
+    }
+  }, [chrome]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        setChrome((current) => (event.shiftKey ? (current === 'hidden' ? 'full' : 'hidden') : current === 'compact' ? 'full' : 'compact'));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const dock = useResizable({ key: 'dock', initial: 280, min: 120, max: 720, direction: 'up' });
   const [dockTabs, setDockTabs] = useState<DockTab[]>([]);
   const [dockActive, setDockActive] = useState<string | null>(null);
@@ -76,9 +115,23 @@ export function App() {
   const [tainting, setTainting] = useState<KubeItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [forwarding, setForwarding] = useState<KubeItem | null>(null);
+  const [bulkDelete, setBulkDelete] = useState<KubeItem[] | null>(null);
+  const [bulkLabel, setBulkLabel] = useState<KubeItem[] | null>(null);
+  const [bulkLabelText, setBulkLabelText] = useState('');
   const [incomingAsk, setIncomingAsk] = useState<{ id: number; text: string } | null>(null);
   const [scanningImage, setScanningImage] = useState<string | null>(null);
   const [focusStorage, setFocusStorage] = useState<string | undefined>(undefined);
+  const [decor, setDecor] = useState<Record<string, { label?: string; color?: string }>>({});
+  const loadDecor = useCallback(async () => {
+    try {
+      setDecor((await api.settings.get()).settings.clusters.perContext);
+    } catch {
+      // decoration only
+    }
+  }, []);
+  useEffect(() => {
+    void loadDecor();
+  }, [loadDecor]);
   // "Open bucket browser" on a storage pod: a connection through a forward, then the module.
   useEffect(() => {
     const onOpen = (event: Event) => {
@@ -168,29 +221,23 @@ export function App() {
   const sectionLabel = section && tool ? tool.sections?.find((entry) => entry.toLowerCase().replace(/\s+/g, '-') === section) : undefined;
   const isAppSettings = selection.kind === 'page' && selection.value === 'app-settings';
 
-  const load = useCallback(async () => {
-    if (!context || selection.kind !== 'resource') return;
-    try {
-      const scope = definition?.namespaced && namespace ? namespace : undefined;
-      const response = await api.list<KubeItem>(context, kind, scope);
-      setItems(response.items);
-      setState(response.state);
-      setError(response.error);
-      setCounts((current) => ({ ...current, [kind]: response.items.length }));
-    } catch (cause) {
-      setState('error');
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [context, kind, namespace, definition?.namespaced, selection.kind]);
-
+  // The list on screen and every count in the sidebar come over the live
+  // wire; the server pushes when the cache changes. `load` is kept for the
+  // callers that want a nudge right after a write, and is a no-op in effect
+  // because the watch already delivered the change.
+  const liveList = useLiveList<KubeItem>(context, selection.kind === 'resource' ? kind : null, definition?.namespaced && namespace ? namespace : undefined);
+  const liveCounts = useLiveCounts(context);
   useEffect(() => {
-    if (selection.kind !== 'resource') return;
-    setItems([]);
-    setState('connecting');
-    void load();
-    const timer = setInterval(() => void load(), 1_000);
-    return () => clearInterval(timer);
-  }, [load, selection.kind]);
+    setItems(liveList.items);
+    setState(liveList.state);
+    setError(liveList.error);
+  }, [liveList]);
+  useEffect(() => {
+    setCounts(liveCounts);
+  }, [liveCounts]);
+  const load = useCallback(async () => {
+    // Deliberately empty: see above. Kept so call sites read as intent.
+  }, []);
 
   /**
    * Opens whatever was clicked on the overview.
@@ -199,6 +246,28 @@ export function App() {
    * have been fetched, so the name is held and matched once it arrives. That
    * keeps the click instant instead of blocking on a round trip.
    */
+  useEffect(() => {
+    latestView.current = { selection, filter, status: statusFilter, selected: selected?.metadata?.name ?? null, tab: drawerTab };
+  }, [selection, filter, statusFilter, selected, drawerTab]);
+
+  /** Leaves the current view, remembering it, and enters another, restoring it. */
+  const go = useCallback(
+    (next: NavSelection) => {
+      const leaving = latestView.current;
+      viewMemory.current[viewKey(leaving.selection)] = { filter: leaving.filter, status: leaving.status, selected: leaving.selected, tab: leaving.tab };
+      setSelection(next);
+      const remembered = viewMemory.current[viewKey(next)];
+      if (next.kind === 'resource') setKind(next.value);
+      if (next.kind === 'workspace') setLastSection((current) => ({ ...current, [next.value.split(':')[0] ?? '']: next.value }));
+      setFilter(remembered?.filter ?? '');
+      setStatusFilter(remembered?.status ?? '');
+      setSelected(null);
+      setPendingName(remembered?.selected ?? null);
+      setDrawerTab(remembered?.tab);
+    },
+    [],
+  );
+
   const navigate = useCallback((target: NavigateTarget) => {
     if (target.workspace) {
       setSelection({ kind: 'workspace', value: target.workspace });
@@ -408,6 +477,9 @@ export function App() {
         case 'forward':
           setForwarding(item);
           return;
+        case 'delete':
+          setBulkDelete([item]);
+          return;
         case 'taint':
           setTainting(item);
           return;
@@ -453,6 +525,39 @@ export function App() {
     },
     [openInDock, openShell, restart, verb, context],
   );
+
+  /**
+   * The verbs the bulk bar offers for the kind on screen. Each runs over the
+   * ticked rows one at a time and reports how many it managed, because a
+   * partial failure in the middle of twenty deletes is the normal case.
+   */
+  const bulkActions = useMemo((): BulkAction[] => {
+    if (!context) return [];
+    const restartable = new Set(['Deployment', 'StatefulSet', 'DaemonSet']);
+    return [
+      {
+        id: 'ask',
+        label: 'Ask the assistant',
+        icon: <Sparkles size={12} strokeWidth={2} />,
+        run: (chosen) =>
+          askAssistant(
+            `About these ${chosen.length} ${kind}s in cluster ${context}: ${chosen.map((c) => `${c.metadata?.namespace ?? ''}/${c.metadata?.name ?? ''}`).join(', ')}. Are they healthy, what do they have in common, and is anything wrong?`,
+          ),
+      },
+      { id: 'copy', label: 'Copy names', icon: <Copy size={12} strokeWidth={2} />, run: (chosen) => copyText(chosen.map((c) => c.metadata?.name ?? '').join('\n'), `${chosen.length} names copied`) },
+      { id: 'label', label: 'Add label…', icon: <Tag size={12} strokeWidth={2} />, run: (chosen) => setBulkLabel(chosen) },
+      ...(restartable.has(kind)
+        ? [{ id: 'restart', label: 'Restart rollout', icon: <RotateCw size={12} strokeWidth={2} />, run: async (chosen: KubeItem[]) => { for (const item of chosen) await restart(item); } }]
+        : []),
+      ...(kind === 'Node'
+        ? [
+            { id: 'cordon', label: 'Cordon', icon: <Ban size={12} strokeWidth={2} />, run: async (chosen: KubeItem[]) => { for (const item of chosen) await setSchedulable(context, item, false); toast.success(`Cordoned ${chosen.length}`); } },
+            { id: 'uncordon', label: 'Uncordon', icon: <CirclePlay size={12} strokeWidth={2} />, run: async (chosen: KubeItem[]) => { for (const item of chosen) await setSchedulable(context, item, true); toast.success(`Uncordoned ${chosen.length}`); } },
+          ]
+        : []),
+      { id: 'delete', label: 'Delete…', icon: <Trash2 size={12} strokeWidth={2} />, danger: true, run: (chosen) => setBulkDelete(chosen) },
+    ];
+  }, [context, kind, restart]);
 
   const apiVersionFor = (entry: ResourceDefinition | undefined): string => {
     const loose = entry as unknown as { apiVersion?: string; group?: string; version?: string } | undefined;
@@ -500,23 +605,24 @@ export function App() {
           onToggleTheme={() => theme.set(theme.resolved === 'dark' ? 'light' : 'dark')}
           onPalette={() => setPaletteOpen(true)}
           onAssistant={() => openAssistant()}
+          chrome={chrome}
+          onChrome={setChrome}
         />
 
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
+          {chrome !== 'hidden' ? (
           <ModuleRail
             active={moduleId}
             settingsActive={isAppSettings}
-            onSelect={(id) => {
-              setSelected(null);
-              if (id === KUBERNETES_MODULE.id) setSelection({ kind: 'page', value: 'overview' });
-              else setSelection({ kind: 'workspace', value: lastSection[id] ?? id });
-            }}
+            onSelect={(id) => go(id === KUBERNETES_MODULE.id ? { kind: 'page', value: 'overview' } : { kind: 'workspace', value: lastSection[id] ?? id })}
             onSettings={() => setSelection({ kind: 'page', value: 'app-settings' })}
           />
+          ) : null}
 
-          {isAppSettings ? null : moduleId === KUBERNETES_MODULE.id ? (
+          {isAppSettings || chrome === 'hidden' ? null : moduleId === KUBERNETES_MODULE.id ? (
             <ClusterStrip
               contexts={clusters?.contexts ?? []}
+              decor={decor}
               current={context}
               onSelect={(name) => {
                 setContext(name);
@@ -529,29 +635,40 @@ export function App() {
             />
           ) : null}
 
-          {isAppSettings ? null : (
+          {isAppSettings || chrome === 'hidden' ? null : (
             <div className="relative flex shrink-0">
               <Sidebar
                 kinds={kinds}
                 selection={selection}
                 counts={counts}
-                width={sidebar.width}
+                width={chrome === 'compact' ? 56 : sidebar.width}
+                compact={chrome === 'compact'}
+                onToggleCompact={() => setChrome((current) => (current === 'compact' ? 'full' : 'compact'))}
                 module={moduleId === KUBERNETES_MODULE.id ? undefined : tool}
-                onSelect={(next) => {
-                  setSelection(next);
-                  if (next.kind === 'resource') setKind(next.value);
-                  if (next.kind === 'workspace') setLastSection((current) => ({ ...current, [next.value.split(':')[0] ?? '']: next.value }));
-                  setSelected(null);
-                }}
+                onSelect={go}
               />
-              <ResizeHandle
-                side="right"
-                label="Resize navigation"
-                dragging={sidebar.dragging}
-                onPointerDown={sidebar.onPointerDown}
-              />
+              {chrome === 'full' ? (
+                <ResizeHandle
+                  side="right"
+                  label="Resize navigation"
+                  dragging={sidebar.dragging}
+                  onPointerDown={sidebar.onPointerDown}
+                />
+              ) : null}
             </div>
           )}
+          {chrome === 'hidden' ? (
+            <button
+              type="button"
+              data-testid="chrome-show"
+              onClick={() => setChrome('full')}
+              aria-label="Show navigation"
+              title="Show navigation (⌘⇧B)"
+              className="btn-secondary absolute bottom-3 left-3 z-30 flex h-[30px] items-center gap-1.5 rounded-md border border-line px-2.5 text-[12px] text-secondary hover:text-primary"
+            >
+              <PanelLeft size={13} strokeWidth={2} /> Navigation
+            </button>
+          ) : null}
 
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -565,7 +682,7 @@ export function App() {
                 className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
               >
             {view === 'overview' && context ? (
-              <Overview context={context} onNavigate={navigate} />
+              <Overview context={context} cluster={current} onNavigate={navigate} onDecorChanged={() => void loadDecor()} />
             ) : null}
 
             {view === 'tool' && tool?.id === 'helm' && context ? (
@@ -599,7 +716,7 @@ export function App() {
 
             {view === 'resources' ? (
               <>
-                <div className="flex h-[48px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3">
+                <div className="flex h-[50px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3.5">
                   <Field
                     id="quick-filter"
                     label={`Filter ${kind}`}
@@ -620,6 +737,7 @@ export function App() {
                   {statusOptions.length ? (
                     <Select
                       label="Status"
+                      width={150}
                       value={statusFilter}
                       onChange={setStatusFilter}
                       testId="status-select"
@@ -657,6 +775,7 @@ export function App() {
                     label={definition?.label}
                     namespace={definition?.namespaced ? (namespaces.length > 1 ? namespaces.join(', ') : namespace) : undefined}
                     items={visibleItems}
+                    bulk={bulkActions}
                     state={state}
                     error={error}
                     filter={filter}
@@ -727,11 +846,7 @@ export function App() {
           kind={kind}
           items={items}
           theme={theme.resolved}
-          onNavigate={(next) => {
-            setSelection(next);
-            if (next.kind === 'resource') setKind(next.value);
-            setSelected(null);
-          }}
+          onNavigate={go}
           onCluster={(name) => {
             setContext(name);
             setSelected(null);
@@ -786,6 +901,24 @@ export function App() {
           onClose={() => setCreating(false)}
           onCreate={async (text) => {
             if (!context) return;
+            let doc: { apiVersion?: unknown; kind?: unknown; metadata?: { name?: unknown; namespace?: unknown } };
+            try {
+              doc = parseYamlText(text) as typeof doc;
+            } catch (cause) {
+              throw new Error(`YAML did not parse: ${cause instanceof Error ? cause.message : String(cause)}`);
+            }
+            if (!doc || typeof doc !== 'object') throw new Error('The document must be a YAML object.');
+            if (typeof doc.apiVersion !== 'string' || !doc.apiVersion) throw new Error('apiVersion is required, e.g. v1 or apps/v1.');
+            if (doc.kind !== kind) throw new Error(`kind must be ${kind}.`);
+            if (typeof doc.metadata?.name !== 'string' || !doc.metadata.name) throw new Error('metadata.name is required.');
+            const nameProblem = dnsSubdomain(doc.metadata.name);
+            if (nameProblem) throw new Error(`metadata.name: ${nameProblem}`);
+            if (definition?.namespaced) {
+              const ns = typeof doc.metadata.namespace === 'string' ? doc.metadata.namespace : namespace;
+              if (!ns) throw new Error('metadata.namespace is required for this kind.');
+              const nsProblem = namespaceName(ns);
+              if (nsProblem) throw new Error(`metadata.namespace: ${nsProblem}`);
+            }
             await api.create(context, kind, text, definition?.namespaced ? namespace || undefined : undefined);
             toast.success(`Created ${kind.toLowerCase()}`);
             setCreating(false);
@@ -795,6 +928,92 @@ export function App() {
 
         <PortForwardDialog context={context ?? ''} pod={forwarding} onClose={() => setForwarding(null)} />
         <ScanDialog image={scanningImage} onClose={() => setScanningImage(null)} />
+
+        <ConfirmDialog
+          open={bulkDelete !== null}
+          testId="bulk-delete-dialog"
+          title={`Delete ${bulkDelete?.length ?? 0} ${kind.toLowerCase()}${(bulkDelete?.length ?? 0) === 1 ? '' : 's'}?`}
+          body={<span className="font-mono text-[11.5px] break-words [overflow-wrap:anywhere]">{(bulkDelete ?? []).map((item) => item.metadata?.name).join(', ')}</span>}
+          confirmLabel={`Delete ${bulkDelete?.length ?? 0}`}
+          danger
+          onClose={() => setBulkDelete(null)}
+          onConfirm={() => {
+            const chosen = bulkDelete ?? [];
+            setBulkDelete(null);
+            if (!context) return;
+            void (async () => {
+              let done = 0;
+              for (const item of chosen) {
+                try {
+                  await api.remove(context, kind, item.metadata?.name ?? '', item.metadata?.namespace);
+                  done += 1;
+                } catch (cause) {
+                  toast.error(`${item.metadata?.name ?? ''}: ${cause instanceof Error ? cause.message : String(cause)}`);
+                }
+              }
+              toast.success(`Deleted ${done} of ${chosen.length}`);
+            })();
+          }}
+        />
+
+        <Modal
+          open={bulkLabel !== null}
+          onClose={() => setBulkLabel(null)}
+          title={`Label ${bulkLabel?.length ?? 0} ${kind.toLowerCase()}${(bulkLabel?.length ?? 0) === 1 ? '' : 's'}`}
+          description="key=value, merge-patched onto every selected object."
+          guard={{ dirty: bulkLabelText !== '' }}
+          testId="bulk-label-dialog"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setBulkLabel(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                data-testid="bulk-label-apply"
+                disabled={!bulkLabelPair(bulkLabelText)}
+                onClick={() => {
+                  const pair = bulkLabelPair(bulkLabelText);
+                  const chosen = bulkLabel ?? [];
+                  setBulkLabel(null);
+                  setBulkLabelText('');
+                  if (!context || !pair) return;
+                  void (async () => {
+                    let done = 0;
+                    for (const item of chosen) {
+                      try {
+                        await api.patch(context, kind, item.metadata?.name ?? '', { metadata: { labels: { [pair[0]]: pair[1] } } }, item.metadata?.namespace);
+                        done += 1;
+                      } catch (cause) {
+                        toast.error(`${item.metadata?.name ?? ''}: ${cause instanceof Error ? cause.message : String(cause)}`);
+                      }
+                    }
+                    toast.success(`Labelled ${done} of ${chosen.length}`);
+                  })();
+                }}
+              >
+                Apply
+              </Button>
+            </>
+          }
+        >
+          <Field
+            id="bulk-label"
+            label="Label"
+            mono
+            value={bulkLabelText}
+            onChange={(event) => setBulkLabelText(event.target.value)}
+            placeholder="team=payments"
+            data-testid="bulk-label-input"
+            validate={(value) => {
+              if (!value) return null;
+              const index = value.indexOf('=');
+              if (index === -1) return 'A label is key=value.';
+              return labelKey(value.slice(0, index)) ?? labelValue(value.slice(index + 1));
+            }}
+          />
+          <div className="pb-2" />
+        </Modal>
 
         <ScaleDialog
           item={scaling}
@@ -855,6 +1074,8 @@ interface TitleBarProps {
   readonly onToggleTheme: () => void;
   readonly onPalette: () => void;
   readonly onAssistant: () => void;
+  readonly chrome: 'full' | 'compact' | 'hidden';
+  readonly onChrome: (next: 'full' | 'compact' | 'hidden') => void;
 }
 
 /** True inside the Electron shell, where macOS draws traffic lights over us. */
@@ -879,62 +1100,67 @@ const PROVIDER_LABEL: Record<string, string> = {
  * rail. What is left is who you are connected to and whether it is answering -
  * the two things worth having on screen permanently.
  */
-function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistant }: TitleBarProps) {
+function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistant, chrome, onChrome }: TitleBarProps) {
   const provider = current ? PROVIDER_LABEL[current.provider] : '';
   const timezone = useTimezone();
   const zoneOptions = useMemo(() => timezoneOptions(), []);
+  const liveOpen = useLiveState();
+  const tint = module?.tint ?? 'var(--accent-base)';
 
   return (
     <header
       data-testid="title-bar"
       // The macOS traffic lights live in this strip; the left inset is theirs.
-      className={`flex h-[44px] shrink-0 items-center gap-2.5 border-b border-line bg-raised pr-3 ${
-        IS_DESKTOP ? 'pl-[84px]' : 'pl-4'
-      }`}
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className={`hero-band relative flex h-[46px] shrink-0 items-center gap-2 border-b border-line pr-3 ${IS_DESKTOP ? 'pl-[84px]' : 'pl-3'}`}
+      style={{ WebkitAppRegion: 'drag', ['--hero-tint' as string]: tint, boxShadow: '0 1px 0 var(--highlight) inset, 0 1px 0 rgb(0 0 0 / 0.2)' } as React.CSSProperties}
     >
-      <Zap size={15} strokeWidth={2.2} aria-hidden className="shrink-0 text-accent" />
-      <span className="text-[13px] font-semibold tracking-[-0.01em] text-primary">Mjolnir</span>
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px" style={{ background: `linear-gradient(90deg, transparent, color-mix(in oklab, ${tint} 55%, transparent) 30%, transparent 80%)` }} />
 
-      <div className="mx-1 h-4 w-px bg-[var(--border-default)]" />
+      <button
+        type="button"
+        data-testid="chrome-toggle"
+        aria-label={chrome === 'full' ? 'Collapse navigation to icons' : chrome === 'compact' ? 'Hide navigation' : 'Show navigation'}
+        title="Navigation: ⌘B collapses, ⌘⇧B hides"
+        onClick={() => onChrome(chrome === 'full' ? 'compact' : chrome === 'compact' ? 'hidden' : 'full')}
+        className="mr-1 flex h-[28px] w-[28px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        {chrome === 'hidden' ? <PanelLeftOpen size={15} strokeWidth={1.9} /> : chrome === 'compact' ? <PanelLeft size={15} strokeWidth={1.9} /> : <PanelLeftClose size={15} strokeWidth={1.9} />}
+      </button>
+      <span className="flex items-center gap-2" data-testid="brand">
+        <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] text-white" style={{ background: 'linear-gradient(145deg, color-mix(in oklab, var(--accent-solid) 100%, white 22%), color-mix(in oklab, var(--accent-solid) 100%, black 18%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 4px 12px color-mix(in oklab, var(--accent-solid) 50%, transparent)' }}>
+          <Zap size={14} strokeWidth={2.4} aria-hidden />
+        </span>
+        <span className="text-[13.5px] font-semibold tracking-[-0.01em] text-primary">Mjolnir</span>
+      </span>
+
+      <span className="mx-1 text-[12px] text-tertiary">/</span>
 
       {module ? (
-        <span className="flex items-center gap-1.5 text-[12.5px] text-primary" data-testid="module-crumb">
-          {module.icon ? <module.icon size={13} strokeWidth={1.9} style={{ color: module.tint }} /> : <span aria-hidden className="h-[7px] w-[7px] rounded-full" style={{ background: module.tint }} />}
+        <span className="flex h-[28px] items-center gap-1.5 rounded-full border border-line px-2.5 text-[12.5px] text-primary" data-testid="module-crumb" style={{ background: `color-mix(in oklab, ${tint} 10%, var(--surface-raised))`, borderColor: `color-mix(in oklab, ${tint} 30%, var(--border-default))`, boxShadow: '0 1px 0 var(--highlight) inset' }}>
+          {module.icon ? <module.icon size={13} strokeWidth={2} style={{ color: tint }} /> : <span aria-hidden className="h-[7px] w-[7px] rounded-full" style={{ background: tint }} />}
           {module.label}
         </span>
       ) : (
-        <span className="text-[12.5px] text-primary" data-testid="module-crumb">Settings</span>
+        <span className="flex h-[28px] items-center rounded-full border border-line bg-raised px-2.5 text-[12.5px] text-primary" data-testid="module-crumb">Settings</span>
       )}
 
-      {current !== undefined ? <span className="text-tertiary">›</span> : null}
-
       {current !== undefined ? (
-      <span
-        data-testid="connection-status"
-        data-state={current ? 'connected' : 'disconnected'}
-        className="flex items-center gap-2"
-      >
-        <motion.span
-          aria-hidden
-          animate={{ opacity: [0.45, 1, 0.45] }}
-          transition={{ duration: 2.4, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
-          className="flex"
-        >
-          <Circle size={7} strokeWidth={0} className="fill-ok text-ok" />
-        </motion.span>
-        <span data-testid="cluster-name" className="font-mono text-[12.5px] text-primary">
-          {current?.name ?? 'no cluster'}
-        </span>
-        {provider ? (
-          <span className="rounded-xs bg-accent-subtle px-1.5 py-[1px] text-[10px] font-semibold tracking-wide text-accent">
-            {provider}
+        <>
+          <span className="text-[12px] text-tertiary">/</span>
+          <span
+            data-testid="connection-status"
+            data-state={current ? 'connected' : 'disconnected'}
+            className="flex h-[28px] items-center gap-2 rounded-full border border-line bg-raised pl-2 pr-2.5"
+            style={{ boxShadow: '0 1px 0 var(--highlight) inset' }}
+          >
+            <span aria-hidden className={`glow-dot ${liveOpen ? 'breathe' : ''}`} style={{ ['--dot' as string]: liveOpen ? 'var(--status-ok)' : 'var(--status-warn)' }} />
+            <span data-testid="cluster-name" className="font-mono text-[12.5px] text-primary">{current?.name ?? 'no cluster'}</span>
+            {provider ? <span className="rounded-full bg-accent-subtle px-1.5 py-[1px] text-[10px] font-semibold tracking-wide text-accent">{provider}</span> : null}
+            {current?.server ? <span className="hidden font-mono text-[11px] text-tertiary xl:inline">{current.server.replace(/^https?:\/\//, '')}</span> : null}
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-tertiary" data-testid="live-state">{liveOpen ? 'live' : 'reconnecting'}</span>
           </span>
-        ) : null}
-        {current?.server ? (
-          <span className="font-mono text-[11px] text-tertiary">{current.server}</span>
-        ) : null}
-      </span>
+        </>
       ) : null}
 
       <div className="flex-1" />
@@ -961,25 +1187,28 @@ function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistan
             </button>
           }
         />
-        <Button
-          variant="ghost"
+        <button
+          type="button"
           data-testid="assistant-open"
           onClick={onAssistant}
-          icon={<Sparkles size={13} strokeWidth={1.9} className="text-accent" />}
+          className="lift flex h-[30px] items-center gap-1.5 rounded-full border px-3 text-[12.5px] text-primary"
+          style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent-solid) 26%, var(--surface-raised)), color-mix(in oklab, var(--log-pod-b) 22%, var(--surface-raised)))', borderColor: 'color-mix(in oklab, var(--accent-base) 40%, var(--border-default))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.12) inset, 0 4px 14px color-mix(in oklab, var(--accent-solid) 30%, transparent)' }}
         >
-          <span className="text-secondary">Assistant</span>
-        </Button>
-        <Button
-          variant="ghost"
+          <Sparkles size={13} strokeWidth={2} className="text-accent" aria-hidden />
+          Assistant
+        </button>
+        <button
+          type="button"
           data-testid="palette-open"
           onClick={onPalette}
-          icon={<Search size={13} strokeWidth={2} />}
+          className="btn-secondary flex h-[30px] w-[220px] items-center gap-2 rounded-full border border-line px-3 text-[12.5px] text-tertiary transition-colors duration-100 hover:border-strong hover:text-secondary"
         >
-          <span className="text-secondary">Search</span>
-          <kbd className="ml-1.5 inline-flex items-center gap-[2px] rounded-xs border border-line px-1 font-sans text-[10px] text-tertiary">
+          <Search size={13} strokeWidth={2} aria-hidden />
+          <span className="flex-1 text-left">Search anything…</span>
+          <kbd className="inline-flex items-center gap-[2px] rounded-md border border-line bg-sunken px-1.5 py-[1px] font-sans text-[10px] text-tertiary">
             <CommandIcon size={9} strokeWidth={2.2} aria-hidden />K
           </kbd>
-        </Button>
+        </button>
         <Button
           iconOnly
           data-testid="theme-toggle"
@@ -990,4 +1219,14 @@ function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistan
       </div>
     </header>
   );
+}
+
+/** `key=value` split, validated. Null when it is not a label yet. */
+function bulkLabelPair(text: string): [string, string] | null {
+  const index = text.indexOf('=');
+  if (index === -1) return null;
+  const key = text.slice(0, index).trim();
+  const value = text.slice(index + 1).trim();
+  if (!key || labelKey(key) || labelValue(value)) return null;
+  return [key, value];
 }

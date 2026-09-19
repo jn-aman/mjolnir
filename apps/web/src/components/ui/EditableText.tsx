@@ -20,15 +20,18 @@ interface EditableTextProps {
   readonly disabledReason?: string | undefined;
   readonly className?: string;
   readonly testId?: string;
+  /** Returns a sentence when the draft is not acceptable; saving is blocked. */
+  readonly validate?: ((next: string) => string | null) | undefined;
 }
 
-export function EditableText({ value, label, onCommit, mono = true, disabledReason, className = '', testId }: EditableTextProps) {
+export function EditableText({ value, label, onCommit, mono = true, disabledReason, className = '', testId, validate }: EditableTextProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   const changed = draft.trim() !== value && draft.trim() !== '';
+  const problem = editing && changed ? (validate?.(draft.trim()) ?? null) : null;
   // Click away: unchanged closes, changed asks. Never a silent save, never a silent loss.
   useOutsideClick(box, editing, () => {
     if (!changed) {
@@ -46,6 +49,7 @@ export function EditableText({ value, label, onCommit, mono = true, disabledReas
 
   const commit = async () => {
     const next = draft.trim();
+    if (next && next !== value && validate?.(next)) return; // the sentence under the box says why
     setEditing(false);
     setAsking(false);
     if (!next || next === value) return;
@@ -69,16 +73,24 @@ export function EditableText({ value, label, onCommit, mono = true, disabledReas
         onKeyDown={(event) => {
           if (event.key === 'Enter') void commit();
           if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
             setEditing(false);
             setAsking(false);
           }
         }}
         aria-label={label}
         data-testid={testId ? `${testId}-input` : undefined}
-        size={Math.max(8, Math.min(60, draft.length + 2))}
-        className={`rounded-xs border border-focus bg-sunken px-1 text-primary outline-none ${mono ? 'font-mono' : ''} ${className}`}
+        style={{ width: `${Math.max(value.length, draft.length, 4) + 2}ch`, maxWidth: '100%' }}
+        aria-invalid={problem ? true : undefined}
+        className={`rounded-xs border bg-sunken px-1 text-primary outline-none ${problem ? 'border-[var(--status-error)]' : 'border-focus'} ${mono ? 'font-mono' : ''} ${className}`}
       />
-      {asking ? (
+      {problem ? (
+        <span className="absolute left-0 top-full z-20 mt-1 whitespace-nowrap rounded-md border border-[var(--status-error-border)] bg-error-bg px-2 py-1 font-sans text-[11px] text-error shadow-[var(--shadow-md)]" data-testid="edit-error">
+          {problem}
+        </span>
+      ) : null}
+      {asking && !problem ? (
         <span className="absolute left-0 top-full z-20 mt-1">
           <AskSave what={label} busy={busy} onSave={() => void commit()} onDiscard={() => { setEditing(false); setAsking(false); }} />
         </span>

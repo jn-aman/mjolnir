@@ -21,7 +21,7 @@ the slot exists (menu entry, page or dock tab) and the operation is scheduled.
 | `apply -f` / `replace -f` | same as edit for an existing object; Create for a new one | done |
 | `create -f` | **Create** in the list toolbar: skeleton for the kind, edited in place, POSTed | done |
 | `create <kind> <name>` (imperative) | Create with a skeleton; typed builders (configmap from literals, secret, namespace) | next |
-| `delete` | row menu › Delete…, drawer › Delete (confirmed) | done |
+| `delete` | the row's own delete button, row menu › Delete…, drawer › Delete, and the bulk bar for many at once (all confirmed) | done |
 | `delete --force --grace-period=0` | option on the delete confirm | next |
 | `patch` | every inline edit is a merge patch: labels, annotations, image, env, resources, replicas | done |
 | `label` / `annotate` | click a chip, or **add**, remove with × | done |
@@ -69,7 +69,7 @@ the slot exists (menu entry, page or dock tab) and the operation is scheduled.
 | `logs` | drawer › Logs; **Open logs in dock**; full screen | done |
 | `logs -f` / `--previous` / `-c` / `--tail` | follow, Previous, container picker, tail | done |
 | `logs --since` / `--timestamps` / `-l` | time range; timestamps column exists; label-selected multi-pod logs | next |
-| `exec -it` | row menu › Shell, drawer › Shell, per-container Shell: a dock terminal over the exec WebSocket, resizes, bash when present else sh | done |
+| `exec -it` | row menu › Shell, drawer › Shell, per-container Shell: a dock terminal over the exec WebSocket, resizes; the shell is probed (bash, zsh, ash, sh, dash, fish, busybox) and a distroless image says so instead of hanging | done |
 | `attach` | dock terminal | next |
 | `cp` | drawer › Files tab | later |
 | `port-forward` | row menu › Port forward…; Forward beside each port in the drawer; Tools › Port forwards lists and stops them | done (pods); services next |

@@ -116,7 +116,7 @@ export function CommandPalette({
               <Command.Item key={cluster.name} value={`cluster ${cluster.name}`} onSelect={() => run(() => onCluster(cluster.name))}>
                 <Server size={13} strokeWidth={1.9} aria-hidden className="text-tertiary" />
                 <span className="font-mono">{cluster.name}</span>
-                {cluster.server ? <span className="ml-auto truncate font-mono text-[10.5px] text-tertiary">{cluster.server}</span> : null}
+                {cluster.server ? <span className="ml-auto break-words [overflow-wrap:anywhere] font-mono text-[10.5px] text-tertiary">{cluster.server}</span> : null}
               </Command.Item>
             ))}
           </Command.Group>

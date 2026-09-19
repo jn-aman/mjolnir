@@ -3,6 +3,7 @@ import { Copy, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../ui/Button.tsx';
 import { copyEntry, copyText, Menu, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { EditableKeyValues } from './EditableKeyValues.tsx';
+import { annotationValue, labelKey, labelValue } from '../../lib/validate.ts';
 
 /**
  * A ConfigMap or a Secret, key by key.
@@ -66,7 +67,7 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
               <Menu key={key} label={key} entries={menu} testId="data-key-menu">
                 <div className="rounded-lg border border-line bg-raised" data-testid="data-key">
                   <div className="flex items-center gap-2 px-3 py-1.5">
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-accent">{key}</span>
+                    <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-[12px] text-accent">{key}</span>
                     <span className="font-mono text-[10.5px] text-tertiary">{value.length} chars</span>
                     {secret ? (
                       <Button variant="ghost" data-testid={`reveal-${key}`} aria-label={visible ? `Hide ${key}` : `Reveal ${key}`} onClick={() => setRevealed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} icon={visible ? <EyeOff size={12} strokeWidth={1.9} /> : <Eye size={12} strokeWidth={1.9} />}>
@@ -75,7 +76,7 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
                     ) : null}
                     <Button variant="ghost" aria-label={`Copy ${key}`} onClick={() => copyText(value, `${key} copied`)} icon={<Copy size={12} strokeWidth={1.9} />}>Copy</Button>
                   </div>
-                  <pre className={`max-h-[260px] overflow-auto border-t border-line px-3 py-2 font-mono text-[11.5px] leading-[17px] ${visible ? 'text-primary' : 'text-tertiary'} ${multiline ? '' : 'whitespace-pre-wrap break-all'}`}>
+                  <pre className={`max-h-[260px] overflow-auto border-t border-line px-3 py-2 font-mono text-[11.5px] leading-[17px] ${visible ? 'text-primary' : 'text-tertiary'} ${multiline ? '' : 'whitespace-pre-wrap [overflow-wrap:anywhere]'}`}>
                     {visible ? value : '•'.repeat(Math.min(48, Math.max(8, value.length)))}
                   </pre>
                 </div>
@@ -84,7 +85,7 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
           })}
           {binary.map((key) => (
             <div key={key} className="flex items-center gap-2 rounded-lg border border-line bg-raised px-3 py-1.5 text-[12px]" data-testid="data-key">
-              <span className="min-w-0 flex-1 truncate font-mono text-accent">{key}</span>
+              <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-accent">{key}</span>
               <span className="text-tertiary">binary, {Math.round(((object.binaryData?.[key]?.length ?? 0) * 3) / 4)} bytes</span>
             </div>
           ))}
@@ -95,11 +96,11 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
         <>
           <section>
             <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">Labels</h3>
-            <EditableKeyValues values={object.metadata?.labels ?? {}} onPatch={(patch) => onPatchMetadata({ labels: patch })} testId="labels" />
+            <EditableKeyValues values={object.metadata?.labels ?? {}} onPatch={(patch) => onPatchMetadata({ labels: patch })} testId="labels" validateKey={labelKey} validateValue={labelValue} />
           </section>
           <section>
             <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">Annotations</h3>
-            <EditableKeyValues values={object.metadata?.annotations ?? {}} onPatch={(patch) => onPatchMetadata({ annotations: patch })} truncate testId="annotations" />
+            <EditableKeyValues values={object.metadata?.annotations ?? {}} onPatch={(patch) => onPatchMetadata({ annotations: patch })} testId="annotations" validateKey={labelKey} validateValue={annotationValue} />
           </section>
         </>
       ) : null}

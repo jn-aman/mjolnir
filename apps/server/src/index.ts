@@ -10,6 +10,7 @@ import { errorHandler } from './http.ts';
 import type { WebSocketServer } from 'ws';
 import { attachLogSocket } from './log-socket.ts';
 import { attachExecSocket } from './exec-socket.ts';
+import { attachWatchSocket } from './watch-socket.ts';
 import { clusterRoutes } from './routes/clusters.ts';
 import { logRoutes } from './routes/logs.ts';
 import { metricRoutes } from './routes/metrics.ts';
@@ -104,6 +105,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   const sockets: Record<string, WebSocketServer> = {
     '/ws/logs': attachLogSocket(registry),
     '/ws/exec': attachExecSocket(registry),
+    '/ws/watch': attachWatchSocket(registry),
   };
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;

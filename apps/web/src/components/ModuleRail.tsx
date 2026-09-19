@@ -47,8 +47,12 @@ export function ModuleRail({ active, onSelect, onSettings, settingsActive }: Mod
                   whileHover={{ scale: 1.06 }}
                   whileTap={{ scale: 0.94 }}
                   transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                  className={`flex h-full w-full items-center justify-center rounded-lg border ${isActive ? 'border-transparent bg-pressed' : 'border-transparent group-hover:bg-hover'}`}
-                  style={{ color: entry.tint, opacity: isActive ? 1 : 0.78 }}
+                  className={`flex h-full w-full items-center justify-center rounded-xl border ${isActive ? 'border-transparent' : 'border-transparent group-hover:bg-hover'}`}
+                  style={
+                    isActive
+                      ? { color: 'white', background: `linear-gradient(145deg, color-mix(in oklab, ${entry.tint} 100%, white 14%), color-mix(in oklab, ${entry.tint} 100%, black 22%))`, boxShadow: `0 1px 0 rgb(255 255 255 / 0.22) inset, 0 6px 16px color-mix(in oklab, ${entry.tint} 40%, transparent)` }
+                      : { color: entry.tint, opacity: 0.82 }
+                  }
                 >
                   <Icon size={18} strokeWidth={1.8} aria-hidden />
                 </motion.span>

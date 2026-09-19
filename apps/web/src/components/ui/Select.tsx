@@ -36,6 +36,8 @@ interface SelectProps {
   readonly trigger?: ReactNode;
   readonly align?: 'start' | 'end';
   readonly mono?: boolean;
+  /** A fixed trigger width so the toolbar does not shift when the value changes. */
+  readonly width?: number;
 }
 
 export function Select({
@@ -47,6 +49,7 @@ export function Select({
   trigger,
   align = 'start',
   mono = false,
+  width = 176,
 }: SelectProps) {
   const selected = options.find((option) => option.value === value);
   // Every list gets a search box, however short: typing is the one gesture
@@ -72,11 +75,11 @@ export function Select({
             type="button"
             data-testid={testId}
             aria-label={label}
-            className="group flex h-[30px] max-w-[260px] items-center gap-1.5 rounded-md border border-line bg-sunken pl-2.5 pr-2 text-[12.5px] text-primary outline-none hover:border-strong data-[state=open]:border-focus"
-            style={{ transitionProperty: 'border-color', transitionDuration: '90ms' }}
+            className="group flex h-[30px] items-center gap-1.5 rounded-md border border-line bg-sunken pl-2.5 pr-2 text-[12.5px] text-primary outline-none hover:border-strong data-[state=open]:border-focus"
+            style={{ width, transitionProperty: 'border-color', transitionDuration: '90ms' }}
           >
             {selected?.icon}
-            <span className={`min-w-0 flex-1 truncate text-left ${mono ? 'font-mono' : ''}`}>
+            <span className={`min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-left ${mono ? 'font-mono' : ''}`}>
               {selected?.label ?? label}
             </span>
             <ChevronDown
@@ -146,7 +149,7 @@ export function Select({
                   style={{ opacity: active ? 1 : 0 }}
                 />
                 {option.icon}
-                <span className={`min-w-0 flex-1 truncate ${mono ? 'font-mono' : ''}`}>
+                <span className={`min-w-0 flex-1 break-words [overflow-wrap:anywhere] ${mono ? 'font-mono' : ''}`}>
                   {option.label}
                 </span>
                 {option.hint ? (

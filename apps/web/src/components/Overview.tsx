@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
 import { api } from '../lib/api.ts';
 import { formatCpu, formatMemory, type MetricsResponse } from '../lib/metrics.ts';
 import { parseCpu, parseMemory } from '@mjolnir/schemas';
 import { TimeSeries } from './TimeSeries.tsx';
-import { Card, Stat } from './ui/Card.tsx';
+import { Card } from './ui/Card.tsx';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
-import { askEntry, copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
+import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
+import { ClusterHero } from './ClusterHero.tsx';
+import { Activity, AlertTriangle, ArrowRight, Bell, Gauge as GaugeIcon, PieChart } from 'lucide-react';
 import { StatusChip, toneFor } from './StatusChip.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
 
@@ -31,6 +32,10 @@ export interface NavigateTarget {
 
 interface OverviewProps {
   readonly context: string;
+  /** The cluster as the kubeconfig describes it, for the hero. */
+  readonly cluster?: { name: string; server?: string | null | undefined; provider: string } | undefined;
+  /** Called after the display name or colour is changed, so the strip updates. */
+  readonly onDecorChanged?: (() => void) | undefined;
   /**
    * Opens the thing that was clicked.
    *
@@ -41,7 +46,7 @@ interface OverviewProps {
   readonly onNavigate: (target: NavigateTarget) => void;
 }
 
-export function Overview({ context, onNavigate }: OverviewProps) {
+export function Overview({ context, cluster, onDecorChanged, onNavigate }: OverviewProps) {
   const [nodeMetrics, setNodeMetrics] = useState<MetricsResponse | null>(null);
   const [pods, setPods] = useState<KubeItem[]>([]);
   const [nodes, setNodes] = useState<KubeItem[]>([]);
@@ -186,62 +191,21 @@ export function Overview({ context, onNavigate }: OverviewProps) {
 
   return (
     <div data-testid="overview" className="min-h-0 flex-1 overflow-auto p-4">
-      <div className="mb-4 grid grid-cols-4 gap-3">
-        <Menu label="Pods" entries={[{ id: 'open', label: 'Open pods', onSelect: () => onNavigate({ kind: 'Pod' }) }, ...copyEntry('copy', 'Copy value', String(pods.length))]} testId="stat-menu">
-        <div className="min-w-0">
-        <Stat
-          label="Pods"
-          loading={!ready}
-          value={String(pods.length)}
-          hint={`${health.ok} running`}
-          onClick={() => onNavigate({ kind: 'Pod' })}
-        />
-        </div>
-        </Menu>
-        <Menu label="Not running" entries={[{ id: 'open', label: 'Open pods', onSelect: () => onNavigate({ kind: 'Pod' }) }, askEntry('Ask why these are not running', 'Which pods are not running in this cluster, why, and what should I do about each? Use whats_wrong first.'), ...copyEntry('copy', 'Copy value', String(health.error + health.warn))]} testId="stat-menu">
-        <div className="min-w-0">
-        <Stat
-          label="Not running"
-          loading={!ready}
-          value={String(health.error + health.warn)}
-          tone={health.error > 0 ? 'error' : health.warn > 0 ? 'warn' : 'default'}
-          hint={health.error > 0 ? `${health.error} failing` : 'nothing failing'}
-          // Opens the pod list already filtered to the thing the number counts.
-          onClick={() =>
-            onNavigate({
-              kind: 'Pod',
-              ...(troubled[0]?.metadata?.name ? { name: troubled[0].metadata.name } : {}),
-            })
-          }
-        />
-        </div>
-        </Menu>
-        <Menu label="Nodes" entries={[{ id: 'open', label: 'Open nodes', onSelect: () => onNavigate({ kind: 'Node' }) }, ...copyEntry('copy', 'Copy value', String(nodes.length))]} testId="stat-menu">
-        <div className="min-w-0">
-        <Stat
-          label="Nodes"
-          loading={!ready}
-          value={String(nodes.length)}
-          hint={`${formatCpu(totalCpu)} cores`}
-          onClick={() => onNavigate({ kind: 'Node' })}
-        />
-        </div>
-        </Menu>
-        <Menu label="CPU in use" entries={[{ id: 'open', label: 'Open nodes', onSelect: () => onNavigate({ kind: 'Node' }) }, ...copyEntry('copy', 'Copy value', totalCpu > 0 ? `${Math.round((usedCpu / totalCpu) * 100)}%` : '-')]} testId="stat-menu">
-        <div className="min-w-0">
-        <Stat
-          label="CPU in use"
-          loading={!ready}
-          value={totalCpu > 0 ? `${Math.round((usedCpu / totalCpu) * 100)}%` : '-'}
-          hint={`${formatCpu(usedCpu)} of ${formatCpu(totalCpu)}`}
-          onClick={() => onNavigate({ kind: 'Node' })}
-        />
-        </div>
-        </Menu>
-      </div>
-
-      <div className="mb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-        <Card title="Capacity" subtitle="requests and limits against what nodes can schedule">
+      <ClusterHero
+        context={context}
+        cluster={cluster}
+        ready={ready}
+        pods={pods.length}
+        nodes={nodes.length}
+        health={health}
+        version={(nodes[0]?.status as { nodeInfo?: { kubeletVersion?: string } } | undefined)?.nodeInfo?.kubeletVersion}
+        onDecorChanged={onDecorChanged}
+        usage={{ cpu: totalCpu > 0 ? usedCpu / totalCpu : null, cpuText: `${formatCpu(usedCpu)} of ${formatCpu(totalCpu)}`, memory: capacity.memAlloc > 0 ? capacity.memReq / capacity.memAlloc : null, memoryText: `${formatMemory(capacity.memReq)} of ${formatMemory(capacity.memAlloc)} requested` }}
+        onOpenPods={(filter) => onNavigate({ kind: 'Pod', ...(filter ? { filter } : {}) })}
+        onOpenNodes={() => onNavigate({ kind: 'Node' })}
+      />
+      <div className="mb-4 grid gap-3.5" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+        <Card title="Capacity" icon={GaugeIcon} tint="var(--series-1)" subtitle="requests and limits against what nodes can schedule">
           <div className="space-y-3">
             <CapacityBar
               onOpen={() => onNavigate({ kind: 'Node' })}
@@ -262,7 +226,7 @@ export function Overview({ context, onNavigate }: OverviewProps) {
           </div>
         </Card>
 
-        <Card title="Pods by status" subtitle={`${pods.length} total`}>
+        <Card title="Pods by status" icon={PieChart} tint="var(--status-ok)" subtitle={`${pods.length} total`}>
           {pods.length === 0 ? (
             <p className="py-4 text-center text-[12.5px] text-tertiary">{ready ? 'No pods.' : 'Connecting…'}</p>
           ) : (
@@ -271,9 +235,9 @@ export function Overview({ context, onNavigate }: OverviewProps) {
         </Card>
       </div>
 
-      <div className="relative mb-4 flex gap-3">
+      <div className="relative mb-4 flex gap-3.5">
         <div className="relative shrink-0" style={{ width: split.width }}>
-        <Card title="CPU by node" subtitle="last hour, cores" className="h-full">
+        <Card title="CPU by node" icon={Activity} tint="var(--series-1)" subtitle="last hour, cores" className="h-full">
           {nodeMetrics?.available ? (
             <TimeSeries
               series={cpuSeries}
@@ -290,7 +254,7 @@ export function Overview({ context, onNavigate }: OverviewProps) {
         </div>
 
         {/* Deliberately a second chart rather than a second axis on the first. */}
-        <Card title="Memory by node" subtitle="last hour" className="min-w-0 flex-1">
+        <Card title="Memory by node" icon={Activity} tint="var(--series-2)" subtitle="last hour" className="min-w-0 flex-1">
           {nodeMetrics?.available ? (
             <TimeSeries
               series={memorySeries}
@@ -308,6 +272,8 @@ export function Overview({ context, onNavigate }: OverviewProps) {
       <div className="grid grid-cols-2 gap-3">
         <Card
           title="Needs attention"
+          icon={AlertTriangle}
+          tint="var(--status-error)"
           subtitle={
             !ready ? 'checking…' : troubled.length === 0 ? 'everything is running' : `${troubled.length} workloads`
           }
@@ -341,7 +307,7 @@ export function Overview({ context, onNavigate }: OverviewProps) {
                     style={{ transitionProperty: 'background-color', transitionDuration: '90ms' }}
                   >
                     <StatusChip status={podStatus(pod as never)} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-primary">
+                    <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-[12px] text-primary">
                       {pod.metadata?.name}
                     </span>
                     <span className="shrink-0 text-[11.5px] text-tertiary">
@@ -355,7 +321,7 @@ export function Overview({ context, onNavigate }: OverviewProps) {
           )}
         </Card>
 
-        <Card title="Recent warnings" subtitle={`${warnings.length} events`}>
+        <Card title="Recent warnings" icon={Bell} tint="var(--status-warn)" subtitle={`${warnings.length} events`}>
           {warnings.length === 0 ? (
             <p className="py-6 text-center text-[12.5px] text-tertiary">No warning events.</p>
           ) : (

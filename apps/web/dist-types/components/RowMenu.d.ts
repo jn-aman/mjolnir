@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { KubeItem } from './columns.tsx';
+import { type MenuEntry } from './ui/ContextMenu.tsx';
 /**
  * The right-click menu on a resource row.
  *
@@ -17,6 +18,11 @@ interface RowMenuProps {
     readonly act: (action: RowActionId) => void;
     readonly children: ReactNode;
 }
+/**
+ * The entries for one row. Shared by the right-click menu and the row's own
+ * actions button, so both offer exactly the same verbs.
+ */
+export declare function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowActionId) => void): MenuEntry[];
 export declare function RowMenu({ item, kind, act, children }: RowMenuProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=RowMenu.d.ts.map

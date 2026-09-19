@@ -15,9 +15,10 @@ interface EditableKeyValuesProps {
     readonly values: Record<string, string>;
     /** Sends a merge patch for this map alone and resolves when applied. */
     readonly onPatch: (patch: Record<string, string | null>) => Promise<void>;
-    readonly truncate?: boolean;
     readonly testId?: string;
+    readonly validateKey?: ((key: string) => string | null) | undefined;
+    readonly validateValue?: ((value: string) => string | null) | undefined;
 }
-export declare function EditableKeyValues({ values, onPatch, truncate, testId }: EditableKeyValuesProps): import("react").JSX.Element;
+export declare function EditableKeyValues({ values, onPatch, testId, validateKey, validateValue }: EditableKeyValuesProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=EditableKeyValues.d.ts.map

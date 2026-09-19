@@ -201,7 +201,7 @@ function Step({ step }: { step: ToolStep }) {
           {open ? <ChevronDown size={12} strokeWidth={2} aria-hidden className="text-tertiary" /> : <ChevronRight size={12} strokeWidth={2} aria-hidden className="text-tertiary" />}
           <Wrench size={12} strokeWidth={1.9} aria-hidden className="text-accent" />
           <span className="font-mono text-primary">{step.name}</span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-tertiary">{summary}</span>
+          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-[11.5px] text-tertiary">{summary}</span>
           {step.ok === undefined ? (
             <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-accent" aria-label="running" />
           ) : step.ok ? (

@@ -10,8 +10,8 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-[var(--accent-solid)] text-inverse border-transparent hover:brightness-110',
-  secondary: 'bg-raised text-primary border-line hover:border-strong hover:bg-hover',
+  primary: 'btn-primary text-inverse border-transparent hover:brightness-110 hover:-translate-y-px',
+  secondary: 'btn-secondary text-primary border-line hover:border-strong hover:-translate-y-px',
   ghost: 'bg-transparent text-secondary border-transparent hover:bg-hover hover:text-primary',
   danger: 'bg-error-bg text-error border-[var(--status-error-border)] hover:brightness-110',
 };

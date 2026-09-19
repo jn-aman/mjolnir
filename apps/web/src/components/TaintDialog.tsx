@@ -6,6 +6,7 @@ import { Field } from './ui/Field.tsx';
 import { Select } from './ui/Select.tsx';
 import type { KubeItem } from './columns.tsx';
 import type { Taint } from '../lib/edits.ts';
+import { labelKey, labelValue } from '../lib/validate.ts';
 
 /** `kubectl taint`, as a list you edit rather than a syntax you remember. */
 interface TaintDialogProps {
@@ -34,9 +35,11 @@ export function TaintDialog({ node, onClose, onApply }: TaintDialogProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node]);
 
+  const keyProblem = key.trim() ? labelKey(key.trim()) : null;
+  const valueProblem = value.trim() ? labelValue(value.trim()) : null;
   const add = () => {
     const k = key.trim();
-    if (!k) return;
+    if (!k || keyProblem || valueProblem) return;
     setTaints((current) => [...current.filter((t) => !(t.key === k && t.effect === effect)), { key: k, ...(value.trim() ? { value: value.trim() } : {}), effect }]);
     setKey('');
     setValue('');
@@ -95,15 +98,15 @@ export function TaintDialog({ node, onClose, onApply }: TaintDialogProps) {
       </div>
 
       <div className="mt-4 flex items-end gap-2">
-        <Field id="taint-key" label="Key" mono value={key} onChange={(e) => setKey(e.target.value)} placeholder="dedicated" className="flex-1" />
-        <Field id="taint-value" label="Value" mono value={value} onChange={(e) => setValue(e.target.value)} placeholder="gpu" className="flex-1" />
+        <Field id="taint-key" label="Key" mono value={key} onChange={(e) => setKey(e.target.value)} placeholder="dedicated" className="flex-1" validate={(v) => (v ? labelKey(v) : null)} />
+        <Field id="taint-value" label="Value" mono value={value} onChange={(e) => setValue(e.target.value)} placeholder="gpu" className="flex-1" validate={(v) => (v ? labelValue(v) : null)} />
         <Select
           label="Effect"
           value={effect}
           onChange={(next) => setEffect(next as Taint['effect'])}
           options={EFFECTS}
         />
-        <Button onClick={add} icon={<Plus size={13} strokeWidth={2} />} aria-label="Add taint">
+        <Button onClick={add} disabled={!key.trim() || keyProblem !== null || valueProblem !== null} icon={<Plus size={13} strokeWidth={2} />} aria-label="Add taint">
           Add
         </Button>
       </div>

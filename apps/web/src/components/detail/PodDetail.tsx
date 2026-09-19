@@ -5,6 +5,7 @@ import { age } from '../columns.tsx';
 import { EditableKeyValues } from './EditableKeyValues.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { EditableText } from '../ui/EditableText.tsx';
+import { annotationValue, cpuQuantity, imageRef, labelKey, labelValue, memoryQuantity } from '../../lib/validate.ts';
 import { detectObjectStorage, StorageCard } from './StorageCard.tsx';
 import { scanImage } from '../ScanDialog.tsx';
 import type { ContainerChange } from '../../lib/edits.ts';
@@ -133,7 +134,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
   const memoryLimit = pod.spec?.containers?.[0]?.resources?.limits?.['memory'];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* What is wrong, first and in plain language. */}
       {terminated ? (
         <Callout tone="error" title={`Last exit: ${terminated.reason} (code ${terminated.exitCode})`}>
@@ -237,7 +238,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
             values={pod.metadata?.labels ?? {}}
             testId="labels"
             onPatch={(patch) => onPatchMetadata({ labels: patch })}
-          />
+           validateKey={labelKey} validateValue={labelValue} />
         ) : (
           <KeyValues values={pod.metadata?.labels ?? {}} />
         )}
@@ -248,11 +249,10 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
           <EditableKeyValues
             values={pod.metadata?.annotations ?? {}}
             testId="annotations"
-            truncate
             onPatch={(patch) => onPatchMetadata({ annotations: patch })}
-          />
+           validateKey={labelKey} validateValue={annotationValue} />
         ) : (
-          <KeyValues values={pod.metadata?.annotations ?? {}} truncate />
+          <KeyValues values={pod.metadata?.annotations ?? {}} />
         )}
       </Section>
 
@@ -273,11 +273,11 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
                       condition.status === 'True' ? 'var(--status-ok)' : 'var(--status-warn)',
                   }}
                 />
-                <span title={condition.type} className="truncate text-[12.5px] text-primary">
+                <span title={condition.type} className="break-words [overflow-wrap:anywhere] text-[12.5px] text-primary">
                   {condition.type}
                 </span>
                 <span className="font-mono text-[11.5px] text-secondary">{condition.status}</span>
-                <span title={condition.reason} className="truncate text-[12px] text-secondary">
+                <span title={condition.reason} className="break-words [overflow-wrap:anywhere] text-[12px] text-secondary">
                   {condition.reason ?? ''}
                 </span>
               </div>
@@ -338,7 +338,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
                   key={volume.name}
                   className="flex items-center gap-2 rounded-md border border-line bg-raised px-3 py-1.5"
                 >
-                  <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-primary">
+                  <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-[12px] text-primary">
                     {volume.name}
                   </span>
                   {ref && ref.name ? (
@@ -470,7 +470,7 @@ function ContainerCard({
           label="Image"
           value={spec?.image ?? status.image ?? '-'}
           mono
-          {...(onEditContainer ? { onEdit: (next: string) => onEditContainer(status.name ?? '', { image: next }) } : {})}
+          {...(onEditContainer ? { onEdit: (next: string) => onEditContainer(status.name ?? '', { image: next }), validate: imageRef } : {})}
         />
         {spec?.imagePullPolicy ? <Line label="Pull policy" value={spec.imagePullPolicy} /> : null}
         {status.state?.waiting?.message ? (
@@ -516,6 +516,7 @@ function ContainerCard({
                       {onEditContainer ? (
                         <EditableText
                           label={`${group} ${resource}`}
+                          validate={resource === 'cpu' ? cpuQuantity : memoryQuantity}
                           value={current ?? '-'}
                           onCommit={(next) => onEditContainer(status.name ?? '', { resources: { [group]: { [resource]: next } } })}
                         />
@@ -551,7 +552,7 @@ function ContainerCard({
               {spec.env.map((entry) => (
                 <div key={entry.name} className="flex gap-2">
                   <dt className="shrink-0 text-accent">{entry.name}</dt>
-                  <dd className="m-0 min-w-0 truncate text-secondary">
+                  <dd className="m-0 min-w-0 break-words [overflow-wrap:anywhere] text-secondary">
                     {entry.value !== undefined
                       ? (
                           <>
@@ -651,7 +652,8 @@ function describeProbe(probe: Probe): string {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-tertiary">
+      <h3 className="mb-2.5 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-tertiary">
+        <span aria-hidden className="h-[10px] w-[3px] rounded-full bg-accent" />
         {title}
       </h3>
       {children}
@@ -667,12 +669,12 @@ function Fields({ rows }: { rows: readonly FieldRow[] }) {
       {rows.map(([label, value, mono, onClick]) => (
         <div key={label} className="contents">
           <dt className="text-secondary">{label}</dt>
-          <dd className={`m-0 truncate ${mono ? 'font-mono text-[12px]' : ''}`}>
+          <dd className={`m-0 break-words [overflow-wrap:anywhere] ${mono ? 'font-mono text-[12px]' : ''}`}>
             {onClick ? (
               <button
                 type="button"
                 onClick={onClick}
-                className="truncate text-accent underline-offset-2 hover:underline"
+                className="break-words [overflow-wrap:anywhere] text-accent underline-offset-2 hover:underline"
               >
                 {value}
               </button>
@@ -686,7 +688,7 @@ function Fields({ rows }: { rows: readonly FieldRow[] }) {
   );
 }
 
-function KeyValues({ values, truncate = false }: { values: Record<string, string>; truncate?: boolean }) {
+function KeyValues({ values }: { values: Record<string, string> }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {Object.entries(values).map(([key, value]) => (
@@ -694,7 +696,7 @@ function KeyValues({ values, truncate = false }: { values: Record<string, string
           key={key}
           title={`${key}=${value}`}
           className={`rounded-md border border-[var(--border-strong)] bg-overlay px-2 py-[3px] font-mono text-[11px] ${
-            truncate ? 'max-w-[280px] truncate' : ''
+            ''
           }`}
         >
           <span className="text-secondary">{key}</span>
@@ -712,12 +714,14 @@ function Line({
   mono = false,
   tone = 'default',
   onEdit,
+  validate,
 }: {
   label: string;
   value: string;
   mono?: boolean;
   tone?: 'default' | 'warn';
   onEdit?: ((next: string) => Promise<void>) | undefined;
+  validate?: ((next: string) => string | null) | undefined;
 }) {
   return (
     <div className="flex gap-3 text-[11.5px]">
@@ -727,7 +731,7 @@ function Line({
           tone === 'warn' ? 'text-warn' : 'text-secondary'
         }`}
       >
-        {onEdit ? <EditableText label={label.toLowerCase()} value={value} mono={mono} onCommit={onEdit} testId={`edit-${label.toLowerCase()}`} /> : value}
+        {onEdit ? <EditableText label={label.toLowerCase()} value={value} mono={mono} onCommit={onEdit} validate={validate} testId={`edit-${label.toLowerCase()}`} /> : value}
       </span>
     </div>
   );

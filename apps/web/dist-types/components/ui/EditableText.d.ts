@@ -14,7 +14,9 @@ interface EditableTextProps {
     readonly disabledReason?: string | undefined;
     readonly className?: string;
     readonly testId?: string;
+    /** Returns a sentence when the draft is not acceptable; saving is blocked. */
+    readonly validate?: ((next: string) => string | null) | undefined;
 }
-export declare function EditableText({ value, label, onCommit, mono, disabledReason, className, testId }: EditableTextProps): import("react").JSX.Element;
+export declare function EditableText({ value, label, onCommit, mono, disabledReason, className, testId, validate }: EditableTextProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=EditableText.d.ts.map

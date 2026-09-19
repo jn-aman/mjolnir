@@ -1,29 +1,33 @@
 import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 interface CardProps {
     readonly title?: string;
     readonly subtitle?: string;
+    readonly icon?: LucideIcon | undefined;
+    readonly tint?: string | undefined;
     readonly actions?: ReactNode;
     readonly children: ReactNode;
     readonly className?: string;
+    /** Lifts on hover, for cards that open something. */
+    readonly interactive?: boolean;
 }
-/** A panel. Border and surface only, no shadow at rest, no gradient, ever. */
-export declare function Card({ title, subtitle, actions, children, className }: CardProps): import("react").JSX.Element;
+/** A panel with depth: lit top edge, soft shadow, an icon chip when it has a subject. */
+export declare function Card({ title, subtitle, icon: Icon, tint, actions, children, className, interactive }: CardProps): import("react").JSX.Element;
 interface StatProps {
     readonly label: string;
     readonly value: string;
     readonly hint?: string;
     readonly tone?: 'default' | 'ok' | 'warn' | 'error';
-    /** Makes the tile a link to whatever the number counts. */
+    readonly icon?: LucideIcon | undefined;
+    /** A small trend under the number, e.g. "+2 in the last hour". */
+    readonly trend?: ReactNode;
     readonly onClick?: (() => void) | undefined;
-    /** Shows a placeholder instead of a number that is not known yet. */
     readonly loading?: boolean;
 }
 /**
- * A single number, given room.
- *
- * Not every measure deserves a chart. One value with no trend is a stat tile,
- * and drawing it as a one-bar chart wastes the space and says less.
+ * A single number, given room and light. The tone colours a soft glow in
+ * the corner and the icon chip; the number stays the loudest thing.
  */
-export declare function Stat({ label, value, hint, tone, onClick, loading }: StatProps): import("react").JSX.Element;
+export declare function Stat({ label, value, hint, tone, icon: Icon, trend, onClick, loading }: StatProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Card.d.ts.map

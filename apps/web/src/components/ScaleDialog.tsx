@@ -23,7 +23,12 @@ export function ScaleDialog({ item, kind, onClose, onScale }: ScaleDialogProps) 
   const current = typeof item?.spec?.['replicas'] === 'number' ? (item.spec['replicas'] as number) : 1;
   const [value, setValue] = useState(current);
   const [busy, setBusy] = useState(false);
-  useEffect(() => setValue(current), [current, item]);
+  const [raw, setRaw] = useState(String(current));
+  const problem = /^\d+$/.test(raw.trim()) ? null : 'A whole number, 0 or more.';
+  useEffect(() => {
+    setValue(current);
+    setRaw(String(current));
+  }, [current, item]);
 
   const submit = async () => {
     setBusy(true);
@@ -49,29 +54,34 @@ export function ScaleDialog({ item, kind, onClose, onScale }: ScaleDialogProps) 
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" data-testid="scale-apply" disabled={busy || value === current} onClick={() => void submit()}>
+          <Button variant="primary" data-testid="scale-apply" disabled={busy || value === current || problem !== null} onClick={() => void submit()}>
             {busy ? 'Scaling…' : `Scale to ${value}`}
           </Button>
         </>
       }
     >
       <div className="flex items-center justify-center gap-3 pb-1">
-        <Button iconOnly aria-label="Fewer" disabled={value <= 0} onClick={() => setValue((v) => Math.max(0, v - 1))} icon={<Minus size={14} strokeWidth={2} />} />
+        <Button iconOnly aria-label="Fewer" disabled={value <= 0} onClick={() => setValue((v) => { const n = Math.max(0, v - 1); setRaw(String(n)); return n; })} icon={<Minus size={14} strokeWidth={2} />} />
         <input
-          type="number"
-          min={0}
-          value={value}
-          onChange={(event) => setValue(Math.max(0, Number(event.target.value) || 0))}
+          type="text"
+          inputMode="numeric"
+          value={raw}
+          aria-invalid={problem ? true : undefined}
+          onChange={(event) => {
+            setRaw(event.target.value);
+            if (/^\d+$/.test(event.target.value.trim())) setValue(Number(event.target.value.trim()));
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') void submit();
+            if (event.key === 'Enter' && !problem) void submit();
           }}
           aria-label="Replicas"
           data-testid="scale-input"
           className="h-[44px] w-[96px] rounded-lg border border-line bg-sunken text-center font-mono text-[20px] tabular-nums text-primary outline-none focus:border-focus"
         />
-        <Button iconOnly aria-label="More" onClick={() => setValue((v) => v + 1)} icon={<Plus size={14} strokeWidth={2} />} />
+        <Button iconOnly aria-label="More" onClick={() => setValue((v) => { setRaw(String(v + 1)); return v + 1; })} icon={<Plus size={14} strokeWidth={2} />} />
       </div>
-      {value === 0 ? (
+      {problem ? <p className="mt-3 text-center text-[12px] text-error" data-testid="scale-error">{problem}</p> : null}
+      {value === 0 && !problem ? (
         <p className="mt-3 text-center text-[12px] text-warn">Zero replicas stops the workload. Its pods will be removed.</p>
       ) : null}
     </Modal>

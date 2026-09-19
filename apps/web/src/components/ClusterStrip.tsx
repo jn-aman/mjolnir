@@ -35,11 +35,12 @@ function initials(name: string): string {
 interface ClusterStripProps {
   readonly contexts: readonly ClusterContext[];
   readonly current: string | null;
+  readonly decor?: Record<string, { label?: string; color?: string }> | undefined;
   readonly onSelect: (name: string) => void;
   readonly onAdd: () => void;
 }
 
-export function ClusterStrip({ contexts, current, onSelect, onAdd }: ClusterStripProps) {
+export function ClusterStrip({ contexts, current, decor = {}, onSelect, onAdd }: ClusterStripProps) {
   return (
     <nav
       data-testid="cluster-strip"
@@ -84,18 +85,21 @@ export function ClusterStrip({ contexts, current, onSelect, onAdd }: ClusterStri
                   whileHover={{ scale: 1.06 }}
                   whileTap={{ scale: 0.94 }}
                   transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                  className={`flex h-full w-full items-center justify-center rounded-lg border text-[12px] font-semibold ${
-                    active
-                      ? 'border-transparent bg-pressed text-primary'
-                      : 'border-line bg-raised text-tertiary group-hover:border-strong group-hover:text-secondary'
+                  className={`flex h-full w-full items-center justify-center rounded-xl border text-[12px] font-bold ${
+                    active ? 'border-transparent text-white' : 'border-line bg-raised text-tertiary group-hover:border-strong group-hover:text-secondary'
                   }`}
+                  style={
+                    active
+                      ? { background: `linear-gradient(145deg, color-mix(in oklab, ${decor[context.name]?.color ?? PROVIDER_TINT[context.provider] ?? 'var(--accent-base)'} 100%, white 14%), color-mix(in oklab, ${decor[context.name]?.color ?? PROVIDER_TINT[context.provider] ?? 'var(--accent-base)'} 100%, black 22%))`, boxShadow: `0 1px 0 rgb(255 255 255 / 0.22) inset, 0 6px 16px color-mix(in oklab, ${decor[context.name]?.color ?? PROVIDER_TINT[context.provider] ?? 'var(--accent-base)'} 40%, transparent)` }
+                      : { boxShadow: '0 1px 0 var(--highlight) inset' }
+                  }
                 >
-                  {initials(context.name)}
+                  {initials(decor[context.name]?.label || context.name)}
                 </motion.span>
                 <span
                   aria-hidden
                   className="absolute -bottom-px right-0 h-[7px] w-[7px] rounded-full border-2 border-[var(--surface-sunken)]"
-                  style={{ background: PROVIDER_TINT[context.provider] ?? 'var(--text-tertiary)' }}
+                  style={{ background: decor[context.name]?.color ?? PROVIDER_TINT[context.provider] ?? 'var(--text-tertiary)' }}
                 />
               </button>
             </Tooltip.Trigger>
@@ -106,7 +110,7 @@ export function ClusterStrip({ contexts, current, onSelect, onAdd }: ClusterStri
                 sideOffset={8}
                 className="rounded-md border border-line bg-overlay px-2 py-1 shadow-[var(--shadow-md)]"
               >
-                <div className="font-mono text-[11.5px] text-primary">{context.name}</div>
+                <div className="font-mono text-[11.5px] text-primary">{decor[context.name]?.label || context.name}</div>
                 {context.server ? (
                   <div className="font-mono text-[10.5px] text-tertiary">{context.server}</div>
                 ) : null}

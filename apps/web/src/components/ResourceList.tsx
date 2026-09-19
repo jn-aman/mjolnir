@@ -1,12 +1,15 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { motion } from 'motion/react';
-import { Check, Columns3, GripVertical, RotateCcw } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Check, Columns3, GripVertical, RotateCcw, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WatchState } from '@mjolnir/k8s';
 import { type Column, type KubeItem, columnsFor } from './columns.tsx';
-import { RowMenu } from './RowMenu.tsx';
+import { rowMenuEntries, type RowActionId } from './RowMenu.tsx';
+import { RowActions } from './RowActions.tsx';
+import { Checkbox } from './ui/Checkbox.tsx';
 import { Menu, type MenuEntry } from './ui/ContextMenu.tsx';
+import { KindMark } from './ui/KindMark.tsx';
 import { useTablePrefs } from '../lib/tablePrefs.ts';
 
 /**
@@ -35,9 +38,11 @@ interface ResourceListProps {
   readonly onAction?: (action: string, item: KubeItem) => void;
   /** Replaces the Kubernetes row menu, for lists of other things. */
   readonly menu?: ((item: KubeItem) => MenuEntry[]) | undefined;
+  /** Verbs for several rows at once. A checkbox column appears when given. */
+  readonly bulk?: readonly BulkAction[] | undefined;
 }
 
-const ROW_HEIGHT = 34;
+const ROW_HEIGHT = 42;
 const MIN_WIDTH = 60;
 
 type SortState = { readonly columnId: string; readonly direction: 'asc' | 'desc' } | null;
@@ -74,6 +79,19 @@ function deepText(item: object): string {
   return text;
 }
 
+export interface BulkAction {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: React.ReactNode;
+  readonly danger?: boolean;
+  /** Runs on the selected rows; the selection clears when it resolves. */
+  readonly run: (items: KubeItem[]) => Promise<void> | void;
+  /** Offered only when every selected row passes. */
+  readonly applies?: (item: KubeItem) => boolean;
+}
+
+const rowKey = (item: KubeItem) => `${item.metadata?.namespace ?? ''}/${item.metadata?.name ?? ''}`;
+
 export function ResourceList({
   kind,
   items,
@@ -86,7 +104,24 @@ export function ResourceList({
   onSelect,
   onAction,
   menu,
+  bulk,
 }: ResourceListProps) {
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
+  const chosen = () => visible.filter((item) => picked.has(rowKey(item)));
+  useEffect(() => {
+    // A row that goes away takes its tick with it.
+    setPicked((current) => {
+      if (current.size === 0) return current;
+      const present = new Set(items.map(rowKey));
+      if ([...current].every((k) => present.has(k))) return current;
+      return new Set([...current].filter((k) => present.has(k)));
+    });
+  }, [items]);
+  useEffect(() => {
+    setPicked(new Set());
+  }, [kind]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sort, setSort] = useState<SortState>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -224,13 +259,24 @@ export function ResourceList({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="resource-list" data-kind={kind}>
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-testid="resource-list" data-kind={kind}>
       <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
         <div
           role="row"
-          className="sticky top-0 z-10 grid h-[32px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.05em] text-tertiary"
-          style={{ gridTemplateColumns: `${template} minmax(40px, 1fr)` }}
+          className="sticky top-0 z-10 grid h-[36px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.06em] text-tertiary"
+          style={{ gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(96px, 1fr)` }}
         >
+          {bulk ? (
+            <div className="flex h-full items-center justify-center">
+              <Checkbox
+                checked={visible.length > 0 && visible.every((item) => picked.has(rowKey(item)))}
+                indeterminate={picked.size > 0 && !visible.every((item) => picked.has(rowKey(item)))}
+                label="Select every row"
+                testId="select-all"
+                onChange={(next) => setPicked(next ? new Set(visible.map(rowKey)) : new Set())}
+              />
+            </div>
+          ) : null}
           {columns.map((column) => (
             <div
               key={column.id}
@@ -262,7 +308,7 @@ export function ResourceList({
                 type="button"
                 onClick={() => toggleSort(column)}
                 disabled={!column.sortBy}
-                className={`truncate text-inherit transition-colors duration-100 ${
+                className={`break-words [overflow-wrap:anywhere] text-inherit transition-colors duration-100 ${
                   column.sortBy ? 'cursor-pointer hover:text-secondary' : 'cursor-default'
                 }`}
               >
@@ -321,57 +367,98 @@ export function ResourceList({
                 const selected = item.metadata?.name === selectedName;
                 const act = (action: string) => onAction?.(action, item);
 
-                const Wrap = menu
-                  ? ({ children }: { children: React.ReactElement }) => (
-                      <Menu label={item.metadata?.name ?? ''} entries={menu(item)} testId="row-menu">
-                        {children}
-                      </Menu>
-                    )
-                  : ({ children }: { children: React.ReactElement }) => (
-                      <RowMenu item={item} kind={kind} act={act}>
-                        {children}
-                      </RowMenu>
-                    );
+                const entries = menu ? menu(item) : rowMenuEntries(item, kind, act as (action: RowActionId) => void);
+                const key = rowKey(item);
                 return (
-                  <Wrap key={item.metadata?.name ?? row.index}>
+                  <Menu key={item.metadata?.name ?? row.index} label={item.metadata?.name ?? ''} entries={entries} testId="row-menu">
                     <div
                       data-testid="resource-row"
                       data-selected={selected}
                       role="row"
                       tabIndex={0}
-                      onClick={() => onSelect?.(item)}
+                      onClick={(event) => {
+                        if (bulk && (event.metaKey || event.ctrlKey)) {
+                          setPicked((current) => {
+                            const out = new Set(current);
+                            if (out.has(key)) out.delete(key);
+                            else out.add(key);
+                            return out;
+                          });
+                          setAnchor(key);
+                          return;
+                        }
+                        onSelect?.(item);
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           onSelect?.(item);
                         }
                       }}
-                      className={`absolute inset-x-0 grid cursor-pointer items-center border-b border-subtle transition-colors duration-100 ${
-                        selected ? 'bg-pressed' : 'hover:bg-hover'
+                      data-index={row.index}
+                      ref={virtualizer.measureElement}
+                      className={`group/row absolute inset-x-0 grid cursor-pointer items-center border-b border-subtle data-[state=open]:bg-hover data-[state=open]:shadow-[inset_0_0_0_1px_var(--border-strong)] ${
+                        selected ? 'row-selected' : 'row-hover'
                       }`}
                       style={{
-                        gridTemplateColumns: `${template} minmax(40px, 1fr)`,
-                        height: row.size,
+                        gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(96px, 1fr)`,
+                        minHeight: ROW_HEIGHT,
                         transform: `translateY(${row.start}px)`,
                       }}
                     >
                       {selected ? (
                         <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-accent" />
                       ) : null}
+                      {bulk ? (
+                        <div className="flex h-full items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                          <Checkbox
+                            checked={picked.has(key)}
+                            label={`Select ${item.metadata?.name ?? ''}`}
+                            testId="row-select"
+                            onChange={(next, event) => {
+                              setPicked((current) => {
+                                const out = new Set(current);
+                                // Shift extends from the last row you ticked.
+                                if (event?.shiftKey && anchor) {
+                                  const keys = visible.map(rowKey);
+                                  const from = keys.indexOf(anchor);
+                                  const to = keys.indexOf(key);
+                                  if (from !== -1 && to !== -1) {
+                                    for (let i = Math.min(from, to); i <= Math.max(from, to); i += 1) {
+                                      const k = keys[i];
+                                      if (!k) continue;
+                                      if (next) out.add(k);
+                                      else out.delete(k);
+                                    }
+                                    return out;
+                                  }
+                                }
+                                if (next) out.add(key);
+                                else out.delete(key);
+                                return out;
+                              });
+                              setAnchor(key);
+                            }}
+                          />
+                        </div>
+                      ) : null}
                       {columns.map((column) => (
                         <div
                           key={column.id}
                           data-testid={`cell-${column.id}`}
-                          className={`flex min-w-0 items-center px-3 ${
+                          className={`flex min-w-0 items-center gap-2.5 px-3 py-2 ${
                             column.align === 'right' ? 'justify-end' : 'justify-start'
                           }`}
                         >
+                          {column.id === 'name' ? <KindMark kind={(item.spec as { kind?: string } | undefined)?.kind === 'prefix' ? 'StoragePrefix' : kind} /> : null}
                           {column.content(item)}
                         </div>
                       ))}
-                      <div />
+                      <div className="flex h-full items-center justify-end px-2" onClick={(event) => event.stopPropagation()}>
+                        <RowActions entries={entries} name={item.metadata?.name ?? ''} />
+                      </div>
                     </div>
-                  </Wrap>
+                  </Menu>
                 );
               })}
             </div>
@@ -388,6 +475,50 @@ export function ResourceList({
         {state === 'synced' ? <span className="text-ok">watching</span> : null}
         {state === 'error' ? <span className="text-warn">reconnecting</span> : null}
       </div>
+      <AnimatePresence>
+        {bulk && picked.size > 0 ? (
+          <motion.div
+            key="bulk-bar"
+            data-testid="bulk-bar"
+            initial={{ y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 24, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            className="surface-card absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 !rounded-full px-2 py-1.5"
+            style={{ boxShadow: 'var(--shadow-lift)' }}
+          >
+            <span className="px-2 text-[12.5px] text-secondary">
+              <span className="font-mono text-primary">{picked.size}</span> selected
+            </span>
+            <span className="h-4 w-px bg-[var(--border-default)]" />
+            {bulk
+              .filter((action) => !action.applies || chosen().every(action.applies))
+              .map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-testid={`bulk-${action.id}`}
+                  disabled={running !== null}
+                  onClick={() => {
+                    setRunning(action.id);
+                    void Promise.resolve(action.run(chosen()))
+                      .then(() => setPicked(new Set()))
+                      .catch(() => undefined)
+                      .finally(() => setRunning(null));
+                  }}
+                  className={`flex h-[28px] items-center gap-1.5 rounded-full px-2.5 text-[12px] transition-colors duration-100 disabled:opacity-50 ${action.danger ? 'text-error hover:bg-error-bg' : 'text-primary hover:bg-hover'}`}
+                >
+                  {action.icon}
+                  {running === action.id ? 'Working…' : action.label}
+                </button>
+              ))}
+            <span className="h-4 w-px bg-[var(--border-default)]" />
+            <button type="button" data-testid="bulk-clear" onClick={() => setPicked(new Set())} className="flex h-[28px] items-center gap-1 rounded-full px-2.5 text-[12px] text-tertiary hover:bg-hover hover:text-primary">
+              <X size={12} strokeWidth={2} aria-hidden /> Clear
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

@@ -57,7 +57,7 @@ export function ForwardsPanel({ onOpenPod }: { readonly onOpenPod?: ((record: Fo
                   {record.namespace} · {record.context}
                   {record.connections ? ` · ${record.connections} open` : ''}
                 </span>
-                {record.lastError ? <span className="truncate text-[11.5px] text-error">{record.lastError}</span> : null}
+                {record.lastError ? <span className="break-words [overflow-wrap:anywhere] text-[11.5px] text-error">{record.lastError}</span> : null}
                 <div className="flex-1" />
                 <Button variant="ghost" onClick={() => window.open(url, '_blank')} icon={<ExternalLink size={12} strokeWidth={1.9} />}>
                   Open

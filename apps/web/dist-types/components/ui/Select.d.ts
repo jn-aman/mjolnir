@@ -30,7 +30,9 @@ interface SelectProps {
     readonly trigger?: ReactNode;
     readonly align?: 'start' | 'end';
     readonly mono?: boolean;
+    /** A fixed trigger width so the toolbar does not shift when the value changes. */
+    readonly width?: number;
 }
-export declare function Select({ label, value, options, onChange, testId, trigger, align, mono, }: SelectProps): import("react").JSX.Element;
+export declare function Select({ label, value, options, onChange, testId, trigger, align, mono, width, }: SelectProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Select.d.ts.map

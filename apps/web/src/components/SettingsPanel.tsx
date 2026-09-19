@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Wrench,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,6 +33,7 @@ import { Switch } from './ui/Switch.tsx';
 import { ConfirmDialog } from './ui/Modal.tsx';
 import { copyText } from './ui/ContextMenu.tsx';
 import { AskSave } from './ui/AskSave.tsx';
+import { filePath, licenceKey, modelName, namespaceName, optionalUrl } from '../lib/validate.ts';
 
 /**
  * Settings, in two scopes.
@@ -84,6 +86,22 @@ const K8S_SECTIONS: readonly Section[] = [
   { id: 'integrations', label: 'Integrations', icon: Wrench, planned: 'Paths and endpoints for Helm, Argo CD, Trivy and the metrics server, with a check button for each.' },
 ];
 
+const SECTION_BLURB: Record<string, string> = {
+  general: 'How the app looks and behaves.',
+  ai: 'The assistant: who answers, with what permissions.',
+  mcp: 'Let other agents use your clusters through Mjolnir.',
+  licence: 'Your plan, and the key that unlocks it.',
+  shortcuts: 'Every key the app listens for.',
+  cloud: 'Identities and sessions, when the Cloud access module lands.',
+  privacy: 'What leaves this machine. Nothing, unless you ask.',
+  advanced: 'Ports, logs, data and the reset button.',
+  about: 'This build, and who made it.',
+  kubeconfig: 'Where the clusters come from.',
+  clusters: 'Every context Mjolnir knows, and how it shows them.',
+  namespaces: 'What you see by default in a cluster.',
+  integrations: 'Helm, Argo CD, Trivy and the metrics server.',
+};
+
 const AI_PRESETS: ReadonlyArray<{ id: string; label: string; provider: 'anthropic' | 'openai'; baseUrl: string; model: string; needsKey: boolean }> = [
   { id: 'anthropic', label: 'Anthropic', provider: 'anthropic', baseUrl: '', model: 'claude-sonnet-5', needsKey: true },
   { id: 'openai', label: 'OpenAI', provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5', needsKey: true },
@@ -133,8 +151,16 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
 
   return (
     <div data-testid={`settings-${scope}`} className="flex min-h-0 flex-1">
-      <nav className="w-[200px] shrink-0 border-r border-line bg-raised py-3" aria-label="Settings sections">
-        <div className="px-4 pb-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">{scope === 'app' ? 'Mjolnir' : 'Kubernetes'}</div>
+      <nav className="w-[224px] shrink-0 border-r border-line bg-raised py-3" aria-label="Settings sections">
+        <div className="mx-3 mb-2 flex items-center gap-2.5 rounded-lg px-2 py-2" style={{ background: `color-mix(in oklab, ${scope === 'app' ? 'var(--accent-base)' : 'var(--series-1)'} 10%, transparent)` }}>
+          <span className="icon-chip" style={{ ['--chip-tint' as string]: scope === 'app' ? 'var(--accent-base)' : 'var(--series-1)' }} aria-hidden>
+            <Settings2 size={14} strokeWidth={1.9} />
+          </span>
+          <div>
+            <div className="text-[13px] font-semibold text-primary">{scope === 'app' ? 'Mjolnir settings' : 'Kubernetes settings'}</div>
+            <div className="text-[10.5px] text-tertiary">{scope === 'app' ? 'the app itself' : 'the Kubernetes module'}</div>
+          </div>
+        </div>
         {sections.map((entry) => {
           const Icon = entry.icon;
           const active = entry.id === section;
@@ -144,10 +170,12 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
               type="button"
               data-testid={`settings-nav-${entry.id}`}
               onClick={() => setSection(entry.id)}
-              className={`relative flex w-full items-center gap-2.5 py-[6px] pl-4 pr-3 text-left text-[13px] transition-colors duration-100 ${active ? 'text-primary' : 'text-secondary hover:text-primary'}`}
+              className={`relative mx-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-md py-[6px] pl-2 pr-2.5 text-left text-[13px] transition-colors duration-100 ${active ? 'text-primary' : 'text-secondary hover:bg-hover hover:text-primary'}`}
             >
-              {active ? <motion.span layoutId="settings-active" aria-hidden className="absolute inset-0 border-l-2 border-accent bg-pressed" transition={{ type: 'spring', stiffness: 480, damping: 38 }} /> : null}
-              <Icon size={14} strokeWidth={1.8} aria-hidden className={`relative ${active ? 'text-accent' : 'text-tertiary'}`} />
+              {active ? <motion.span layoutId="settings-active" aria-hidden className="row-selected absolute inset-0 rounded-md border-l-2 border-accent" transition={{ type: 'spring', stiffness: 480, damping: 38 }} /> : null}
+              <span className="icon-chip relative !h-[22px] !w-[22px] !rounded-[6px]" style={{ ['--chip-tint' as string]: active ? 'var(--accent-base)' : 'var(--text-tertiary)' }} aria-hidden>
+                <Icon size={12} strokeWidth={2} />
+              </span>
               <span className="relative flex-1">{entry.label}</span>
               {entry.planned ? <span className="relative text-[9.5px] font-semibold uppercase tracking-wide text-tertiary">soon</span> : null}
             </button>
@@ -157,7 +185,18 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={section} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14 }} className="mx-auto max-w-[760px] space-y-3">
+          <motion.div key={section} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14 }} className="mx-auto max-w-[820px] space-y-3.5">
+            {current ? (
+              <div className="mb-1 flex items-center gap-3">
+                <span className="icon-chip icon-chip-lg" style={{ ['--chip-tint' as string]: current.planned ? 'var(--text-tertiary)' : 'var(--accent-base)' }} aria-hidden>
+                  <current.icon size={19} strokeWidth={1.9} />
+                </span>
+                <div>
+                  <h1 className="text-[18px] font-semibold tracking-[-0.01em] text-primary">{current.label}</h1>
+                  <p className="text-[12px] text-tertiary">{SECTION_BLURB[current.id] ?? ''}</p>
+                </div>
+              </div>
+            ) : null}
             {current?.planned ? (
               <Card title={current.label} subtitle="Planned">
                 <p className="text-[12.5px] text-secondary">{current.planned}</p>
@@ -256,11 +295,11 @@ function Ai({ settings, onSave }: { settings: AppSettings | null; onSave: (patch
           }
         />
         <Divider />
-        <Row label="Model" hint="Enter saves." control={<SaveField id="ai-model" label="Model" value={ai.model} testId="ai-model" onSave={(next) => onSave({ ai: { model: next } })} />} />
+        <Row label="Model" hint="Enter saves." control={<SaveField id="ai-model" label="Model" value={ai.model} testId="ai-model" validate={modelName} onSave={(next) => onSave({ ai: { model: next } })} />} />
         {ai.provider === 'openai' ? (
           <>
             <Divider />
-            <Row label="Base URL" hint="The /v1 root; /chat/completions is added. Enter saves." control={<SaveField id="ai-base" label="Base URL" value={ai.baseUrl} onSave={(next) => onSave({ ai: { baseUrl: next } })} />} />
+            <Row label="Base URL" hint="The /v1 root; /chat/completions is added. Enter saves." control={<SaveField id="ai-base" label="Base URL" value={ai.baseUrl} validate={optionalUrl} onSave={(next) => onSave({ ai: { baseUrl: next } })} />} />
           </>
         ) : null}
         <Divider />
@@ -295,7 +334,7 @@ function Mcp({ settings, meta, onSave, onRefresh }: { settings: AppSettings | nu
       <Card title="Over stdio" subtitle="For Claude Code, Cursor, Zed and any client that launches a command. Always available; nothing to turn on.">
         <div className="rounded-md border border-line bg-sunken p-3 font-mono text-[11.5px] text-secondary">
           <div className="mb-1 text-tertiary">Command</div>
-          <code className="block truncate text-primary" title={command}>{command}</code>
+          <code className="block break-words [overflow-wrap:anywhere] text-primary" title={command}>{command}</code>
         </div>
         <div className="mt-2 flex gap-1.5">
           <Button onClick={() => copyText(command, 'Command copied')} icon={<Copy size={12} strokeWidth={1.9} />}>Copy command</Button>
@@ -315,7 +354,7 @@ function Mcp({ settings, meta, onSave, onRefresh }: { settings: AppSettings | nu
               hint="Sent as Authorization: Bearer. Shown once when made."
               control={
                 <div className="flex items-center gap-1.5">
-                  {token ? <code className="max-w-[240px] truncate font-mono text-[11.5px] text-primary">{token}</code> : <span className="text-[12px] text-tertiary">{mcp.token ? 'set' : 'none'}</span>}
+                  {token ? <code className="max-w-[240px] break-words [overflow-wrap:anywhere] font-mono text-[11.5px] text-primary">{token}</code> : <span className="text-[12px] text-tertiary">{mcp.token ? 'set' : 'none'}</span>}
                   <Button onClick={() => void api.settings.mcpToken().then((r) => { setToken(r.token); copyText(r.token, 'Token copied'); })}>{mcp.token ? 'Rotate' : 'Create'}</Button>
                 </div>
               }
@@ -348,7 +387,9 @@ function Licence() {
   useEffect(() => {
     void refresh();
   }, []);
+  const keyProblem = key.trim() ? licenceKey(key) : null;
   const activate = async () => {
+    if (keyProblem) return;
     setBusy(true);
     try {
       setStatus(await api.licence.activate(key.trim()));
@@ -384,9 +425,10 @@ function Licence() {
       </Card>
       <Card title="Activate" subtitle="Paste the key from your email or from mjolnir.sh/account.">
         <div className="flex items-start gap-1.5">
-          <textarea value={key} onChange={(e) => setKey(e.target.value)} rows={3} aria-label="Licence key" data-testid="licence-key" placeholder="eyJqdGkiOi…" className="flex-1 resize-none rounded-md border border-line bg-sunken px-3 py-2 font-mono text-[11.5px] text-primary outline-none focus:border-focus" />
-          <Button variant="primary" disabled={!key.trim() || busy} onClick={() => void activate()} data-testid="licence-activate">{busy ? 'Checking…' : 'Activate'}</Button>
+          <textarea value={key} onChange={(e) => setKey(e.target.value)} rows={3} aria-label="Licence key" data-testid="licence-key" placeholder="eyJqdGkiOi…" className={`flex-1 resize-none rounded-md border bg-sunken px-3 py-2 font-mono text-[11.5px] text-primary outline-none focus:border-focus ${keyProblem ? 'border-[var(--status-error)]' : 'border-line'}`} />
+          <Button variant="primary" disabled={!key.trim() || keyProblem !== null || busy} onClick={() => void activate()} data-testid="licence-activate">{busy ? 'Checking…' : 'Activate'}</Button>
         </div>
+        {keyProblem ? <p className="mt-1.5 text-[11.5px] text-error">{keyProblem}</p> : null}
       </Card>
     </>
   );
@@ -416,14 +458,42 @@ function Shortcuts() {
 
 function About({ path }: { path: string | undefined }) {
   return (
-    <Card title="About">
-      <dl className="grid grid-cols-[160px_1fr] gap-x-4 gap-y-2 text-[12.5px]">
-        <dt className="text-tertiary">Version</dt><dd className="m-0 font-mono text-primary">0.1.0</dd>
-        <dt className="text-tertiary">Local API</dt><dd className="m-0 font-mono text-primary">127.0.0.1 only</dd>
-        <dt className="text-tertiary">Settings file</dt><dd className="m-0 font-mono text-primary">{path ?? '…'}</dd>
-        <dt className="text-tertiary">Licence</dt><dd className="m-0 text-primary">Elastic License 2.0</dd>
-      </dl>
-    </Card>
+    <>
+      <Card title="Mjolnir" subtitle="Kubernetes, containers, storage, cloud access and more, in one desktop app.">
+        <div className="flex items-center gap-4">
+          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl text-white" style={{ background: 'linear-gradient(145deg, color-mix(in oklab, var(--accent-solid) 100%, white 22%), color-mix(in oklab, var(--accent-solid) 100%, black 18%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 10px 24px color-mix(in oklab, var(--accent-solid) 45%, transparent)' }} aria-hidden>
+            <Zap size={26} strokeWidth={2.2} />
+          </span>
+          <div>
+            <div className="text-[16px] font-semibold text-primary">Mjolnir <span className="font-mono text-[13px] text-tertiary">0.1.0</span></div>
+            <div className="text-[12.5px] text-secondary">mjolnir.sh · Elastic License 2.0</div>
+          </div>
+        </div>
+      </Card>
+      <Card title="Author">
+        <div className="flex items-center gap-4">
+          <span className="flex h-[44px] w-[44px] items-center justify-center rounded-full text-[15px] font-bold text-white" style={{ background: 'linear-gradient(145deg, var(--series-3), color-mix(in oklab, var(--series-3) 100%, black 30%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 8px 20px color-mix(in oklab, var(--series-3) 40%, transparent)' }} aria-hidden>
+            AJ
+          </span>
+          <div>
+            <div className="text-[14px] font-semibold text-primary" data-testid="about-author">Aman Jain</div>
+            <div className="text-[12.5px] text-secondary">
+              <a href="mailto:jain.aman1497@gmail.com" className="text-accent hover:underline">jain.aman1497@gmail.com</a>
+              <span className="text-tertiary"> · </span>
+              <a href="https://github.com/jn-aman/mjolnir" target="_blank" rel="noreferrer" className="text-accent hover:underline">github.com/jn-aman/mjolnir</a>
+            </div>
+          </div>
+        </div>
+      </Card>
+      <Card title="This build">
+        <dl className="grid grid-cols-[160px_1fr] gap-x-4 gap-y-2 text-[12.5px]">
+          <dt className="text-tertiary">Version</dt><dd className="m-0 font-mono text-primary">0.1.0</dd>
+          <dt className="text-tertiary">Local API</dt><dd className="m-0 font-mono text-primary">127.0.0.1 only</dd>
+          <dt className="text-tertiary">Settings file</dt><dd className="m-0 font-mono text-primary break-words [overflow-wrap:anywhere]">{path ?? '…'}</dd>
+          <dt className="text-tertiary">Licence</dt><dd className="m-0 text-primary">Elastic License 2.0</dd>
+        </dl>
+      </Card>
+    </>
   );
 }
 
@@ -464,7 +534,7 @@ function Kubeconfig({ clusters, settings, onReload, onChanged }: { clusters: Clu
         <ul className="space-y-1" data-testid="kubeconfig-files">
           {[...new Set([...files, ...extra])].map((f) => (
             <li key={f} className="flex items-center gap-2 text-[12px]">
-              <span className="min-w-0 flex-1 truncate font-mono text-primary">{f}</span>
+              <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-primary">{f}</span>
               <span className="text-[11px] text-tertiary">{extra.includes(f) ? 'added here' : 'from environment'}</span>
               {extra.includes(f) ? <Button variant="ghost" aria-label={`Remove ${f}`} onClick={() => void api.kubeconfigs.remove(f).then(onChanged)} icon={<Trash2 size={12} strokeWidth={1.9} />}>Remove</Button> : null}
             </li>
@@ -474,15 +544,15 @@ function Kubeconfig({ clusters, settings, onReload, onChanged }: { clusters: Clu
       </Card>
       <Card title="Add a file" subtitle="A kubeconfig already on this machine.">
         <div className="flex items-end gap-2">
-          <Field id="kubeconfig-path" label="Path" mono value={path} onChange={(e) => setPath(e.target.value)} placeholder="~/.kube/prod-config" className="flex-1" data-testid="kubeconfig-path" onKeyDown={(e) => { if (e.key === 'Enter' && path.trim()) void add({ path: path.trim() }); }} />
-          <Button variant="primary" disabled={!path.trim() || busy} onClick={() => void add({ path: path.trim() })} data-testid="kubeconfig-add-path">Add</Button>
+          <Field id="kubeconfig-path" label="Path" mono value={path} onChange={(e) => setPath(e.target.value)} placeholder="~/.kube/prod-config" className="flex-1" data-testid="kubeconfig-path" validate={(v) => (v ? filePath(v) : null)} onKeyDown={(e) => { if (e.key === 'Enter' && path.trim()) void add({ path: path.trim() }); }} />
+          <Button variant="primary" disabled={!path.trim() || filePath(path) !== null || busy} onClick={() => void add({ path: path.trim() })} data-testid="kubeconfig-add-path">Add</Button>
         </div>
       </Card>
       <Card title="Paste a kubeconfig" subtitle="Saved under ~/.mjolnir/kubeconfigs with owner-only permissions.">
         <div className="space-y-2">
-          <Field id="kubeconfig-name" label="Name" mono value={name} onChange={(e) => setName(e.target.value)} placeholder="staging" className="w-[260px]" data-testid="kubeconfig-name" />
+          <Field id="kubeconfig-name" label="Name" mono value={name} onChange={(e) => setName(e.target.value)} placeholder="staging" className="w-[260px]" data-testid="kubeconfig-name" validate={(v) => (v && !/^[A-Za-z0-9_.-]+$/.test(v) ? 'Letters, digits, dashes, dots and underscores.' : null)} />
           <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} aria-label="Kubeconfig content" data-testid="kubeconfig-content" placeholder={'apiVersion: v1\nkind: Config\nclusters:\n  - name: …'} className="w-full resize-y rounded-md border border-line bg-sunken px-3 py-2 font-mono text-[11.5px] text-primary outline-none focus:border-focus" />
-          <div className="flex justify-end"><Button variant="primary" disabled={!name.trim() || !content.trim() || busy} onClick={() => void add({ name: name.trim(), content })} data-testid="kubeconfig-add-paste">Save and load</Button></div>
+          <div className="flex justify-end"><Button variant="primary" disabled={!name.trim() || !/^[A-Za-z0-9_.-]+$/.test(name.trim()) || !/apiVersion|contexts:/.test(content) || busy} onClick={() => void add({ name: name.trim(), content })} data-testid="kubeconfig-add-paste">Save and load</Button></div>
         </div>
       </Card>
     </>
@@ -517,9 +587,9 @@ function Clusters({ clusters, settings, onChanged }: { clusters: ClustersRespons
               <li key={c.name} className="flex items-center gap-3 py-2" data-testid={`settings-cluster-${c.name}`}>
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-[12.5px] text-primary">{c.name}</div>
-                  <div className="truncate text-[11px] text-tertiary">{c.server ?? ''}{c.source && c.source !== '(built in)' ? ` · ${c.source}` : ' · built in'}</div>
+                  <div className="break-words [overflow-wrap:anywhere] text-[11px] text-tertiary">{c.server ?? ''}{c.source && c.source !== '(built in)' ? ` · ${c.source}` : ' · built in'}</div>
                 </div>
-                <span className="max-w-[260px] truncate font-mono text-[11.5px] text-tertiary" title={(per.namespaces ?? []).join(', ')}>{per.namespaces?.length ? per.namespaces.join(', ') : 'all namespaces'}</span>
+                <span className="max-w-[260px] break-words [overflow-wrap:anywhere] font-mono text-[11.5px] text-tertiary" title={(per.namespaces ?? []).join(', ')}>{per.namespaces?.length ? per.namespaces.join(', ') : 'all namespaces'}</span>
                 {c.name !== 'demo' ? (
                   <>
                     <Button variant="ghost" aria-label={`Hide ${c.name}`} onClick={() => setRemoving({ name: c.name, scope: 'hide' })} icon={<EyeOff size={12} strokeWidth={1.9} />}>Hide</Button>
@@ -561,7 +631,7 @@ function Namespaces({ settings, onSave }: { settings: AppSettings | null; onSave
     <Card title="Namespaces">
       <Row label="Show system namespaces" hint="kube-system and friends, in lists and the namespace picker." control={<Switch checked={settings.general.showSystemNamespaces} onChange={(next) => void onSave({ general: { showSystemNamespaces: next } })} label="Show system namespaces" />} />
       <Divider />
-      <Row label="Default namespace" hint="Applied when a cluster does not name one. Enter saves." control={<SaveField id="default-namespace" label="Default namespace" placeholder="default" value={settings.general.defaultNamespace} onSave={(next) => onSave({ general: { defaultNamespace: next } })} />} />
+      <Row label="Default namespace" hint="Applied when a cluster does not name one. Enter saves." control={<SaveField id="default-namespace" label="Default namespace" placeholder="default" value={settings.general.defaultNamespace} validate={(v) => (v ? namespaceName(v) : null)} onSave={(next) => onSave({ general: { defaultNamespace: next } })} />} />
     </Card>
   );
 }
@@ -570,7 +640,7 @@ function Namespaces({ settings, onSave }: { settings: AppSettings | null; onSave
  * A settings field with the one rule: Enter saves, leaving it unchanged does
  * nothing, leaving it changed asks.
  */
-function SaveField({ id, label, value, onSave, mono = true, placeholder, className = 'w-[260px]', type, testId }: { id: string; label: string; value: string; onSave: (next: string) => Promise<void>; mono?: boolean; placeholder?: string; className?: string; type?: string; testId?: string }) {
+function SaveField({ id, label, value, onSave, mono = true, placeholder, className = 'w-[260px]', type, testId, validate }: { id: string; label: string; value: string; onSave: (next: string) => Promise<void>; mono?: boolean; placeholder?: string; className?: string; type?: string; testId?: string; validate?: ((v: string) => string | null) | undefined }) {
   const [draft, setDraft] = useState(value);
   const [asking, setAsking] = useState(false);
   useEffect(() => {
@@ -578,7 +648,11 @@ function SaveField({ id, label, value, onSave, mono = true, placeholder, classNa
     setAsking(false);
   }, [value]);
   const changed = draft !== value;
-  const save = () => void onSave(draft).then(() => setAsking(false));
+  const problem = changed && validate ? validate(draft) : null;
+  const save = () => {
+    if (problem) return;
+    void onSave(draft).then(() => setAsking(false));
+  };
   return (
     <span className="relative inline-flex">
       <Field
@@ -589,6 +663,7 @@ function SaveField({ id, label, value, onSave, mono = true, placeholder, classNa
         {...(type ? { type } : {})}
         {...(placeholder ? { placeholder } : {})}
         {...(testId ? { 'data-testid': testId } : {})}
+        validate={validate}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => { if (changed) setAsking(true); }}
@@ -598,7 +673,7 @@ function SaveField({ id, label, value, onSave, mono = true, placeholder, classNa
         }}
         className={className}
       />
-      {asking && changed ? (
+      {asking && changed && !problem ? (
         <span className="absolute right-0 top-full z-20 mt-1.5"><AskSave what={label.toLowerCase()} onSave={save} onDiscard={() => { setDraft(value); setAsking(false); }} /></span>
       ) : null}
     </span>
@@ -609,10 +684,10 @@ function SaveField({ id, label, value, onSave, mono = true, placeholder, classNa
 
 function Row({ label, hint, control }: { label: string; hint?: string; control: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-4 py-1">
+    <div className="flex items-center gap-6 py-2">
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] text-primary">{label}</div>
-        {hint ? <div className="mt-0.5 text-[11.5px] text-tertiary">{hint}</div> : null}
+        <div className="text-[13px] font-medium text-primary">{label}</div>
+        {hint ? <div className="mt-0.5 text-[11.5px] leading-[16px] text-tertiary">{hint}</div> : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -620,5 +695,5 @@ function Row({ label, hint, control }: { label: string; hint?: string; control: 
 }
 
 function Divider() {
-  return <div className="my-2 h-px bg-[var(--border-subtle)]" />;
+  return <div className="my-1 h-px bg-[var(--border-subtle)]" />;
 }

@@ -61,6 +61,8 @@ export interface ClusterConnection {
   create<T = unknown>(path: string, body: unknown): Promise<T>;
   /** A shell in a container: `kubectl exec -it`. Resolves with a handle to close it. */
   exec(options: ExecOptions, io: ExecIo): Promise<{ close: () => void }>;
+  /** Runs one command without a terminal and says whether it started. Used to find a shell. */
+  canRun(namespace: string, pod: string, container: string | undefined, command: readonly string[]): Promise<boolean>;
   /** Pipes one TCP connection to a pod port, the wire behind `kubectl port-forward`. */
   forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void>;
   watch(resource: ResourceDefinition, namespace?: string): ResourceSource;
@@ -72,6 +74,8 @@ export interface ClusterConnection {
 /** The watch surface routes depend on. Both the real and demo watches satisfy it. */
 export interface ResourceSource {
   snapshot(): WatchSnapshot<never>;
+  /** Called with every coalesced change, and once right away. Returns the unsubscribe. */
+  subscribe(listener: (snapshot: WatchSnapshot<never>) => void): () => void;
   start(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -118,6 +122,41 @@ class LiveConnection implements ClusterConnection {
   async forward(namespace: string, pod: string, port: number, socket: Duplex): Promise<void> {
     const forwarder = new PortForward(this.config);
     await forwarder.portForward(namespace, pod, [port], socket, null, socket);
+  }
+
+  /**
+   * Whether a command starts in the container.
+   *
+   * No terminal, no stdin, and the exit status is read from the API server's
+   * own Status object, so a missing binary is a clear Failure rather than a
+   * silence we would have to time. This is how the shell is chosen.
+   */
+  async canRun(namespace: string, pod: string, container: string | undefined, command: readonly string[]): Promise<boolean> {
+    const sink = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback();
+      },
+    });
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const done = (value: boolean) => {
+        if (!settled) {
+          settled = true;
+          resolve(value);
+        }
+      };
+      void new Exec(this.config)
+        .exec(namespace, pod, container ?? '', [...command], sink, sink, null, false, (status) => done(status.status === 'Success'))
+        .then((ws) => {
+          ws.on('close', () => done(false));
+          // A probe that neither succeeds nor fails quickly is not a shell we want.
+          setTimeout(() => {
+            ws.close();
+            done(false);
+          }, 4000);
+        })
+        .catch(() => done(false));
+    });
   }
 
   async exec(options: ExecOptions, io: ExecIo): Promise<{ close: () => void }> {
@@ -282,6 +321,11 @@ class DemoConnection implements ClusterConnection {
 
   create<T = unknown>(path: string, body: unknown): Promise<T> {
     return this.#transport.create<T>(path, body);
+  }
+
+  async canRun(_namespace: string, _pod: string, _container: string | undefined, command: readonly string[]): Promise<boolean> {
+    // The demo container is imaginary, and it has exactly one shell.
+    return command[0] === '/bin/sh';
   }
 
   async exec(options: ExecOptions, io: ExecIo): Promise<{ close: () => void }> {

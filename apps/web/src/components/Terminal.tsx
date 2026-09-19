@@ -81,7 +81,11 @@ export function Terminal({ source, context, namespace, pod, container }: Termina
         return;
       }
       try {
-        const message = JSON.parse(String(event.data)) as { type: string; code?: number | null; message?: string };
+        const message = JSON.parse(String(event.data)) as { type: string; code?: number | null; message?: string; shell?: string };
+        if (message.type === 'shell') {
+          setNote(message.shell ?? null);
+          return;
+        }
         if (message.type === 'exit') {
           setState('exited');
           setNote(message.code === null || message.code === undefined ? 'Session ended' : `Exited with code ${message.code}${message.message ? `: ${message.message}` : ''}`);
@@ -138,6 +142,9 @@ export function Terminal({ source, context, namespace, pod, container }: Termina
     <Menu label={`${pod}${container ? ` · ${container}` : ''}`} entries={entries} testId="terminal-menu">
       <div className="relative flex min-h-0 flex-1 flex-col bg-sunken" data-testid="terminal" data-state={state}>
         <div ref={host} className="min-h-0 flex-1 px-2 pt-1" />
+        {state === 'open' && note ? (
+          <div className="pointer-events-none absolute right-3 top-2 rounded-full border border-line bg-raised px-2 py-[2px] font-mono text-[10.5px] text-tertiary" data-testid="terminal-shell">{note}</div>
+        ) : null}
         {state === 'exited' || state === 'error' ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-line bg-raised px-3 py-1.5 text-[11.5px] text-tertiary">
             <span className={state === 'error' ? 'text-error' : ''}>{note}</span>

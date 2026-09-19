@@ -192,7 +192,8 @@ export function TimeSeries({
               <linearGradient key={entry.name} id={`${id}-${index}`} x1="0" y1="0" x2="0" y2="1">
                 {/* Barely-there fill. Enough to give the line a body and read
                     magnitude; not enough to compete with the line itself. */}
-                <stop offset="0%" stopColor={colour} stopOpacity={0.22} />
+                <stop offset="0%" stopColor={colour} stopOpacity={0.42} />
+                <stop offset="55%" stopColor={colour} stopOpacity={0.12} />
                 <stop offset="100%" stopColor={colour} stopOpacity={0} />
               </linearGradient>
             );
@@ -275,17 +276,15 @@ export function TimeSeries({
           </g>
         ))}
 
-        {series.length === 1
-          ? areas.map((entry, index) => (
-              <path
-                key={entry.name}
-                d={entry.d}
-                fill={`url(#${id}-${index})`}
-                className="mjolnir-fade-in"
-                style={{ animationDelay: `${180 + index * 70}ms` }}
-              />
-            ))
-          : null}
+        {areas.map((entry, index) => (
+          <path
+            key={entry.name}
+            d={entry.d}
+            fill={`url(#${id}-${index})`}
+            className="mjolnir-fade-in"
+            style={{ animationDelay: `${180 + index * 70}ms`, opacity: series.length === 1 ? 1 : 0.45 }}
+          />
+        ))}
 
         {hover !== null && hovered ? (
           <line
@@ -322,8 +321,9 @@ export function TimeSeries({
               strokeLinejoin="round"
               opacity={focused && focused !== path.name ? 0.35 : 1}
               pointerEvents="none"
-              className="mjolnir-draw"
+              className="mjolnir-draw chart-glow"
               style={{
+                color: `var(${SERIES_VARS[index % SERIES_VARS.length]})`,
                 transition: 'opacity 160ms linear, stroke-width 160ms linear',
                 animationDelay: `${index * 70}ms`,
               }}
@@ -390,15 +390,15 @@ export function TimeSeries({
               onPointerEnter={() => setFocused(entry.name)}
               onPointerLeave={() => setFocused(null)}
               onClick={() => onSelect?.(entry.name)}
-              className={`flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-opacity duration-150 ${
-                onSelect ? 'cursor-pointer hover:bg-hover' : 'cursor-default'
+              className={`flex items-center gap-2 rounded-full border border-line bg-raised px-2.5 py-1 text-left transition-[opacity,transform,box-shadow] duration-150 ${
+                onSelect ? 'cursor-pointer hover:-translate-y-px hover:border-strong hover:shadow-[var(--shadow-sm)]' : 'cursor-default'
               }`}
               style={{ opacity: dim ? 0.4 : 1 }}
             >
               <span
                 aria-hidden
-                className="h-[3px] w-[14px] shrink-0 rounded-full"
-                style={{ background: `var(${SERIES_VARS[index % SERIES_VARS.length]})` }}
+                className="glow-dot"
+                style={{ ['--dot' as string]: `var(${SERIES_VARS[index % SERIES_VARS.length]})` }}
               />
               <span className="font-mono text-[11px] text-secondary">{entry.name}</span>
               {latest ? (

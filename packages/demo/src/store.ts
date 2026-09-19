@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import type { KubeObject } from '@mjolnir/schemas';
 import { DEMO_RESOURCES } from './cluster.ts';
 
@@ -11,6 +12,13 @@ import { DEMO_RESOURCES } from './cluster.ts';
  */
 class DemoStore {
   readonly #data = new Map<string, KubeObject[]>();
+  readonly #events = new EventEmitter();
+
+  /** Fires with the plural whenever that collection changes. */
+  onChange(listener: (plural: string) => void): () => void {
+    this.#events.on('change', listener);
+    return () => void this.#events.off('change', listener);
+  }
 
   constructor() {
     for (const [plural, items] of Object.entries(DEMO_RESOURCES)) {
@@ -45,6 +53,7 @@ class DemoStore {
     if (index === -1) items.push(stored);
     else items[index] = stored;
     this.#data.set(plural, items);
+    this.#events.emit('change', plural);
     return stored;
   }
 
@@ -53,6 +62,7 @@ class DemoStore {
     const index = items.findIndex((item) => item.metadata?.name === name && (!namespace || item.metadata?.namespace === namespace));
     if (index === -1) return false;
     items.splice(index, 1);
+    this.#events.emit('change', plural);
     return true;
   }
 }

@@ -2,34 +2,10 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ResourceDefinition } from '@mjolnir/k8s';
 import { CATEGORY_TINT } from '../lib/tint.ts';
+import { KIND_ICON } from '../lib/kindIcons.ts';
 import { TOOLS, type ToolDefinition } from '../lib/tools.ts';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
-import {
-  Boxes,
-  ChevronDown,
-  Clock,
-  Cog,
-  Container,
-  Database,
-  FileKey,
-  FileText,
-  Gauge,
-  Globe,
-  HardDrive,
-  Key,
-  Layers,
-  LayoutDashboard,
-  Network,
-  Repeat,
-  Server,
-  Settings,
-  Shield,
-  ShieldCheck,
-  Shuffle,
-  Timer,
-  UserCircle,
-  Waypoints,
-} from 'lucide-react';
+import { Boxes, ChevronDown, LayoutDashboard, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 /**
  * Resource navigation.
@@ -42,36 +18,6 @@ import {
  * thirty near-identical words, and shape is what the eye finds before it reads.
  */
 
-const KIND_ICON: Record<string, typeof Boxes> = {
-  Pod: Container,
-  Deployment: Layers,
-  StatefulSet: Database,
-  DaemonSet: Repeat,
-  ReplicaSet: Boxes,
-  Job: Timer,
-  CronJob: Clock,
-  ConfigMap: FileText,
-  Secret: FileKey,
-  ResourceQuota: Gauge,
-  LimitRange: Gauge,
-  HorizontalPodAutoscaler: Shuffle,
-  PodDisruptionBudget: Shield,
-  Service: Waypoints,
-  Ingress: Globe,
-  NetworkPolicy: Network,
-  Endpoints: Waypoints,
-  PersistentVolumeClaim: HardDrive,
-  PersistentVolume: HardDrive,
-  StorageClass: HardDrive,
-  ServiceAccount: UserCircle,
-  Role: Key,
-  RoleBinding: Key,
-  ClusterRole: ShieldCheck,
-  ClusterRoleBinding: ShieldCheck,
-  Node: Server,
-  Namespace: Boxes,
-  Event: Cog,
-};
 
 const CATEGORY_ORDER = ['cluster', 'workloads', 'config', 'network', 'storage', 'access'] as const;
 
@@ -101,9 +47,12 @@ interface SidebarProps {
   readonly width: number;
   /** When set, this is a module other than Kubernetes: its sections are the nav. */
   readonly module?: ToolDefinition | undefined;
+  /** Icons only. */
+  readonly compact?: boolean;
+  readonly onToggleCompact?: (() => void) | undefined;
 }
 
-export function Sidebar({ kinds, selection, counts, onSelect, width, module }: SidebarProps) {
+export function Sidebar({ kinds, selection, counts, onSelect, width, module, compact = false, onToggleCompact }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const grouped = new Map<string, ResourceDefinition[]>();
@@ -148,6 +97,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
             return (
               <li key={section}>
                 <Entry
+                  compact={compact}
                   icon={Icon}
                   label={section}
                   testId={`nav-${id}`}
@@ -171,6 +121,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
       style={{ width }}
     >
       <Entry
+        compact={compact}
         icon={LayoutDashboard}
         label="Overview"
         testId="nav-overview"
@@ -202,7 +153,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
                 <ChevronDown size={11} strokeWidth={2.4} />
               </motion.span>
               <span aria-hidden className="h-[6px] w-[6px] rounded-full" style={{ background: CATEGORY_TINT[category] }} />
-              {CATEGORY_LABEL[category]}
+              {compact ? null : CATEGORY_LABEL[category]}
             </button>
             </Menu>
 
@@ -219,6 +170,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
                 {entries.map((entry) => (
                   <li key={entry.kind}>
                     <Entry
+                      compact={compact}
                       icon={KIND_ICON[entry.kind] ?? Boxes}
                       label={entry.label}
                       testId={`nav-${entry.plural}`}
@@ -256,7 +208,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
             <ChevronDown size={11} strokeWidth={2.4} />
           </motion.span>
           <span aria-hidden className="h-[6px] w-[6px] rounded-full bg-accent" />
-          Tools
+          {compact ? null : 'Tools'}
         </button>
         </Menu>
         {collapsed.has('tools') ? null : (
@@ -264,6 +216,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
             {tools.map((tool) => (
               <li key={tool.id}>
                 <Entry
+                  compact={compact}
                   icon={tool.icon}
                   label={tool.label}
                   testId={`nav-tool-${tool.id}`}
@@ -280,7 +233,23 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module }: S
 
       <div className="flex-1" />
       <div className="mx-3 my-1.5 h-px bg-[var(--border-subtle)]" />
+      {onToggleCompact ? (
+        <button
+          type="button"
+          data-testid="sidebar-collapse"
+          onClick={onToggleCompact}
+          title={compact ? 'Expand navigation (⌘B)' : 'Collapse navigation (⌘B)'}
+          aria-label={compact ? 'Expand navigation' : 'Collapse navigation'}
+          className="mx-2 mb-1 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-md py-[6px] pl-2 pr-2.5 text-[12.5px] text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary"
+        >
+          <span className="icon-chip !h-[22px] !w-[22px] !rounded-[6px]" style={{ ['--chip-tint' as string]: 'var(--text-tertiary)' }} aria-hidden>
+            {compact ? <PanelLeftOpen size={12} strokeWidth={2} /> : <PanelLeftClose size={12} strokeWidth={2} />}
+          </span>
+          {compact ? null : 'Collapse'}
+        </button>
+      ) : null}
       <Entry
+        compact={compact}
         icon={Settings}
         label="Kubernetes settings"
         testId="nav-settings"
@@ -300,6 +269,7 @@ function Entry({
   tint,
   menu = [],
   onSelect,
+  compact = false,
 }: {
   icon: typeof Boxes;
   label: string;
@@ -309,15 +279,17 @@ function Entry({
   tint?: string | undefined;
   menu?: readonly MenuEntry[];
   onSelect: () => void;
+  compact?: boolean;
 }) {
   return (
     <Menu label={label} entries={menu} testId="nav-menu">
     <button
+      title={compact ? label : undefined}
       type="button"
       data-testid={testId}
       data-active={active}
       onClick={onSelect}
-      className={`group relative flex w-full items-center gap-2.5 py-[5px] pl-3 pr-2.5 text-left text-[13px] transition-colors duration-100 ${
+      className={`group relative mx-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-md py-[6px] pl-2 pr-2.5 text-left text-[13px] transition-colors duration-100 ${
         active ? 'font-medium text-primary' : 'text-secondary hover:text-primary'
       }`}
     >
@@ -329,25 +301,24 @@ function Entry({
           // that repaints.
           layoutId="sidebar-active"
           aria-hidden
-          className="absolute inset-0 border-l-2 border-accent bg-pressed"
+          className="row-selected absolute inset-0 rounded-md border-l-2 border-accent"
           transition={{ type: 'spring', stiffness: 480, damping: 38 }}
         />
       ) : (
         <span
           aria-hidden
-          className="absolute inset-0 bg-transparent transition-colors duration-100 group-hover:bg-hover"
+          className="absolute inset-0 rounded-md bg-transparent transition-colors duration-100 group-hover:bg-hover"
         />
       )}
-      <Icon
-        size={14}
-        strokeWidth={1.8}
-        className={`relative shrink-0 transition-colors duration-100 ${
-          active ? 'text-accent' : tint ? '' : 'text-tertiary group-hover:text-secondary'
-        }`}
-        style={!active && tint ? { color: tint, opacity: 0.85 } : undefined}
-      />
-      <span className="relative min-w-0 flex-1 truncate">{label}</span>
-      {count !== undefined && count > 0 ? (
+      <span
+        className={`icon-chip relative !h-[22px] !w-[22px] !rounded-[6px] transition-transform duration-150 group-hover:scale-105 ${active ? '' : 'opacity-90'}`}
+        style={{ ['--chip-tint' as string]: active ? 'var(--accent-base)' : (tint ?? 'var(--text-tertiary)') }}
+        aria-hidden
+      >
+        <Icon size={12} strokeWidth={2} />
+      </span>
+      {compact ? null : <span className="relative min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{label}</span>}
+      {!compact && count !== undefined && count > 0 ? (
         <span className="relative shrink-0 font-mono text-[10.5px] tabular-nums text-tertiary">
           {count}
         </span>

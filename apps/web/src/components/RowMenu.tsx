@@ -66,7 +66,11 @@ const RESTARTABLE = new Set(['Deployment', 'StatefulSet', 'DaemonSet']);
 
 const icon = (Icon: typeof FileText) => <Icon size={13} strokeWidth={1.9} />;
 
-export function RowMenu({ item, kind, act, children }: RowMenuProps) {
+/**
+ * The entries for one row. Shared by the right-click menu and the row's own
+ * actions button, so both offer exactly the same verbs.
+ */
+export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowActionId) => void): MenuEntry[] {
   const name = item.metadata?.name ?? '';
   const namespace = item.metadata?.namespace;
   const node = typeof item.spec?.['nodeName'] === 'string' ? (item.spec['nodeName'] as string) : undefined;
@@ -139,8 +143,12 @@ export function RowMenu({ item, kind, act, children }: RowMenuProps) {
     { id: 'delete', label: 'Delete…', icon: icon(Trash2), danger: true, onSelect: () => act('delete') },
   ];
 
+  return entries;
+}
+
+export function RowMenu({ item, kind, act, children }: RowMenuProps) {
   return (
-    <Menu label={name} entries={entries} testId="row-menu">
+    <Menu label={item.metadata?.name ?? ''} entries={rowMenuEntries(item, kind, act)} testId="row-menu">
       {children}
     </Menu>
   );

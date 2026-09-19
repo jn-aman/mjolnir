@@ -74,7 +74,7 @@ export function HelmPanel({ context, namespace, onNavigate }: HelmPanelProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="helm-panel">
-      <div className="flex h-[48px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3">
+      <div className="flex h-[50px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3.5">
         <Package size={14} strokeWidth={1.9} aria-hidden style={{ color: 'var(--series-1)' }} />
         <span className="text-[13px] font-semibold text-primary">Helm releases</span>
         <span className="text-[11.5px] text-tertiary">{releases.length} in {namespace || 'all namespaces'}, read from their Secrets</span>
@@ -144,8 +144,8 @@ function HelmDrawer({ context, summary, onClose, menu }: { context: string; summ
                 <StatusChip status={summary.status} tone={STATUS_TONE(summary.status)} />
                 <span className="text-[11px] text-tertiary">revision {revision ?? summary.revision}</span>
               </div>
-              <h2 data-testid="drawer-name" className="truncate font-mono text-[14px] text-primary">{summary.name}</h2>
-              <p className="truncate text-[11.5px] text-tertiary">{summary.namespace} · {summary.chart.name}-{summary.chart.version}{summary.chart.appVersion ? ` · app ${summary.chart.appVersion}` : ''}</p>
+              <h2 data-testid="drawer-name" className="break-words [overflow-wrap:anywhere] font-mono text-[14px] text-primary">{summary.name}</h2>
+              <p className="break-words [overflow-wrap:anywhere] text-[11.5px] text-tertiary">{summary.namespace} · {summary.chart.name}-{summary.chart.version}{summary.chart.appVersion ? ` · app ${summary.chart.appVersion}` : ''}</p>
             </div>
             <Button iconOnly aria-label="Close" variant="ghost" onClick={onClose} icon={<X size={15} strokeWidth={2} />} />
           </div>

@@ -22,6 +22,7 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
   #updatedAt: Date | null = null;
   #timer: NodeJS.Timeout | null = null;
   #restarts = 14;
+  #unsubscribeStore: (() => void) | null = null;
 
   constructor(options: { resource: ResourceDefinition; namespace?: string }) {
     this.#resource = options.resource;
@@ -82,6 +83,12 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
     this.#state = 'synced';
     this.#updatedAt = new Date();
     this.#emit();
+    // A write to this collection is a change, the same as an event from a real API server.
+    this.#unsubscribeStore = demoStore.onChange((plural) => {
+      if (plural !== this.#resource.plural) return;
+      this.#updatedAt = new Date();
+      this.#emit();
+    });
 
     if (this.#resource.plural === 'pods') {
       this.#timer = setInterval(() => {
@@ -95,6 +102,8 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
   }
 
   async stop(): Promise<void> {
+    this.#unsubscribeStore?.();
+    this.#unsubscribeStore = null;
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
     this.#listeners.clear();

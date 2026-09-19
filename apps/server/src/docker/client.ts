@@ -97,6 +97,24 @@ export class DockerClient {
     return { id: created.Id, socket };
   }
 
+  /**
+   * Whether a command starts in the container. No TTY, nothing attached: the
+   * exec's own exit code says yes or no, which is how a shell is chosen.
+   */
+  async canRun(container: string, command: readonly string[]): Promise<boolean> {
+    try {
+      const created = await this.json<{ Id: string }>('POST', `/containers/${encodeURIComponent(container)}/exec`, {
+        body: { AttachStdout: true, AttachStderr: true, Tty: false, Cmd: [...command] },
+      });
+      const response = await this.raw('POST', `/exec/${created.Id}/start`, { body: { Detach: false, Tty: false } });
+      await readAll(response);
+      const state = await this.json<{ ExitCode?: number | null }>('GET', `/exec/${created.Id}/json`);
+      return state.ExitCode === 0;
+    } catch {
+      return false;
+    }
+  }
+
   async resizeExec(id: string, size: { cols: number; rows: number }): Promise<void> {
     await this.json('POST', `/exec/${id}/resize`, { query: { h: size.rows, w: size.cols } }).catch(() => undefined);
   }

@@ -26,7 +26,19 @@ interface ResourceListProps {
     readonly onAction?: (action: string, item: KubeItem) => void;
     /** Replaces the Kubernetes row menu, for lists of other things. */
     readonly menu?: ((item: KubeItem) => MenuEntry[]) | undefined;
+    /** Verbs for several rows at once. A checkbox column appears when given. */
+    readonly bulk?: readonly BulkAction[] | undefined;
 }
-export declare function ResourceList({ kind, items, state, error, filter, label, namespace, selectedName, onSelect, onAction, menu, }: ResourceListProps): import("react").JSX.Element;
+export interface BulkAction {
+    readonly id: string;
+    readonly label: string;
+    readonly icon?: React.ReactNode;
+    readonly danger?: boolean;
+    /** Runs on the selected rows; the selection clears when it resolves. */
+    readonly run: (items: KubeItem[]) => Promise<void> | void;
+    /** Offered only when every selected row passes. */
+    readonly applies?: (item: KubeItem) => boolean;
+}
+export declare function ResourceList({ kind, items, state, error, filter, label, namespace, selectedName, onSelect, onAction, menu, bulk, }: ResourceListProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=ResourceList.d.ts.map

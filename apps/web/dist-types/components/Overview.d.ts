@@ -16,6 +16,14 @@ export interface NavigateTarget {
 }
 interface OverviewProps {
     readonly context: string;
+    /** The cluster as the kubeconfig describes it, for the hero. */
+    readonly cluster?: {
+        name: string;
+        server?: string | null | undefined;
+        provider: string;
+    } | undefined;
+    /** Called after the display name or colour is changed, so the strip updates. */
+    readonly onDecorChanged?: (() => void) | undefined;
     /**
      * Opens the thing that was clicked.
      *
@@ -25,6 +33,6 @@ interface OverviewProps {
      */
     readonly onNavigate: (target: NavigateTarget) => void;
 }
-export declare function Overview({ context, onNavigate }: OverviewProps): import("react").JSX.Element;
+export declare function Overview({ context, cluster, onDecorChanged, onNavigate }: OverviewProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Overview.d.ts.map

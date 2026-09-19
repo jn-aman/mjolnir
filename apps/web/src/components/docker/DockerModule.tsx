@@ -3,7 +3,7 @@ import { AnimatePresence } from 'motion/react';
 import { ArrowDownToLine, Download, Pause, Play, RefreshCw, RotateCw, Search, ShieldAlert, Square, Terminal as TerminalIcon, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, type DockerContainer, type DockerContextInfo, type DockerImage, type DockerNetwork, type DockerVolume } from '../../lib/api.ts';
-import { ResourceList } from '../ResourceList.tsx';
+import { ResourceList, type BulkAction } from '../ResourceList.tsx';
 import { formatBytes, type KubeItem } from '../columns.tsx';
 import { Field } from '../ui/Field.tsx';
 import { Select } from '../ui/Select.tsx';
@@ -190,11 +190,81 @@ export function DockerModule({ tool, section, onOpenDock }: DockerModuleProps) {
     return container ? containerMenu(container) : [];
   };
 
+  /** Bulk verbs per section. Anything already in the wanted state is skipped. */
+  const bulk: BulkAction[] =
+    section === 'containers' || section === 'compose'
+      ? [
+          { id: 'start', label: 'Start', icon: icon(Play), run: async (chosen) => { for (const row of chosen) { const c = byName.get(row.metadata?.name ?? ''); if (c && c.state !== 'running') await api.docker.action(context, c.id, 'start'); } await load(); } },
+          { id: 'stop', label: 'Stop', icon: icon(Square), run: async (chosen) => { for (const row of chosen) { const c = byName.get(row.metadata?.name ?? ''); if (c && c.state === 'running') await api.docker.action(context, c.id, 'stop'); } await load(); } },
+          { id: 'restart', label: 'Restart', icon: icon(RotateCw), run: async (chosen) => { for (const row of chosen) { const c = byName.get(row.metadata?.name ?? ''); if (c) await api.docker.action(context, c.id, 'restart'); } await load(); } },
+          {
+            id: 'remove',
+            label: 'Remove…',
+            icon: icon(Trash2),
+            danger: true,
+            run: (chosen) =>
+              setConfirm({
+                title: `Remove ${chosen.length} container${chosen.length === 1 ? '' : 's'}?`,
+                body: 'Running ones are stopped first. Named volumes stay.',
+                label: `Remove ${chosen.length}`,
+                run: async () => {
+                  for (const row of chosen) {
+                    const c = byName.get(row.metadata?.name ?? '');
+                    if (c) await api.docker.removeContainer(context, c.id, { force: true });
+                  }
+                },
+              }),
+          },
+        ]
+      : section === 'images'
+        ? [
+            {
+              id: 'remove',
+              label: 'Remove…',
+              icon: icon(Trash2),
+              danger: true,
+              run: (chosen) =>
+                setConfirm({
+                  title: `Remove ${chosen.length} image${chosen.length === 1 ? '' : 's'}?`,
+                  body: 'Images a container still uses are skipped.',
+                  label: `Remove ${chosen.length}`,
+                  run: async () => {
+                    for (const row of chosen) {
+                      const image = images.find((i) => (i.tags[0] ?? i.id.replace(/^sha256:/, '').slice(0, 12)) === row.metadata?.name);
+                      if (image && image.usedBy.length === 0) await api.docker.removeImage(context, image.id);
+                    }
+                  },
+                }),
+            },
+          ]
+        : section === 'volumes'
+          ? [
+              {
+                id: 'remove',
+                label: 'Remove…',
+                icon: icon(Trash2),
+                danger: true,
+                run: (chosen) =>
+                  setConfirm({
+                    title: `Remove ${chosen.length} volume${chosen.length === 1 ? '' : 's'}?`,
+                    body: 'Volumes a container mounts are skipped. Data in the rest is deleted.',
+                    label: `Remove ${chosen.length}`,
+                    run: async () => {
+                      for (const row of chosen) {
+                        const volume = volumes.find((v) => v.name === row.metadata?.name);
+                        if (volume && volume.usedBy.length === 0) await api.docker.removeVolume(context, volume.name);
+                      }
+                    },
+                  }),
+              },
+            ]
+          : [];
+
   if (section === 'registries') return <ToolPanel tool={tool} section="Registries" />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="docker-module">
-      <div className="flex h-[48px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3">
+      <div className="flex h-[50px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3.5">
         <Select
           label="Docker context"
           value={context}
@@ -232,6 +302,7 @@ export function DockerModule({ tool, section, onOpenDock }: DockerModuleProps) {
             state={items.length || error ? 'synced' : 'connecting'}
             error={error}
             filter={filter}
+            bulk={bulk}
             selectedName={selected?.name}
             menu={menuFor}
             onSelect={(item) => {

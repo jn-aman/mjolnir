@@ -251,3 +251,65 @@
 @media (prefers-reduced-motion: reduce) {
   [data-radix-popper-content-wrapper] > [data-state], .mjolnir-overlay, .mjolnir-modal, [cmdk-overlay], [cmdk-dialog] { animation-duration: 60ms !important; }
 }
+
+/* Depth. Surfaces are lit from above: a hairline highlight on the top edge,
+   a soft shadow below, and a lift on hover for anything you can open. */
+.surface-card {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface-raised) 100%, white 2%) 0%, var(--surface-raised) 100%);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+}
+.lift {
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms linear;
+}
+.lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lift);
+  border-color: var(--border-strong);
+}
+.lift:active { transform: translateY(0); }
+.icon-chip {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 26px; height: 26px; border-radius: 8px;
+  background: color-mix(in oklab, var(--chip-tint, var(--accent-base)) 14%, var(--surface-raised));
+  border: 1px solid color-mix(in oklab, var(--chip-tint, var(--accent-base)) 28%, transparent);
+  color: var(--chip-tint, var(--accent-base));
+  box-shadow: 0 1px 0 var(--highlight) inset;
+}
+.icon-chip.icon-chip-lg { width: 40px; height: 40px; border-radius: 12px; }
+.glow-dot {
+  width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0;
+  background: var(--dot, var(--status-ok));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--dot, var(--status-ok)) 22%, transparent), 0 0 10px color-mix(in oklab, var(--dot, var(--status-ok)) 60%, transparent);
+}
+@keyframes mjolnir-breathe {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in oklab, var(--dot, var(--status-ok)) 22%, transparent), 0 0 8px color-mix(in oklab, var(--dot, var(--status-ok)) 50%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--dot, var(--status-ok)) 30%, transparent), 0 0 16px color-mix(in oklab, var(--dot, var(--status-ok)) 80%, transparent); }
+}
+.glow-dot.breathe { animation: mjolnir-breathe 2.6s ease-in-out infinite; }
+.chart-glow { filter: drop-shadow(0 0 6px color-mix(in oklab, currentColor 55%, transparent)); }
+.hero-band {
+  background:
+    radial-gradient(900px 220px at 12% -40%, color-mix(in oklab, var(--hero-tint, var(--accent-base)) 26%, transparent), transparent 70%),
+    radial-gradient(600px 200px at 90% 120%, color-mix(in oklab, var(--hero-tint, var(--accent-base)) 12%, transparent), transparent 70%),
+    var(--surface-raised);
+}
+.btn-primary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent-solid) 100%, white 12%) 0%, var(--accent-solid) 100%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px color-mix(in oklab, var(--accent-solid) 40%, transparent);
+}
+.btn-secondary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface-raised) 100%, white 3%) 0%, var(--surface-raised) 100%);
+  box-shadow: 0 1px 0 var(--highlight) inset, 0 1px 2px rgb(0 0 0 / 0.18);
+}
+.row-hover { transition: background-color 120ms linear, box-shadow 160ms cubic-bezier(0.16,1,0.3,1); }
+.row-hover:hover { background: var(--surface-hover); box-shadow: 0 1px 0 var(--highlight) inset; }
+.row-selected {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--accent-base) 16%, var(--surface-pressed)) 0%, var(--surface-pressed) 60%);
+  box-shadow: 0 1px 0 var(--highlight) inset;
+}
+@media (prefers-reduced-motion: reduce) {
+  .glow-dot.breathe { animation: none; }
+  .lift:hover { transform: none; }
+}

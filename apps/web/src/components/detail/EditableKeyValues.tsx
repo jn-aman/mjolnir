@@ -24,11 +24,12 @@ interface EditableKeyValuesProps {
   readonly values: Record<string, string>;
   /** Sends a merge patch for this map alone and resolves when applied. */
   readonly onPatch: (patch: Record<string, string | null>) => Promise<void>;
-  readonly truncate?: boolean;
   readonly testId?: string;
+  readonly validateKey?: ((key: string) => string | null) | undefined;
+  readonly validateValue?: ((value: string) => string | null) | undefined;
 }
 
-export function EditableKeyValues({ values, onPatch, truncate = false, testId }: EditableKeyValuesProps) {
+export function EditableKeyValues({ values, onPatch, testId, validateKey, validateValue }: EditableKeyValuesProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
@@ -74,8 +75,12 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
     }
   };
 
+  const editProblem = editingKey !== null ? (validateValue?.(draft.trim()) ?? null) : null;
+  const addProblem = adding ? (validateKey?.(newKey.trim()) ?? (newKey.trim() ? (validateValue?.(newValue.trim()) ?? null) : null)) : null;
+
   const commitEdit = async (key: string) => {
     const next = draft.trim();
+    if (validateValue?.(next)) return;
     setEditingKey(null);
     setAskingEdit(false);
     if (next === values[key]) return;
@@ -89,6 +94,7 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
       stopAdding();
       return;
     }
+    if (validateKey?.(key) || validateValue?.(value)) return;
     stopAdding();
     await run(key, { [key]: value });
   };
@@ -142,14 +148,20 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void commitEdit(key);
                   if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
                     setEditingKey(null);
                     setAskingEdit(false);
                   }
                 }}
                 aria-label={`Value for ${key}`}
-                className="w-[140px] bg-transparent text-primary outline-none"
+                style={{ width: `${Math.max(value.length, draft.length, 6) + 2}ch`, maxWidth: '60vw' }}
+                className="bg-transparent text-primary outline-none"
               />
-              {askingEdit ? (
+              {editProblem ? (
+                <span className="absolute left-0 top-full z-20 mt-1.5 whitespace-nowrap rounded-md border border-[var(--status-error-border)] bg-error-bg px-2 py-1 font-sans text-[11px] text-error shadow-[var(--shadow-md)]" data-testid="edit-error">{editProblem}</span>
+              ) : null}
+              {askingEdit && !editProblem ? (
                 <span className="absolute left-0 top-full z-20 mt-1.5">
                   <AskSave what={key} onSave={() => void commitEdit(key)} onDiscard={() => { setEditingKey(null); setAskingEdit(false); }} />
                 </span>
@@ -164,7 +176,7 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
                 }}
                 aria-label={`Edit ${key}`}
                 title="Click to edit"
-                className={`border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent ${truncate ? 'max-w-[220px] truncate' : ''}`}
+                className={`border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent `}
               >
                 {value || <span className="text-tertiary">(empty)</span>}
               </button>
@@ -197,7 +209,11 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
             value={newKey}
             onChange={(event) => setNewKey(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Escape') stopAdding();
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                stopAdding();
+              }
             }}
             placeholder="key"
             aria-label="New key"
@@ -209,7 +225,11 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
             onChange={(event) => setNewValue(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void commitAdd();
-              if (event.key === 'Escape') stopAdding();
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                stopAdding();
+              }
             }}
             placeholder="value"
             aria-label="New value"
@@ -231,7 +251,10 @@ export function EditableKeyValues({ values, onPatch, truncate = false, testId }:
           >
             <X size={12} strokeWidth={2.4} />
           </button>
-          {askingAdd ? (
+          {addProblem && (newKey.trim() || newValue.trim()) ? (
+            <span className="absolute left-0 top-full z-20 mt-1.5 whitespace-nowrap rounded-md border border-[var(--status-error-border)] bg-error-bg px-2 py-1 font-sans text-[11px] text-error shadow-[var(--shadow-md)]" data-testid="edit-error">{addProblem}</span>
+          ) : null}
+          {askingAdd && !addProblem ? (
             <span className="absolute left-0 top-full z-20 mt-1.5">
               <AskSave what="entry" onSave={() => void commitAdd()} onDiscard={stopAdding} />
             </span>

@@ -4,6 +4,64 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } f
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from '@codemirror/language';
 import { yaml } from '@codemirror/lang-yaml';
+import { json } from '@codemirror/lang-json';
+import { javascript } from '@codemirror/lang-javascript';
+import { markdown } from '@codemirror/lang-markdown';
+import { python } from '@codemirror/lang-python';
+import { go } from '@codemirror/lang-go';
+import { html } from '@codemirror/lang-html';
+import { css } from '@codemirror/lang-css';
+import { xml } from '@codemirror/lang-xml';
+import { sql } from '@codemirror/lang-sql';
+import { rust } from '@codemirror/lang-rust';
+import { StreamLanguage } from '@codemirror/language';
+import { shell } from '@codemirror/legacy-modes/mode/shell';
+import { toml } from '@codemirror/legacy-modes/mode/toml';
+import { properties } from '@codemirror/legacy-modes/mode/properties';
+import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
+import { nginx } from '@codemirror/legacy-modes/mode/nginx';
+
+export type EditorLanguage = 'yaml' | 'json' | 'javascript' | 'typescript' | 'jsx' | 'tsx' | 'markdown' | 'python' | 'go' | 'html' | 'css' | 'xml' | 'sql' | 'rust' | 'shell' | 'toml' | 'properties' | 'dockerfile' | 'nginx' | 'plain';
+
+/** The language for a file name, by its extension. */
+export function languageFor(name: string): EditorLanguage {
+  const lower = name.toLowerCase();
+  const base = lower.split('/').pop() ?? lower;
+  if (base === 'dockerfile' || base.startsWith('dockerfile.')) return 'dockerfile';
+  if (/nginx\.conf$/.test(base)) return 'nginx';
+  const ext = base.includes('.') ? (base.split('.').pop() ?? '') : '';
+  const map: Record<string, EditorLanguage> = {
+    yaml: 'yaml', yml: 'yaml', json: 'json', jsonl: 'json', geojson: 'json', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'jsx', ts: 'typescript', mts: 'typescript', cts: 'typescript', tsx: 'tsx',
+    md: 'markdown', markdown: 'markdown', py: 'python', go: 'go', html: 'html', htm: 'html', css: 'css', xml: 'xml', svg: 'xml', sql: 'sql', rs: 'rust',
+    sh: 'shell', bash: 'shell', zsh: 'shell', toml: 'toml', ini: 'properties', properties: 'properties', env: 'properties', conf: 'properties', cfg: 'properties',
+  };
+  return map[ext] ?? 'plain';
+}
+
+function languageExtension(language: EditorLanguage) {
+  switch (language) {
+    case 'yaml': return yaml();
+    case 'json': return json();
+    case 'javascript': return javascript();
+    case 'jsx': return javascript({ jsx: true });
+    case 'typescript': return javascript({ typescript: true });
+    case 'tsx': return javascript({ typescript: true, jsx: true });
+    case 'markdown': return markdown();
+    case 'python': return python();
+    case 'go': return go();
+    case 'html': return html();
+    case 'css': return css();
+    case 'xml': return xml();
+    case 'sql': return sql();
+    case 'rust': return rust();
+    case 'shell': return StreamLanguage.define(shell);
+    case 'toml': return StreamLanguage.define(toml);
+    case 'properties': return StreamLanguage.define(properties);
+    case 'dockerfile': return StreamLanguage.define(dockerFile);
+    case 'nginx': return StreamLanguage.define(nginx);
+    default: return [];
+  }
+}
 import { tags } from '@lezer/highlight';
 import { stringify } from 'yaml';
 import { Check, Pencil, RotateCcw, X } from 'lucide-react';
@@ -88,6 +146,14 @@ const highlight = HighlightStyle.define([
   { tag: tags.null, color: 'var(--text-tertiary)' },
   { tag: tags.comment, color: 'var(--text-tertiary)', fontStyle: 'italic' },
   { tag: tags.punctuation, color: 'var(--text-tertiary)' },
+  { tag: tags.keyword, color: 'var(--log-pod-b)' },
+  { tag: tags.function(tags.variableName), color: 'var(--accent-base)' },
+  { tag: tags.typeName, color: 'var(--series-3)' },
+  { tag: tags.heading, color: 'var(--text-primary)', fontWeight: 'bold' },
+  { tag: tags.link, color: 'var(--accent-base)', textDecoration: 'underline' },
+  { tag: tags.operator, color: 'var(--text-secondary)' },
+  { tag: tags.attributeName, color: 'var(--series-4)' },
+  { tag: tags.tagName, color: 'var(--series-2)' },
 ]);
 
 interface YamlEditorProps {
@@ -101,9 +167,12 @@ interface YamlEditorProps {
   readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   /** Hands the caller apply and discard, so a guard elsewhere can offer Save. */
   readonly controller?: ((api: { apply: () => Promise<void>; discard: () => void }) => void) | undefined;
+  readonly language?: EditorLanguage;
+  /** Soft-wrap long lines (logs, prose). */
+  readonly wrap?: boolean;
 }
 
-export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditing = false, applyLabel = 'Apply', onDirtyChange, controller }: YamlEditorProps) {
+export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditing = false, applyLabel = 'Apply', onDirtyChange, controller, language = 'yaml', wrap = false }: YamlEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const [dirty, setDirtyState] = useState(false);
@@ -130,7 +199,8 @@ export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditin
         bracketMatching(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-        yaml(),
+        languageExtension(language),
+        ...(wrap ? [EditorView.lineWrapping] : []),
         syntaxHighlighting(highlight),
         storm,
         EditorState.readOnly.of(!onApply || !editing),
@@ -150,7 +220,7 @@ export function YamlEditor({ value, onApply, testId = 'yaml-editor', startEditin
     // The editor owns its document after mount; a new `value` means a new
     // object was selected, and the drawer remounts this component for that.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, Boolean(onApply), editing]);
+  }, [value, Boolean(onApply), editing, language, wrap]);
 
   const reset = () => {
     const editor = view.current;
