@@ -20,6 +20,7 @@ import { kindTint } from '../lib/kindIcons.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
 import { LoadingState } from './ui/States.tsx';
+import { ResourceDetail } from './detail/ResourceDetail.tsx';
 
 /**
  * The detail panel.
@@ -414,9 +415,13 @@ export function ResourceDrawer({
               }}
             />
           ) : (
-            <p className="text-[12.5px] text-tertiary">
-              A detailed view for {kind} is not built yet. The YAML tab has everything.
-            </p>
+            <ResourceDetail
+              key={`${namespace}/${name}`}
+              context={context}
+              kind={kind}
+              item={item as never}
+              {...(onNavigate ? { onNavigate } : {})}
+            />
           )}
         </Tabs.Content>
 
