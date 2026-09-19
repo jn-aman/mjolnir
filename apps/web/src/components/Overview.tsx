@@ -7,6 +7,7 @@ import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import { useLiveList } from '../lib/live.ts';
+import { useFlags } from '../lib/flags.tsx';
 import { ClusterHero } from './ClusterHero.tsx';
 import { Activity, AlertTriangle, ArrowRight, Bell, Gauge as GaugeIcon, PieChart } from 'lucide-react';
 import { StatusChip, toneFor } from './StatusChip.tsx';
@@ -47,6 +48,7 @@ interface OverviewProps {
 }
 
 export function Overview({ context, cluster, onDecorChanged, onNavigate }: OverviewProps) {
+  const { values: flagValues } = useFlags();
   const [nodeMetrics, setNodeMetrics] = useState<MetricsResponse | null>(null);
   // Pods, nodes and events come over the live wire, like every other list, so
   // this screen changes with the cluster rather than every five seconds.
@@ -66,6 +68,13 @@ export function Overview({ context, cluster, onDecorChanged, onNavigate }: Overv
     let cancelled = false;
     const load = async () => {
       // Metrics are sampled, not watched: a poll is the honest shape for them.
+      // Off means the app does not ask. A flag that hides a chart while still
+      // polling the cluster for it would be a setting that does nothing except
+      // to the person reading it.
+      if (!(flagValues['kubernetes.metrics'] ?? true)) {
+        setNodeMetrics({ available: false, reason: 'Metrics are turned off in settings.', series: [] });
+        return;
+      }
       const response = await fetch(`/api/metrics/${encodeURIComponent(context)}/nodes`);
       const body = (await response.json()) as MetricsResponse;
       if (!cancelled) setNodeMetrics(body);

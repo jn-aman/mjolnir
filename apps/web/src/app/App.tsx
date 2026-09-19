@@ -153,7 +153,9 @@ export function App() {
         setAppSettings(response.settings);
         // First run is "the file has never recorded an answer", not "no
         // settings file", so a reset that keeps preferences does not replay it.
-        if (!response.settings.onboarding.completed) setWelcome(true);
+        // The flag decides whether there is a welcome at all; the setting
+        // decides whether this person has already seen it.
+        if (!response.settings.onboarding.completed && (flagValues['ui.onboarding'] ?? true)) setWelcome(true);
       })
       .catch(() => undefined);
   }, []);

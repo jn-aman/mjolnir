@@ -14,13 +14,19 @@ const ChatRequest = z.object({
  * POST /api/ai/chat streams the agent's events as SSE: text deltas, tool
  * calls, tool results, done. The key never leaves the server.
  */
-export function aiRoutes(context: ToolContext): Router {
+export function aiRoutes(context: ToolContext, flags: { value(id: string): boolean }): Router {
   const router = Router();
 
   router.get(
     '/tools',
     handle(async (_req, res) => {
-      res.json({ tools: TOOLS.map((tool) => ({ name: tool.name, description: tool.description, kind: tool.kind })) });
+      // The assistant is told about the tools it may actually run. Listing
+      // one it is not allowed to call would make the model promise something
+      // and then fail, which reads as the assistant being broken.
+      const canCall = flags.value('assistant.tool-calls');
+      const canWrite = flags.value('assistant.writes') && context.settings.get().ai.allowWrites;
+      const allowed = canCall ? TOOLS.filter((tool) => canWrite || tool.kind !== 'write') : [];
+      res.json({ tools: allowed.map((tool) => ({ name: tool.name, description: tool.description, kind: tool.kind })), canCall, canWrite });
     }),
   );
 

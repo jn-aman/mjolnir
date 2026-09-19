@@ -42,8 +42,20 @@ const ACTIONS = new Set(['start', 'stop', 'restart', 'kill', 'pause', 'unpause']
 
 const cleanName = (c: ContainerSummary) => c.Names[0]?.replace(/^\//, '') ?? c.Id.slice(0, 12);
 
-export function dockerRoutes(): Router {
+export function dockerRoutes(flags: { value(id: string): boolean }): Router {
   const router = Router();
+
+  /**
+   * One gate in front of everything that changes a container.
+   *
+   * As middleware rather than a check repeated in nine handlers, because the
+   * tenth handler is the one that would be written without it.
+   */
+  router.use((req, _res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD') return next();
+    if (flags.value('docker.write')) return next();
+    next(new HttpError(403, 'auth', 'Container actions are turned off in this build.'));
+  });
 
   const wrap = <T>(work: () => Promise<T>): Promise<T> =>
     work().catch((error: unknown) => {

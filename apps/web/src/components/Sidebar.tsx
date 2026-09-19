@@ -59,6 +59,18 @@ interface SidebarProps {
   readonly compact?: boolean;
 }
 
+/**
+ * Sections that belong to a flagged feature.
+ *
+ * Kept here rather than in the tool definitions because it is a small list
+ * and putting a flag id into every section entry would make the common case,
+ * a section with no flag, carry a field it never uses.
+ */
+const SECTION_FLAGS: Readonly<Record<string, string>> = {
+  'storage:transfers': 'storage.transfers',
+  'storage:presigned links': 'storage.presigned',
+};
+
 export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width, module, compact = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -115,7 +127,15 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
         )}
         <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
         <ul>
-          {(module.sections ?? []).map((section) => {
+          {(module.sections ?? [])
+            .filter((section) => {
+              // A section whose feature is off should not be in the
+              // navigation. Leaving it there and explaining on arrival is how
+              // a flag becomes decoration.
+              const flag = SECTION_FLAGS[`${module.id}:${section.toLowerCase()}`];
+              return !flag || (flagValues[flag] ?? true);
+            })
+            .map((section) => {
             const id = `${module.id}:${section.toLowerCase().replace(/\s+/g, '-')}`;
             return (
               <li key={section}>

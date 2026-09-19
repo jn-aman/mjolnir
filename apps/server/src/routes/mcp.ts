@@ -9,11 +9,16 @@ import { HttpError, handle } from '../http.ts';
  * HTTP. Off by default; when on, every request needs the bearer token from
  * Settings. Stateless: each request gets its own server instance.
  */
-export function mcpRoutes(context: ToolContext): Router {
+export function mcpRoutes(context: ToolContext, flags: { value(id: string): boolean }): Router {
   const router = Router();
 
   const guard = (authorization: string | undefined) => {
     const mcp = context.settings.get().mcp;
+    // Two gates, and they mean different things. The flag says whether this
+    // build has the feature; the setting says whether this person turned it
+    // on. A flag that only changed what a settings page looked like, while
+    // the port kept answering, would be worse than no flag.
+    if (!flags.value('mcp.http')) throw HttpError.notFound('MCP over HTTP is not available in this build.');
     if (!mcp.http) throw HttpError.notFound('MCP over HTTP is off. Turn it on in Settings › MCP server.');
     const token = authorization?.replace(/^Bearer\s+/i, '') ?? '';
     if (!mcp.token || token !== mcp.token) throw new HttpError(401, 'auth', 'invalid MCP token');

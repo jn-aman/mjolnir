@@ -97,6 +97,7 @@ export const FLAGS: readonly FlagDefinition[] = [
     fallback: false,
     stage: 'beta',
     module: 'mjolnir',
+    warning: 'This opens a port on this machine that an agent can drive Mjolnir through. It is bound to 127.0.0.1 and needs the token, and it is still a way into your clusters.',
   },
   {
     id: 'kubernetes.time-travel',
