@@ -89,16 +89,23 @@ const OWNED = [
  * Every entry here is a sentence somebody would otherwise have to work out
  * from two values and a path.
  */
-const EXPLAINED: ReadonlyArray<{ match: RegExp; note: (change: { desired: unknown; live: unknown }) => string; expected?: boolean }> = [
+interface NoteInput {
+  readonly desired: unknown;
+  readonly live: unknown;
+  /** What the desired side is called: "the acme chart", "the last kubectl apply". */
+  readonly against: string;
+}
+
+const EXPLAINED: ReadonlyArray<{ match: RegExp; note: (change: NoteInput) => string; expected?: boolean }> = [
   {
     match: /^spec\.replicas$/,
-    note: ({ desired, live }) =>
-      `The chart asks for ${String(desired)} and the cluster is running ${String(live)}. A HorizontalPodAutoscaler does this legitimately and will keep doing it; a person running kubectl scale does this too, and the next apply or upgrade will undo it.`,
+    note: ({ desired, live, against }) =>
+      `${sentenceCase(against)} asks for ${String(desired)} and the cluster is running ${String(live)}. A HorizontalPodAutoscaler does this legitimately and will keep doing it; a person running kubectl scale does this too, and the next apply or upgrade will undo it.`,
   },
   {
     match: /containers\[\d+\]\.image$/,
-    note: ({ desired, live }) =>
-      `The running image is ${String(live)}, not ${String(desired)}. Usually kubectl set image, which the next upgrade reverts, so whatever this fixed comes back.`,
+    note: ({ desired, live, against }) =>
+      `The running image is ${String(live)}, not ${String(desired)}. Usually kubectl set image, which the next reconcile against ${against} reverts, so whatever this fixed comes back.`,
   },
   {
     match: /containers\[\d+\]\.resources\./,
@@ -128,7 +135,7 @@ export interface DriftInput {
 }
 
 export function detectDrift(input: DriftInput): DriftReport {
-  const changes = comparePaths(input.desired, input.live).map((change) => decorate(change));
+  const changes = comparePaths(input.desired, input.live).map((change) => decorate(change, input.against));
   const unexpected = changes.filter((change) => !change.expected).length;
   const kind = String((input.live as { kind?: string }).kind ?? 'Object');
   const metadata = (input.live['metadata'] ?? {}) as { name?: string; namespace?: string };
@@ -155,13 +162,24 @@ function describe(changes: readonly DriftChange[], unexpected: number, against: 
   return `${first.path} differs from ${against}${tail}.`;
 }
 
-function decorate(change: Omit<DriftChange, 'note' | 'expected'>): DriftChange {
+function decorate(change: Omit<DriftChange, 'note' | 'expected'>, against: string): DriftChange {
   const rule = EXPLAINED.find((entry) => entry.match.test(change.path));
   return {
     ...change,
-    ...(rule ? { note: rule.note({ desired: change.desired, live: change.live }) } : {}),
+    ...(rule ? { note: rule.note({ desired: change.desired, live: change.live, against }) } : {}),
     expected: rule?.expected ?? false,
   };
+}
+
+/**
+ * "the acme chart" at the start of a sentence.
+ *
+ * The name of the source is written to read mid-sentence, because that is
+ * where it appears most often. One note needs it first, and a capital there is
+ * cheaper than two spellings of every name.
+ */
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**

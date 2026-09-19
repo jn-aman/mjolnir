@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { resolveResource, decodeHelmReleases, latestHelmReleases, type HelmSecretShape } from '@mjolnir/k8s';
 import type { ClusterRegistry } from '../clusters.ts';
 import { HttpError, handle, param, query } from '../http.ts';
+import { warmSnapshot } from '../watch-wait.ts';
 
 /** Helm releases from the watch cache of Secrets: nothing to install, nothing to run. */
 export function helmRoutes(registry: ClusterRegistry): Router {
@@ -10,12 +11,11 @@ export function helmRoutes(registry: ClusterRegistry): Router {
   const secretsFor = async (contextName: string, namespace?: string): Promise<HelmSecretShape[]> => {
     const resource = resolveResource('Secret');
     if (!resource) throw HttpError.badRequest('no Secret kind');
-    const watch = registry.connect(contextName).watch(resource, namespace);
-    let snapshot = watch.snapshot();
-    for (let tries = 0; snapshot.state === 'connecting' && tries < 20; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      snapshot = watch.snapshot();
-    }
+    // Waits for the cache to be full rather than for it to be filling: a
+    // brand new watch is `idle` for a tick before it is `connecting`, so the
+    // condition this used to poll on let the very first request through with
+    // an empty list and an empty release list to go with it.
+    const snapshot = await warmSnapshot(registry.connect(contextName), resource, namespace);
     return [...snapshot.items] as unknown as HelmSecretShape[];
   };
 

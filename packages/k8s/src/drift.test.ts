@@ -211,3 +211,28 @@ describe('where desired state comes from', () => {
     expect(findInManifest(documents, { kind: 'Deployment', name: 'api', namespace: 'shop' })).toBe(documents[0]);
   });
 });
+
+describe('naming the source it compared against', () => {
+  it('does not call the last kubectl apply a chart', () => {
+    const report = detectDrift({
+      live: { kind: 'Deployment', metadata: { name: 'api' }, spec: { replicas: 5 } },
+      desired: { kind: 'Deployment', metadata: { name: 'api' }, spec: { replicas: 2 } },
+      source: 'last-applied',
+      against: 'the last kubectl apply',
+    });
+
+    const note = report.changes[0]?.note ?? '';
+    expect(note).toContain('The last kubectl apply asks for 2');
+    expect(note).not.toContain('chart');
+  });
+
+  it('names the chart when that is what it compared against', () => {
+    const report = detectDrift({
+      live: { kind: 'Deployment', metadata: { name: 'api' }, spec: { replicas: 5 } },
+      desired: { kind: 'Deployment', metadata: { name: 'api' }, spec: { replicas: 2 } },
+      source: 'helm',
+      against: 'the acme chart',
+    });
+    expect(report.changes[0]?.note).toContain('The acme chart asks for 2');
+  });
+});

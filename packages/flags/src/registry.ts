@@ -282,6 +282,14 @@ export const FLAGS: readonly FlagDefinition[] = [
     module: 'kubernetes',
   },
   {
+    id: 'kubernetes.drift',
+    label: 'Diff and drift',
+    description: 'Compares a live object against its Helm chart or the last kubectl apply, ignoring everything Kubernetes defaults.',
+    fallback: true,
+    stage: 'beta',
+    module: 'kubernetes',
+  },
+  {
     id: 'kubernetes.certificates',
     label: 'Certificate expiry',
     description: 'Finds every TLS secret, cert-manager certificate and webhook CA bundle, and says which of them nobody renews.',

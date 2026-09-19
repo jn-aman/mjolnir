@@ -122,9 +122,29 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
     informer.on('update', () => this.#touch());
     informer.on('delete', () => this.#touch());
 
+    /*
+     * A reconnect, not a sync.
+     *
+     * This used to set `synced`, and it is the wrong event for it: the
+     * informer emits `connect` when the *watch* is established, which happens
+     * before the initial list has been delivered into the cache. So a brand
+     * new watch reported "synced, 0 items" for the couple of hundred
+     * milliseconds before the list arrived.
+     *
+     * That is the exact lie this state exists to prevent. Every caller reads
+     * `synced` as "the cache is the cluster", so a list route answered "this
+     * namespace is empty" for a namespace that was not, a Helm release could
+     * not be found a moment after it was installed, and a drift check said an
+     * object had never been installed by Helm when it had. Each one looked
+     * broken once and then fixed itself, which is the worst way for a bug to
+     * behave, because it never reproduces when somebody goes to look.
+     *
+     * It still clears the backoff, because a connection really was made.
+     */
     informer.on('connect', () => {
       this.#restartAttempt = 0;
-      this.#setState('synced');
+      // Back to connecting only if we had given up; never forward to synced.
+      if (this.#state === 'error') this.#setState('connecting');
     });
 
     informer.on('error', (error?: unknown) => {
@@ -139,6 +159,8 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
     });
 
     try {
+      // `start()` resolves once the initial list has been read and replayed
+      // into the cache, which is the only moment `synced` is true.
       await informer.start();
       this.#setState('synced');
       this.#touch();

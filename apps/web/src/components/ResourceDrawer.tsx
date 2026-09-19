@@ -18,6 +18,8 @@ import { Terminal as TerminalIcon } from 'lucide-react';
 import { KindMark } from './ui/KindMark.tsx';
 import { kindTint } from '../lib/kindIcons.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
+import { useFlags } from '../lib/flags.tsx';
+import { DriftPanel } from './DriftPanel.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
 import { LoadingState } from './ui/States.tsx';
 import { ResourceDetail } from './detail/ResourceDetail.tsx';
@@ -80,6 +82,15 @@ export function ResourceDrawer({
 }: DrawerProps) {
   const [yaml, setYaml] = useState<string | null>(null);
   const [tab, setTab] = useState(initialTab ?? 'overview');
+  const { values: flagValues } = useFlags();
+  /*
+   * Only where there is something to compare against.
+   *
+   * A pod's desired state belongs to the replica set that made it, and a
+   * replica set's to the deployment above that, so offering the tab on one
+   * would promise an answer that is always "nothing to compare against".
+   */
+  const canDrift = (flagValues['kubernetes.drift'] ?? true) && !['Pod', 'ReplicaSet', 'Event', 'Endpoints', 'Node'].includes(kind);
   const [expanded, setExpanded] = useState(false);
   const [logContainer, setLogContainer] = useState<string | undefined>(undefined);
   const [logPrevious, setLogPrevious] = useState(false);
@@ -273,6 +284,7 @@ export function ResourceDrawer({
     ...(isPod && onForward ? [{ id: 'forward', label: 'Port forward…', onSelect: () => onForward(item) }] : []),
     { id: 'yaml', label: 'Edit YAML', onSelect: () => setTab('yaml') },
     { id: 'events', label: 'Events', onSelect: () => setTab('events') },
+    ...(canDrift ? [{ id: 'drift', label: 'Compare with the chart', onSelect: () => setTab('drift') }] : []),
     SEPARATOR,
     ...copyEntry('copy-name', 'Copy name', name),
     ...copyEntry('copy-namespace', 'Copy namespace', namespace),
@@ -296,6 +308,9 @@ export function ResourceDrawer({
     ...(isPod ? [{ id: 'logs', label: 'Logs' }] : []),
     { id: 'events', label: 'Events' },
     { id: 'yaml', label: 'YAML' },
+    // Beside the YAML on purpose: "what does this look like" and "is this
+    // what it was supposed to look like" are the same question asked twice.
+    ...(canDrift ? [{ id: 'drift', label: 'Drift' }] : []),
   ];
 
   return (
@@ -465,6 +480,17 @@ export function ResourceDrawer({
                 initialContainer={logContainer}
                 initialPrevious={logPrevious}
               />
+            ) : null}
+          </Tabs.Content>
+        ) : null}
+
+        {canDrift ? (
+          <Tabs.Content value="drift" className="flex min-h-0 flex-1 flex-col outline-none">
+            {/* Mounted only when looked at: it reads a Helm release, and
+                doing that for every object somebody clicks would be a lot of
+                secrets decoded for a tab nobody opened. */}
+            {tab === 'drift' ? (
+              <DriftPanel context={context} kind={kind} name={name} namespace={namespace || undefined} />
             ) : null}
           </Tabs.Content>
         ) : null}

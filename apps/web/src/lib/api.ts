@@ -179,6 +179,34 @@ export interface AccountDevice {
   active: boolean;
 }
 
+export interface DriftChange {
+  path: string;
+  kind: 'changed' | 'removed' | 'type-changed';
+  desired: unknown;
+  live: unknown;
+  note?: string | null;
+  /** Some drift is a controller doing its job. */
+  expected: boolean;
+}
+
+export type DriftResult =
+  | {
+      available: true;
+      source: 'helm' | 'last-applied' | 'argocd';
+      object: { kind: string; name: string; namespace?: string | null };
+      changes: DriftChange[];
+      unexpected: number;
+      inSync: boolean;
+      summary: string;
+      against: string;
+    }
+  | {
+      available: false;
+      object: { kind: string; name: string; namespace?: string | null };
+      /** Why there is nothing to compare against, which is not the same as no drift. */
+      reason: string;
+    };
+
 export interface CertificateSummary {
   id: string;
   source: 'secret' | 'cert-manager' | 'webhook' | 'api-service';
@@ -603,6 +631,13 @@ export const api = {
     release: (context: string, namespace: string, name: string, revision?: number) =>
       request<{ release: HelmReleaseFull; history: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${revision ? `?revision=${revision}` : ''}`),
   },
+  drift: {
+    check: (context: string, kind: string, name: string, namespace?: string) =>
+      request<DriftResult>(
+        `/api/drift/${encodeURIComponent(context)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`,
+      ),
+  },
+
   certificates: {
     list: (context: string, namespace?: string) =>
       request<CertificateReport>(
