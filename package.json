@@ -40,7 +40,8 @@
     "release": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/release.ts",
     "release:verify": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/release.ts --verify-only",
     "dmg": "npm run release",
-    "org": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/org.ts"
+    "org": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/org.ts",
+    "deploy:site": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/deploy-site.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
