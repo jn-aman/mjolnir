@@ -82,6 +82,8 @@ export function App() {
   const [diagnosing, setDiagnosing] = useState<{ kind: string; name: string; namespace?: string } | undefined>(undefined);
   /** Which picker the dock's plus button opened, if any. */
   const [picking, setPicking] = useState<'logs' | 'shell' | null>(null);
+  /** Reported by the list, shown in the toolbar above it. */
+  const [listStatus, setListStatus] = useState<{ visible: number; total: number; state: WatchState } | null>(null);
   const [kind, setKind] = useState(route.selection?.kind === 'resource' ? route.selection.value : 'Pod');
   const [namespaces, setNamespaces] = useState<string[]>(route.namespace ? route.namespace.split(',').filter(Boolean) : []);
   /** The one namespace to scope a server request to; empty means all, or several (filtered here). */
@@ -1028,6 +1030,26 @@ export function App() {
 
                   <div className="flex-1" />
 
+                  {/*
+                    What is on screen, beside the controls that decide it.
+                    
+                    This lived in a status bar along the bottom, which spent a
+                    whole row of the window on two short words and put them as
+                    far from the filter that changes them as the window allows.
+                  */}
+                  {listStatus ? (
+                    <div className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono text-[11.5px] text-tertiary" data-testid="resource-count">
+                      <span>
+                        {listStatus.visible === listStatus.total
+                          ? `${listStatus.total} ${kind.toLowerCase()}`
+                          : `${listStatus.visible} of ${listStatus.total}`}
+                      </span>
+                      {listStatus.state === 'synced' ? <span className="text-ok" data-testid="live-state">watching</span> : null}
+                      {listStatus.state === 'error' ? <span className="text-warn" data-testid="live-state">reconnecting</span> : null}
+                      {listStatus.state === 'connecting' ? <span data-testid="live-state">connecting</span> : null}
+                    </div>
+                  ) : null}
+
                   {health ? (
                     <div className="flex shrink-0 items-center gap-3 whitespace-nowrap font-mono text-[11.5px]" data-testid="health-strip">
                       {health.error > 0 ? <Dot tone="error" active={statusFilter === 'tone:error'} onClick={() => setStatusFilter(statusFilter === 'tone:error' ? '' : 'tone:error')}>{health.error} failing</Dot> : null}
@@ -1040,6 +1062,7 @@ export function App() {
                 <div className="relative flex min-h-0 flex-1">
                   <ResourceList
                     kind={kind}
+                    onStatus={setListStatus}
                     label={definition?.label}
                     namespace={definition?.namespaced ? (namespaces.length > 1 ? namespaces.join(', ') : namespace) : undefined}
                     items={visibleItems}

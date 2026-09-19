@@ -53,6 +53,15 @@ interface ResourceListProps {
    * bucket or a container list.
    */
   readonly empty?: { readonly title: string; readonly detail: string } | undefined;
+  /**
+   * Reports the count and the watch state so the toolbar can show them.
+   *
+   * They used to live in a status bar along the bottom, which spent a whole
+   * row of the window on two short words and put them as far from the filter
+   * that changes them as the window allows. The toolbar already had the empty
+   * space and already holds everything else about what is on screen.
+   */
+  readonly onStatus?: ((status: { visible: number; total: number; state: WatchState }) => void) | undefined;
 }
 
 const ROW_HEIGHT = 42;
@@ -122,6 +131,7 @@ export function ResourceList({
   menu,
   bulk,
   empty,
+  onStatus,
 }: ResourceListProps) {
   const { values: flags } = useFlags();
   // Each surface asks for itself rather than reading one "advanced table"
@@ -264,6 +274,16 @@ export function ResourceList({
       return left > right ? direction : -direction;
     });
   }, [items, filter, sort, columns, deepSearch]);
+
+  /**
+   * Reports what is on screen, for the toolbar above it.
+   *
+   * Up rather than rendered here, because the thing that shows it sits in
+   * the toolbar beside the filter that changes it.
+   */
+  useEffect(() => {
+    onStatus?.({ visible: visible.length, total: items.length, state });
+  }, [onStatus, visible.length, items.length, state]);
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -592,15 +612,6 @@ export function ResourceList({
        </div>
       </div>
 
-      <div className="flex h-[26px] shrink-0 items-center gap-3 border-t border-line bg-raised px-4 font-mono text-[11px] text-tertiary">
-        <span data-testid="resource-count">
-          {visible.length === items.length
-            ? `${items.length} ${kind.toLowerCase()}`
-            : `${visible.length} of ${items.length}`}
-        </span>
-        {state === 'synced' ? <span className="text-ok">watching</span> : null}
-        {state === 'error' ? <span className="text-warn">reconnecting</span> : null}
-      </div>
       <AnimatePresence>
         {canBulk && bulk && picked.size > 0 ? (
           <motion.div
