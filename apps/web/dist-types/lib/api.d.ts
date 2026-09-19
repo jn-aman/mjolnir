@@ -100,6 +100,19 @@ export interface AppSettings {
         version: number;
     };
 }
+/** A kind this cluster defines, discovered from its CustomResourceDefinitions. */
+export interface CustomResource extends ResourceDefinition {
+    definition: string;
+    shortNames: string[];
+    versions: string[];
+    columns: Array<{
+        name: string;
+        jsonPath: string;
+        type: string;
+        priority?: number;
+    }>;
+    owner?: string;
+}
 export interface FlagState {
     id: string;
     label: string;
@@ -307,6 +320,11 @@ export declare const api: {
     clusterStatus: (context: string) => Promise<ClusterStatus>;
     kinds: () => Promise<{
         resources: ResourceDefinition[];
+    }>;
+    /** The kinds one cluster serves: built-ins plus its own custom resources. */
+    kindsFor: (context: string, fresh?: boolean) => Promise<{
+        resources: ResourceDefinition[];
+        custom: CustomResource[];
     }>;
     list: <T = Record<string, unknown>>(context: string, kind: string, namespace?: string) => Promise<ResourceListResponse<T>>;
     get: <T = Record<string, unknown>>(context: string, kind: string, name: string, namespace?: string) => Promise<T>;

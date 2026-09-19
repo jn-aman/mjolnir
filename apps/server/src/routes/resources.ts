@@ -1,17 +1,51 @@
 import { Router } from 'express';
 import { load as parseYaml } from 'js-yaml';
 import { RESOURCES, collectionPath, resolveResource } from '@mjolnir/k8s';
+import type { ResourceDefinition } from '@mjolnir/k8s';
 import type { ClusterRegistry } from '../clusters.ts';
+import type { CrdCatalogue } from '../crds.ts';
 import { HttpError, handle, param, query } from '../http.ts';
 
-export function resourceRoutes(registry: ClusterRegistry): Router {
+export function resourceRoutes(registry: ClusterRegistry, crds: CrdCatalogue): Router {
   const router = Router();
+
+  /**
+   * Built-in kinds first, then whatever this cluster serves.
+   *
+   * Built-ins win on a name clash because a cluster that defines its own
+   * `Deployment` should not be able to redirect the Workloads section, and
+   * because the built-in table carries categories and aliases that a CRD does
+   * not. Everything downstream treats the two identically.
+   */
+  const resolve = async (contextName: string, input: string): Promise<ResourceDefinition> => {
+    const builtin = resolveResource(input);
+    if (builtin) return builtin;
+    const custom = await crds.resolve(contextName, input);
+    if (custom) return custom;
+    throw HttpError.badRequest(`unknown resource kind: ${input}`);
+  };
 
   /** The kinds this build knows about, so the client never hard-codes them. */
   router.get(
     '/kinds',
     handle(async (_req, res) => {
       res.json({ resources: RESOURCES });
+    }),
+  );
+
+  /**
+   * The kinds one cluster serves: the built-ins plus its own custom resources.
+   *
+   * Separate from `/kinds` because the answer is per cluster. A build talks to
+   * a bare kind cluster and an Argo-and-Crossplane cluster in the same window,
+   * and the sidebar has to differ between them.
+   */
+  router.get(
+    '/kinds/:context',
+    handle(async (req, res) => {
+      const contextName = param(req, 'context');
+      const custom = await crds.list(contextName, { fresh: query(req, 'fresh') === 'true' });
+      res.json({ resources: RESOURCES, custom });
     }),
   );
 
@@ -30,8 +64,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
       const kindInput = param(req, 'kind');
       const namespace = query(req, 'namespace');
 
-      const resource = resolveResource(kindInput);
-      if (!resource) throw HttpError.badRequest(`unknown resource kind: ${kindInput}`);
+      const resource = await resolve(contextName, kindInput);
 
       const connection = registry.connect(contextName);
       const watch = connection.watch(resource, resource.namespaced ? namespace : undefined);
@@ -63,8 +96,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
       const name = param(req, 'name');
       const namespace = query(req, 'namespace');
 
-      const resource = resolveResource(kindInput);
-      if (!resource) throw HttpError.badRequest(`unknown resource kind: ${kindInput}`);
+      const resource = await resolve(contextName, kindInput);
       if (resource.namespaced && !namespace) {
         throw HttpError.badRequest(`${resource.kind} is namespaced; namespace is required`);
       }
@@ -94,8 +126,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
     handle(async (req, res) => {
       const contextName = param(req, 'context');
       const kindInput = param(req, 'kind');
-      const resource = resolveResource(kindInput);
-      if (!resource) throw HttpError.badRequest(`unknown resource kind: ${kindInput}`);
+      const resource = await resolve(contextName, kindInput);
 
       const text = (req.body as { yaml?: unknown })?.yaml;
       if (typeof text !== 'string' || text.trim() === '') throw HttpError.badRequest('expected a yaml field');
@@ -132,8 +163,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
       const name = param(req, 'name');
       const namespace = query(req, 'namespace');
       if (!namespace) throw HttpError.badRequest('namespace is required');
-      const resource = resolveResource('Pod');
-      if (!resource) throw HttpError.badRequest('unknown resource kind: Pod');
+      const resource = await resolve(contextName, 'Pod');
       const connection = registry.connect(contextName);
       const path = `${collectionPath(resource, namespace)}/${encodeURIComponent(name)}/eviction`;
       res.json(
@@ -154,8 +184,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
       const name = param(req, 'name');
       const namespace = query(req, 'namespace');
 
-      const resource = resolveResource(kindInput);
-      if (!resource) throw HttpError.badRequest(`unknown resource kind: ${kindInput}`);
+      const resource = await resolve(contextName, kindInput);
 
       const text = (req.body as { yaml?: unknown })?.yaml;
       if (typeof text !== 'string' || text.trim() === '') {
@@ -195,8 +224,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
       const name = param(req, 'name');
       const namespace = query(req, 'namespace');
 
-      const resource = resolveResource(kindInput);
-      if (!resource) throw HttpError.badRequest(`unknown resource kind: ${kindInput}`);
+      const resource = await resolve(contextName, kindInput);
       if (resource.namespaced && !namespace) {
         throw HttpError.badRequest(`${resource.kind} is namespaced; namespace is required`);
       }
@@ -217,8 +245,7 @@ export function resourceRoutes(registry: ClusterRegistry): Router {
       const name = param(req, 'name');
       const namespace = query(req, 'namespace');
 
-      const resource = resolveResource(kindInput);
-      if (!resource) throw HttpError.badRequest(`unknown resource kind: ${kindInput}`);
+      const resource = await resolve(contextName, kindInput);
       if (resource.namespaced && !namespace) {
         throw HttpError.badRequest(`${resource.kind} is namespaced; namespace is required`);
       }

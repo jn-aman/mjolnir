@@ -4,8 +4,9 @@ import type { ResourceDefinition } from '@mjolnir/k8s';
 import { CATEGORY_TINT } from '../lib/tint.ts';
 import { KIND_ICON } from '../lib/kindIcons.ts';
 import { TOOLS, type ToolDefinition } from '../lib/tools.ts';
+import type { CustomResource } from '../lib/api.ts';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
-import { Boxes, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
+import { Boxes, ChevronDown, LayoutDashboard, Settings, Shapes } from 'lucide-react';
 
 /**
  * Resource navigation.
@@ -41,6 +42,8 @@ export type NavSelection =
 
 interface SidebarProps {
   readonly kinds: ResourceDefinition[];
+  /** Kinds this cluster defines itself, grouped under their API group. */
+  readonly custom?: readonly CustomResource[];
   readonly selection: NavSelection;
   readonly counts: Record<string, number>;
   readonly onSelect: (selection: NavSelection) => void;
@@ -51,7 +54,7 @@ interface SidebarProps {
   readonly compact?: boolean;
 }
 
-export function Sidebar({ kinds, selection, counts, onSelect, width, module, compact = false }: SidebarProps) {
+export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width, module, compact = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const grouped = new Map<string, ResourceDefinition[]>();
@@ -191,6 +194,8 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module, com
         );
       })}
 
+      {custom.length > 0 ? <CustomSection custom={custom} compact={compact} collapsed={collapsed} onToggle={toggle} isActive={isActive} onSelect={onSelect} counts={counts} /> : null}
+
       <section className="mb-0.5" data-testid="nav-tools">
         <Menu entries={sectionMenu('tools')}>
         <button
@@ -241,6 +246,95 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module, com
         onSelect={() => onSelect({ kind: 'page', value: 'settings' })}
       />
     </nav>
+  );
+}
+
+/**
+ * Custom resources, grouped by API group.
+ *
+ * A cluster with Argo, Cert-Manager and Prometheus has sixty custom kinds, and
+ * a flat list of sixty is worse than none. Grouping by API group is the
+ * grouping the cluster already has: `argoproj.io` is one product, and the
+ * group name is the thing people recognise and the thing they can search for.
+ */
+function CustomSection({
+  custom,
+  compact,
+  collapsed,
+  onToggle,
+  isActive,
+  onSelect,
+  counts,
+}: {
+  custom: readonly CustomResource[];
+  compact: boolean;
+  collapsed: Set<string>;
+  onToggle: (id: string) => void;
+  isActive: (candidate: NavSelection) => boolean;
+  onSelect: (selection: NavSelection) => void;
+  counts: Record<string, number>;
+}) {
+  const groups = new Map<string, CustomResource[]>();
+  for (const entry of custom) {
+    const list = groups.get(entry.group) ?? [];
+    list.push(entry);
+    groups.set(entry.group, list);
+  }
+  return (
+    <>
+      {[...groups.entries()].map(([group, entries]) => {
+        const id = `crd:${group}`;
+        const shut = collapsed.has(id);
+        return (
+          <section key={group} className="mb-0.5" data-testid={`nav-group-${group}`}>
+            <Menu
+              label={group}
+              entries={[
+                { id: 'collapse', label: shut ? 'Expand this group' : 'Collapse this group', onSelect: () => onToggle(id) },
+                ...copyEntry('copy-group', 'Copy the API group', group),
+              ]}
+            >
+              <button
+                type="button"
+                onClick={() => onToggle(id)}
+                aria-expanded={!shut}
+                title={group}
+                className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary transition-colors duration-100 hover:text-secondary"
+              >
+                <motion.span animate={{ rotate: shut ? -90 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 34 }} className="flex shrink-0">
+                  <ChevronDown size={11} strokeWidth={2.4} />
+                </motion.span>
+                <span aria-hidden className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CATEGORY_TINT['custom'] ?? 'var(--series-5)' }} />
+                {compact ? null : <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{group}</span>}
+              </button>
+            </Menu>
+            {shut ? null : (
+              <ul>
+                {entries.map((entry) => (
+                  <li key={entry.kind}>
+                    <Entry
+                      compact={compact}
+                      icon={KIND_ICON[entry.kind] ?? Shapes}
+                      label={entry.label}
+                      testId={`nav-${entry.plural}`}
+                      active={isActive({ kind: 'resource', value: entry.kind })}
+                      count={counts[entry.kind]}
+                      tint={CATEGORY_TINT['custom'] ?? 'var(--series-5)'}
+                      menu={[
+                        { id: 'open', label: `Open ${entry.label.toLowerCase()}`, onSelect: () => onSelect({ kind: 'resource', value: entry.kind }) },
+                        ...copyEntry('copy-kubectl', 'Copy kubectl command', `kubectl get ${entry.plural}.${entry.group}${entry.namespaced ? ' -A' : ''}`),
+                        ...copyEntry('copy-crd', 'Copy the CRD name', entry.definition),
+                      ]}
+                      onSelect={() => onSelect({ kind: 'resource', value: entry.kind })}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+    </>
   );
 }
 

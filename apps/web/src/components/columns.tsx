@@ -634,7 +634,75 @@ const BY_KIND: Record<string, Array<Column<never>>> = {
 };
 
 /** Columns for a kind, priority-ordered, falling back to name/namespace/age. */
-export function columnsFor(kind: string): Array<Column<KubeItem>> {
+export interface PrinterColumn {
+  readonly name: string;
+  readonly jsonPath: string;
+  readonly type: string;
+  readonly priority?: number;
+}
+
+export function columnsFor(kind: string, printer: readonly PrinterColumn[] = []): Array<Column<KubeItem>> {
   const columns = (BY_KIND[kind] ?? GENERIC_COLUMNS) as Array<Column<KubeItem>>;
-  return [...columns].sort((a, b) => a.priority - b.priority);
+  // A CRD declares what `kubectl get` prints for it, which is the author
+  // saying which two or three fields matter out of a hundred. Honouring that
+  // is the difference between a custom resource that is usable in a table and
+  // a column of names.
+  const extra = printer
+    // Priority above zero means kubectl hides it without -o wide.
+    .filter((column) => (column.priority ?? 0) === 0 && column.jsonPath && column.name)
+    .slice(0, 5)
+    .map<Column<KubeItem>>((column, index) => ({
+      id: `printer-${column.name.toLowerCase().replace(/\s+/g, '-')}`,
+      priority: 25 + index,
+      header: column.name,
+      width: column.type === 'integer' || column.type === 'number' ? '110px' : 'minmax(120px, 1fr)',
+      ...(column.type === 'integer' || column.type === 'number' ? { align: 'right' as const } : {}),
+      content: (item) => {
+        const value = readPath(item, column.jsonPath);
+        return <span className="truncate text-[12px] text-secondary">{formatPrinted(value, column.type)}</span>;
+      },
+      sortBy: (item) => {
+        const value = readPath(item, column.jsonPath);
+        return typeof value === 'number' ? value : String(value ?? '');
+      },
+      searchText: (item) => {
+        const value = readPath(item, column.jsonPath);
+        return value === undefined ? undefined : String(value);
+      },
+    }));
+  return [...columns, ...extra].sort((a, b) => a.priority - b.priority);
+}
+
+function formatPrinted(value: unknown, type: string): string {
+  if (value === undefined || value === null) return '-';
+  if (type === 'date' && typeof value === 'string') return age(value);
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/** A `.spec.foo[0].bar` printer-column path, the subset CRDs actually use. */
+function readPath(object: unknown, path: string): unknown {
+  const steps = path.replace(/^\./, '').split(/\.(?![^[]*\])/);
+  let current: unknown = object;
+  for (const step of steps) {
+    if (current === null || current === undefined) return undefined;
+    const match = /^([^[]*)((?:\[[^\]]*\])*)$/.exec(step);
+    const key = match?.[1] ?? step;
+    if (key) {
+      if (typeof current !== 'object') return undefined;
+      current = (current as Record<string, unknown>)[key];
+    }
+    for (const index of (match?.[2] ?? '').matchAll(/\[([^\]]*)\]/g)) {
+      const inner = index[1] ?? '';
+      if (Array.isArray(current)) {
+        const position = Number(inner);
+        current = Number.isFinite(position) ? current[position] : undefined;
+      } else if (current && typeof current === 'object') {
+        current = (current as Record<string, unknown>)[inner.replace(/^['"]|['"]$/g, '')];
+      } else {
+        return undefined;
+      }
+    }
+  }
+  return current;
 }

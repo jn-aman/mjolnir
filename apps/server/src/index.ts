@@ -27,6 +27,7 @@ import { storageRoutes } from './routes/storage.ts';
 import { flagRoutes } from './routes/flags.ts';
 import { updateRoutes } from './routes/updates.ts';
 import { telemetryRoutes } from './routes/telemetry.ts';
+import { CrdCatalogue } from './crds.ts';
 import { FlagStore } from './flags.ts';
 import { Telemetry } from './telemetry.ts';
 import { APP_VERSION } from './version.ts';
@@ -60,6 +61,8 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
 
   if (registry.extraKubeconfigs.length) await registry.reload();
 
+  const crds = new CrdCatalogue(registry);
+
   const flags = new FlagStore(settings, APP_VERSION);
   flags.start();
 
@@ -89,7 +92,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/storage', storageRoutes(settings, forwards));
   app.use('/api/ai', aiRoutes(toolContext));
   app.use('/mcp', mcpRoutes(toolContext));
-  app.use('/api/resources', resourceRoutes(registry));
+  app.use('/api/resources', resourceRoutes(registry, crds));
   app.use('/api/forwards', forwardRoutes(forwards));
   app.use('/api/logs', logRoutes(registry));
   app.use('/api/metrics', metricRoutes(registry));
@@ -124,7 +127,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   const sockets: Record<string, WebSocketServer> = {
     '/ws/logs': attachLogSocket(registry),
     '/ws/exec': attachExecSocket(registry),
-    '/ws/watch': attachWatchSocket(registry),
+    '/ws/watch': attachWatchSocket(registry, crds),
   };
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;

@@ -34,4 +34,5 @@ export const CATEGORY_TINT: Record<string, string> = {
   network: 'var(--series-2)',
   storage: 'var(--log-pod-b)',
   access: 'var(--status-error)',
+  custom: 'var(--series-5)',
 };

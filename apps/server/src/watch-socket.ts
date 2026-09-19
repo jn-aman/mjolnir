@@ -1,5 +1,6 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import { RESOURCES, resolveResource } from '@mjolnir/k8s';
+import type { CrdCatalogue } from './crds.ts';
 import { logger } from '@mjolnir/logger';
 import type { ClusterRegistry } from './clusters.ts';
 
@@ -25,7 +26,7 @@ interface SubscribeMessage {
 
 const FRAME_INTERVAL_MS = 120;
 
-export function attachWatchSocket(registry: ClusterRegistry): WebSocketServer {
+export function attachWatchSocket(registry: ClusterRegistry, crds: CrdCatalogue): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (socket: WebSocket) => {
@@ -54,6 +55,7 @@ export function attachWatchSocket(registry: ClusterRegistry): WebSocketServer {
     };
 
     socket.on('message', (raw) => {
+      void (async () => {
       let message: Partial<Omit<SubscribeMessage, 'type'>> & { type?: string; id?: string };
       try {
         message = JSON.parse(raw.toString()) as typeof message;
@@ -69,7 +71,8 @@ export function attachWatchSocket(registry: ClusterRegistry): WebSocketServer {
       const id = message.id;
       subscriptions.get(id)?.();
       try {
-        const connection = registry.connect(message.context);
+        const contextName = message.context;
+        const connection = registry.connect(contextName);
         if (message.counts) {
           const counts: Record<string, number> = {};
           const push = throttled(() => send({ type: 'counts', id, counts }));
@@ -82,7 +85,9 @@ export function attachWatchSocket(registry: ClusterRegistry): WebSocketServer {
           subscriptions.set(id, () => stops.forEach((stop) => stop()));
           return;
         }
-        const resource = resolveResource(message.kind ?? '');
+        // Built-in first, then this cluster's own custom kinds, so a live
+        // list of Argo Applications watches exactly like a list of pods.
+        const resource = resolveResource(message.kind ?? '') ?? (await crds.resolve(contextName, message.kind ?? ''));
         if (!resource) {
           send({ type: 'error', id, message: `unknown kind ${message.kind ?? ''}` });
           return;
@@ -98,6 +103,7 @@ export function attachWatchSocket(registry: ClusterRegistry): WebSocketServer {
       } catch (error) {
         send({ type: 'error', id, message: error instanceof Error ? error.message : String(error) });
       }
+      })();
     });
 
     socket.on('close', () => {

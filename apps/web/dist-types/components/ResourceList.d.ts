@@ -1,5 +1,5 @@
 import type { WatchState } from '@mjolnir/k8s';
-import { type KubeItem } from './columns.tsx';
+import { type KubeItem, type PrinterColumn } from './columns.tsx';
 import { type MenuEntry } from './ui/ContextMenu.tsx';
 /**
  * One table for every resource kind.
@@ -18,6 +18,8 @@ interface ResourceListProps {
     readonly state: WatchState;
     readonly error: string | null;
     readonly filter: string;
+    /** Extra columns a CustomResourceDefinition asks kubectl to print. */
+    readonly printerColumns?: readonly PrinterColumn[];
     /** Lets an empty result clear the search that caused it. */
     readonly onClearFilter?: (() => void) | undefined;
     /** The kind's label as people say it: "Role bindings", not "rolebindings". */
@@ -41,6 +43,6 @@ export interface BulkAction {
     /** Offered only when every selected row passes. */
     readonly applies?: (item: KubeItem) => boolean;
 }
-export declare function ResourceList({ kind, items, state, error, filter, onClearFilter, label, namespace, selectedName, onSelect, onAction, menu, bulk, }: ResourceListProps): import("react").JSX.Element;
+export declare function ResourceList({ kind, items, state, error, filter, printerColumns, onClearFilter, label, namespace, selectedName, onSelect, onAction, menu, bulk, }: ResourceListProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=ResourceList.d.ts.map

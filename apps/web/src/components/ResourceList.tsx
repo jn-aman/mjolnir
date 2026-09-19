@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, Columns3, GripVertical, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WatchState } from '@mjolnir/k8s';
-import { type Column, type KubeItem, columnsFor } from './columns.tsx';
+import { type Column, type KubeItem, type PrinterColumn, columnsFor } from './columns.tsx';
 import { rowMenuEntries, type RowActionId } from './RowMenu.tsx';
 import { RowActions } from './RowActions.tsx';
 import { Checkbox } from './ui/Checkbox.tsx';
@@ -32,6 +32,8 @@ interface ResourceListProps {
   readonly state: WatchState;
   readonly error: string | null;
   readonly filter: string;
+  /** Extra columns a CustomResourceDefinition asks kubectl to print. */
+  readonly printerColumns?: readonly PrinterColumn[];
   /** Lets an empty result clear the search that caused it. */
   readonly onClearFilter?: (() => void) | undefined;
   /** The kind's label as people say it: "Role bindings", not "rolebindings". */
@@ -102,6 +104,7 @@ export function ResourceList({
   state,
   error,
   filter,
+  printerColumns,
   onClearFilter,
   label,
   namespace,
@@ -134,7 +137,7 @@ export function ResourceList({
   const resizing = useRef<{ id: string; startX: number; startWidth: number } | null>(null);
 
   const { prefs, update, reset } = useTablePrefs(kind);
-  const all = useMemo(() => columnsFor(kind), [kind]);
+  const all = useMemo(() => columnsFor(kind, printerColumns), [kind, printerColumns]);
 
   /** Columns in the user's order, with hidden ones removed. */
   const columns = useMemo(() => {

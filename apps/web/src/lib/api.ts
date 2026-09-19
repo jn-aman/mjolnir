@@ -98,6 +98,15 @@ export interface AppSettings {
   onboarding: { completed: boolean; step: string; version: number };
 }
 
+/** A kind this cluster defines, discovered from its CustomResourceDefinitions. */
+export interface CustomResource extends ResourceDefinition {
+  definition: string;
+  shortNames: string[];
+  versions: string[];
+  columns: Array<{ name: string; jsonPath: string; type: string; priority?: number }>;
+  owner?: string;
+}
+
 export interface FlagState {
   id: string;
   label: string;
@@ -278,6 +287,12 @@ export const api = {
     request<ClusterStatus>(`/api/clusters/${encodeURIComponent(context)}/status`),
 
   kinds: () => request<{ resources: ResourceDefinition[] }>('/api/resources/kinds'),
+
+  /** The kinds one cluster serves: built-ins plus its own custom resources. */
+  kindsFor: (context: string, fresh = false) =>
+    request<{ resources: ResourceDefinition[]; custom: CustomResource[] }>(
+      `/api/resources/kinds/${encodeURIComponent(context)}${fresh ? '?fresh=true' : ''}`,
+    ),
 
   list: <T = Record<string, unknown>>(context: string, kind: string, namespace?: string) => {
     const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';

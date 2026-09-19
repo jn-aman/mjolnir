@@ -4,7 +4,7 @@ import { toast, Toaster } from 'sonner';
 import type { ClusterContext, ResourceDefinition, WatchState } from '@mjolnir/k8s';
 import { AnimatePresence, motion } from 'motion/react';
 import { Ban, Circle, CirclePlay, Command as CommandIcon, Copy, Moon, Plus, RotateCw, Search, Sparkles, Sun, Tag, Trash2 } from 'lucide-react';
-import { api, type AppSettings, type ClustersResponse } from '../lib/api.ts';
+import { api, type AppSettings, type ClustersResponse, type CustomResource } from '../lib/api.ts';
 import { useTheme } from '../lib/theme.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { ResourceList, type BulkAction } from '../components/ResourceList.tsx';
@@ -52,6 +52,8 @@ export function App() {
   const [clusters, setClusters] = useState<ClustersResponse | null>(null);
   const [context, setContext] = useState<string | null>(null);
   const [kinds, setKinds] = useState<ResourceDefinition[]>([]);
+  /** The kinds this cluster defines itself, discovered from its CRDs. */
+  const [customKinds, setCustomKinds] = useState<CustomResource[]>([]);
   // Where the URL says we were, so a reload does not start over.
   const [route] = useState(readRoute);
   const [selection, setSelection] = useState<NavSelection>(route.selection ?? { kind: 'page', value: 'overview' });
@@ -242,13 +244,35 @@ export function App() {
 
   useEffect(() => {
     if (!context) return;
+    let cancelled = false;
+    // Custom kinds are per cluster: the same window talks to a bare cluster and
+    // to one carrying Argo, Cert-Manager and Crossplane, and the sidebar has to
+    // differ between them.
+    void api
+      .kindsFor(context)
+      .then((response) => {
+        if (cancelled) return;
+        setKinds(response.resources);
+        setCustomKinds(response.custom);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomKinds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context]);
+
+  useEffect(() => {
+    if (!context) return;
     void (async () => {
       const response = await fetch(`/api/metrics/${encodeURIComponent(context)}/pods`);
       setPodMetrics((await response.json()) as MetricsResponse);
     })();
   }, [context]);
 
-  const definition = useMemo(() => kinds.find((entry) => entry.kind === kind), [kinds, kind]);
+  const allKinds = useMemo(() => [...kinds, ...customKinds], [kinds, customKinds]);
+  const definition = useMemo(() => allKinds.find((entry) => entry.kind === kind), [allKinds, kind]);
 
   const view =
     selection.kind === 'page' ? selection.value : selection.kind === 'resource' ? 'resources' : selection.kind;
@@ -676,6 +700,7 @@ export function App() {
             <div className="relative flex shrink-0">
               <Sidebar
                 kinds={kinds}
+                custom={customKinds}
                 selection={selection}
                 counts={counts}
                 width={chrome === 'compact' ? 56 : sidebar.width}
@@ -816,6 +841,7 @@ export function App() {
                     state={state}
                     error={error}
                     filter={filter}
+                    printerColumns={customKinds.find((entry) => entry.kind === kind)?.columns ?? []}
                     onClearFilter={() => setFilter('')}
                     selectedName={drawerItem?.metadata?.name}
                     onSelect={(item) => {

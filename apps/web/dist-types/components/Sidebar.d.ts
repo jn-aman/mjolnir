@@ -1,5 +1,6 @@
 import type { ResourceDefinition } from '@mjolnir/k8s';
 import { type ToolDefinition } from '../lib/tools.ts';
+import type { CustomResource } from '../lib/api.ts';
 /** What the sidebar can select: a resource kind, or one of the app's own pages. */
 export type NavSelection = {
     kind: 'resource';
@@ -20,6 +21,8 @@ export type NavSelection = {
 };
 interface SidebarProps {
     readonly kinds: ResourceDefinition[];
+    /** Kinds this cluster defines itself, grouped under their API group. */
+    readonly custom?: readonly CustomResource[];
     readonly selection: NavSelection;
     readonly counts: Record<string, number>;
     readonly onSelect: (selection: NavSelection) => void;
@@ -29,6 +32,6 @@ interface SidebarProps {
     /** Icons only. */
     readonly compact?: boolean;
 }
-export declare function Sidebar({ kinds, selection, counts, onSelect, width, module, compact }: SidebarProps): import("react").JSX.Element;
+export declare function Sidebar({ kinds, custom, selection, counts, onSelect, width, module, compact }: SidebarProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Sidebar.d.ts.map
