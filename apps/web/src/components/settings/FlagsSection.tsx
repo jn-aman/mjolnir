@@ -180,6 +180,19 @@ export function FlagsSection({ settings, onSave }: { settings: AppSettings | nul
                           </button>
                         </>
                       ) : null}
+                      {/*
+                        Unleash draws a toggle as on whenever the environment
+                        is enabled, whatever its strategies then do, so a flag
+                        at 0% rollout reads as on there and is off here. Saying
+                        which, in the app, is the difference between "the flags
+                        are broken" and "that one is not rolled out yet".
+                      */}
+                      {flag.remoteReason ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span data-testid={`flag-reason-${flag.id}`}>{flag.remoteReason}</span>
+                        </>
+                      ) : null}
                     </div>
                     {flag.warning && flag.value ? (
                       <div className="mt-1 flex items-start gap-1.5 text-[11.5px] text-[var(--status-warn)]">

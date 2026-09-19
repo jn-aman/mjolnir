@@ -27,6 +27,15 @@ const STORAGE_IMAGES: ReadonlyArray<[RegExp, string]> = [
 const ACCESS_KEYS = ['MINIO_ROOT_USER', 'MINIO_ACCESS_KEY', 'RUSTFS_ACCESS_KEY', 'AWS_ACCESS_KEY_ID', 'ACCESS_KEY', 'S3_ACCESS_KEY'];
 const SECRET_KEYS = ['MINIO_ROOT_PASSWORD', 'MINIO_SECRET_KEY', 'RUSTFS_SECRET_KEY', 'AWS_SECRET_ACCESS_KEY', 'SECRET_KEY', 'S3_SECRET_KEY'];
 
+/** The first of these names the Secret actually holds, decoded. */
+function pickKey(data: Record<string, string>, names: readonly string[]): string {
+  for (const name of names) {
+    const value = data[name];
+    if (value) return value;
+  }
+  return '';
+}
+
 interface EnvVar {
   name?: string;
   value?: string;
@@ -37,6 +46,8 @@ interface ContainerShape {
   name?: string;
   image?: string;
   env?: EnvVar[];
+  /** Whole Secrets and ConfigMaps poured into the environment. */
+  envFrom?: Array<{ secretRef?: { name?: string }; configMapRef?: { name?: string }; prefix?: string }>;
   ports?: Array<{ name?: string; containerPort?: number }>;
 }
 
@@ -47,6 +58,12 @@ export interface StorageDetection {
   readonly consolePort?: number | undefined;
   readonly access?: EnvVar | undefined;
   readonly secret?: EnvVar | undefined;
+  /**
+   * Secrets the container pulls in wholesale. The MinIO chart, the operator
+   * and Bitnami all do this instead of naming the variables, so a card that
+   * only reads `env` reports "not set" on the most common install there is.
+   */
+  readonly bulkSecrets: readonly string[];
 }
 
 export function detectObjectStorage(containers: readonly ContainerShape[] | undefined): StorageDetection | null {
@@ -63,6 +80,7 @@ export function detectObjectStorage(containers: readonly ContainerShape[] | unde
       container: container.name ?? '',
       port: s3Port?.containerPort ?? 9000,
       ...(console?.containerPort ? { consolePort: console.containerPort } : {}),
+      bulkSecrets: (container.envFrom ?? []).map((entry) => entry.secretRef?.name).filter((name): name is string => Boolean(name)),
       ...(find(ACCESS_KEYS) ? { access: find(ACCESS_KEYS) } : {}),
       ...(find(SECRET_KEYS) ? { secret: find(SECRET_KEYS) } : {}),
     };
@@ -77,11 +95,13 @@ interface StorageCardProps {
   readonly podIP?: string | undefined;
   /** Decodes one key of a Secret in this namespace. Absent means no access. */
   readonly onRevealSecret?: ((secret: string, key: string) => Promise<string>) | undefined;
+  /** Every decoded key of a Secret, for the `envFrom` case where we do not know the name. */
+  readonly onReadSecret?: ((secret: string) => Promise<Record<string, string>>) | undefined;
   readonly onOpenBrowser?: (() => void) | undefined;
   readonly context?: string | undefined;
 }
 
-export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, onOpenBrowser, context }: StorageCardProps) {
+export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, onReadSecret, onOpenBrowser, context }: StorageCardProps) {
   /** Reads the keys (revealing from Secrets if needed) and opens the browser on a forwarded connection. */
   const openBrowser = async () => {
     const value = async (entry: EnvVar | undefined): Promise<string> => {
@@ -92,7 +112,18 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
       return '';
     };
     try {
-      const [accessKey, secretKey] = await Promise.all([value(detection.access), value(detection.secret)]);
+      let [accessKey, secretKey] = await Promise.all([value(detection.access), value(detection.secret)]);
+      if ((!accessKey || !secretKey) && onReadSecret) {
+        for (const name of detection.bulkSecrets) {
+          const data = await onReadSecret(name).catch(() => ({}) as Record<string, string>);
+          accessKey = accessKey || pickKey(data, ACCESS_KEYS);
+          secretKey = secretKey || pickKey(data, SECRET_KEYS);
+          if (accessKey && secretKey) break;
+        }
+      }
+      setError(null);
+      // The server looks again on its side, so an empty pair here is not
+      // fatal; it only becomes an error once it has failed there too.
       window.dispatchEvent(new CustomEvent('mjolnir:open-storage', { detail: { name: `${pod} (${detection.product})`, source: { context: context ?? '', namespace, pod, port: detection.port }, accessKey, secretKey } }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -102,6 +133,25 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
   const [error, setError] = useState<string | null>(null);
   const endpoint = podIP ? `http://${podIP}:${detection.port}` : `http://${pod}.${namespace}:${detection.port}`;
   const forward = `kubectl -n ${namespace} port-forward pod/${pod} ${detection.port}:${detection.port}${detection.consolePort ? ` ${detection.consolePort}:${detection.consolePort}` : ''}`;
+
+  /** Reads a wholesale Secret and keeps whichever key carries this credential. */
+  const revealBulk = async (label: string, names: string[]) => {
+    if (!onReadSecret) return;
+    for (const name of detection.bulkSecrets) {
+      try {
+        const found = pickKey(await onReadSecret(name), names);
+        if (found) {
+          setRevealed((current) => ({ ...current, [label]: found }));
+          setError(null);
+          return;
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+        return;
+      }
+    }
+    setError(`No key named ${names.slice(0, 3).join(', ')} in ${detection.bulkSecrets.join(', ')}`);
+  };
 
   const reveal = async (entry: EnvVar) => {
     const ref = entry.valueFrom?.secretKeyRef;
@@ -115,7 +165,34 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
     }
   };
 
-  const credential = (label: string, entry: EnvVar | undefined) => {
+  const credential = (label: string, entry: EnvVar | undefined, names: string[]) => {
+    if (!entry && detection.bulkSecrets.length) {
+      const shown = revealed[label];
+      const from = detection.bulkSecrets.join(', ');
+      return (
+        <Row
+          label={label}
+          value={shown ?? `Secret ${from}`}
+          hint={shown ? `from Secret ${from}` : 'pulled in whole with envFrom; the variable is not named in the pod spec'}
+          action={
+            shown !== undefined ? (
+              <Button variant="ghost" onClick={() => copyText(shown, `${label} copied`)} icon={<Copy size={12} strokeWidth={1.9} />}>
+                Copy
+              </Button>
+            ) : onReadSecret ? (
+              <Button
+                variant="ghost"
+                data-testid={`reveal-${label.toLowerCase().replace(/\s+/g, '-')}`}
+                onClick={() => void revealBulk(label, names)}
+                icon={<Eye size={12} strokeWidth={1.9} />}
+              >
+                Reveal
+              </Button>
+            ) : undefined
+          }
+        />
+      );
+    }
     if (!entry) return <Row label={label} value="not set in env" muted />;
     const ref = entry.valueFrom?.secretKeyRef;
     const shown = entry.value ?? revealed[entry.name ?? ''];
@@ -186,8 +263,8 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
               </Button>
             }
           />
-          {credential('Access key', detection.access)}
-          {credential('Secret key', detection.secret)}
+          {credential('Access key', detection.access, ACCESS_KEYS)}
+          {credential('Secret key', detection.secret, SECRET_KEYS)}
         </div>
         {error ? <p className="mt-2 text-[11.5px] text-error">{error}</p> : null}
       </div>

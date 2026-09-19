@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, ChevronRight, Download, ExternalLink, Folder, FolderPlus, Link2, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Archive, ChevronRight, Download, Ellipsis, ExternalLink, Eye, Folder, FolderPlus, Link2, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, type StorageConnection, type StorageObject } from '../../lib/api.ts';
 import { formatDateTime } from '../../lib/time.ts';
@@ -11,11 +11,12 @@ import { Select } from '../ui/Select.tsx';
 import { Switch } from '../ui/Switch.tsx';
 import { Card } from '../ui/Card.tsx';
 import { ConfirmDialog, Modal } from '../ui/Modal.tsx';
-import { copyEntry, copyText, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
+import { Menu, copyEntry, copyText, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { ToolPanel } from '../ToolPanel.tsx';
 import { FileViewer } from './FileViewer.tsx';
 import type { ToolDefinition } from '../../lib/tools.ts';
 import { bucketName, url as urlRule } from '../../lib/validate.ts';
+import { useSticky } from '../../lib/sticky.ts';
 
 /**
  * Buckets as folders.
@@ -36,7 +37,7 @@ interface StorageModuleProps {
 
 export function StorageModule({ tool, section, focusConnection }: StorageModuleProps) {
   const [connections, setConnections] = useState<StorageConnection[]>([]);
-  const [connectionId, setConnectionId] = useState<string>(() => {
+  const [connectionId, setConnectionId] = useSticky<string>('storage.connection', () => {
     try {
       return localStorage.getItem('mjolnir.storage.connection') ?? '';
     } catch {
@@ -156,12 +157,13 @@ interface Entry {
 
 function Buckets({ connections, connectionId, onConnection }: { connections: StorageConnection[]; connectionId: string; onConnection: (id: string) => void }) {
   const [buckets, setBuckets] = useState<Array<{ name: string; created: string }>>([]);
-  const [bucket, setBucket] = useState('');
-  const [prefix, setPrefix] = useState('');
+  // Where you were, kept across leaving the module and coming back.
+  const [bucket, setBucket] = useSticky('storage.bucket', '');
+  const [prefix, setPrefix] = useSticky('storage.prefix', '');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [next, setNext] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useSticky('storage.filter', '');
   const [preview, setPreview] = useState<{ key: string; type: string; size: number } | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; body: string; run: () => Promise<unknown> } | null>(null);
   const [presigned, setPresigned] = useState<{ key: string; url: string; expires: number } | null>(null);
@@ -183,6 +185,16 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
   useEffect(() => {
     void loadBuckets();
   }, [loadBuckets]);
+
+  // A prefix belongs to the bucket it was read from. Changing bucket has to
+  // drop it, but mounting with a remembered pair must not, so this compares
+  // rather than firing on every render.
+  const lastBucket = useRef(bucket);
+  useEffect(() => {
+    if (lastBucket.current === bucket) return;
+    lastBucket.current = bucket;
+    setPrefix('');
+  }, [bucket, setPrefix]);
 
   const loadObjects = useCallback(
     async (token?: string) => {
@@ -239,7 +251,7 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
     entry.kind === 'prefix'
       ? [{ id: 'open', label: 'Open folder', icon: <Folder size={13} strokeWidth={1.9} />, onSelect: () => setPrefix(entry.key) }, ...copyEntry('copy-prefix', 'Copy prefix', entry.key)]
       : [
-          { id: 'preview', label: 'Preview', onSelect: () => void open(entry) },
+          { id: 'preview', label: 'Preview', icon: <Eye size={13} strokeWidth={1.9} />, onSelect: () => void open(entry) },
           { id: 'download', label: 'Download', icon: <Download size={13} strokeWidth={1.9} />, onSelect: () => window.open(api.storage.objectUrl(connectionId, bucket, entry.key), '_blank') },
           { id: 'presign', label: 'Presigned link (1 hour)…', icon: <Link2 size={13} strokeWidth={1.9} />, onSelect: () => void api.storage.presign(connectionId, bucket, entry.key, 3600).then((r) => { setPresigned({ key: entry.key, ...r }); copyText(r.url, 'Presigned link copied'); }) },
           SEPARATOR,
@@ -291,16 +303,8 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
         <Select label="Connection" value={connectionId} onChange={onConnection} testId="storage-connection" options={connections.map((c) => ({ value: c.id, label: c.name, hint: c.source ? 'pod' : new URL(c.endpoint || 'http://x').host }))} />
         <Select label="Bucket" value={bucket} onChange={(b) => { setBucket(b); setPrefix(''); }} testId="storage-bucket" mono options={buckets.map((b) => ({ value: b.name, label: b.name }))} />
         <Button iconOnly variant="ghost" aria-label="New bucket" onClick={() => setCreatingBucket(true)} icon={<FolderPlus size={13} strokeWidth={1.9} />} />
-        <nav className="flex min-w-0 items-center gap-1 font-mono text-[12px]" aria-label="Path" data-testid="storage-crumbs">
-          <button type="button" onClick={() => setPrefix('')} className="rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary">{bucket || '…'}</button>
-          {crumbs.map((c, i) => (
-            <span key={`${c}-${i}`} className="flex items-center gap-1">
-              <ChevronRight size={12} className="text-tertiary" aria-hidden />
-              <button type="button" onClick={() => setPrefix(`${crumbs.slice(0, i + 1).join('/')}/`)} className="rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary">{c}</button>
-            </span>
-          ))}
-        </nav>
-        <Field id="storage-filter" label="Filter" hideLabel mono value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" className="ml-2 w-[200px] shrink" />
+        <Crumbs bucket={bucket} crumbs={crumbs} onGo={setPrefix} />
+        <Field id="storage-filter" label="Filter" hideLabel mono value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" className="ml-2 w-[180px] shrink-0" />
         <div className="flex-1" />
         <label className="inline-flex cursor-pointer">
           <input type="file" multiple className="hidden" data-testid="storage-upload-input" onChange={(e) => void upload(e.target.files)} />
@@ -320,6 +324,13 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
           error={null}
           filter={filter}
           bulk={bulk}
+          empty={
+            !connectionId
+              ? { title: 'No connection yet', detail: 'Add an endpoint and keys under Connections, or open a bucket browser straight from a MinIO, RustFS or SeaweedFS pod in Kubernetes: the keys come from the pod.' }
+              : !bucket
+                ? { title: 'No bucket selected', detail: 'Pick one from the bucket menu in the toolbar, or create one with the folder button beside it.' }
+                : { title: `Nothing in ${bucket}${prefix ? `/${prefix.replace(/\/$/, '')}` : ''}`, detail: 'This prefix holds no objects. Upload with the button in the toolbar, or drop files onto the list.' }
+          }
           menu={(item) => {
             const entry = byName.get(item.metadata?.name ?? '');
             return entry ? menuFor(entry) : [];
@@ -355,4 +366,77 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
 
 export function formatObjectDate(value: string | undefined): string {
   return value ? formatDateTime(value) : '';
+}
+
+/**
+ * The path, however deep it goes.
+ *
+ * A key eight folders deep is normal in a bucket and the toolbar is one line,
+ * so the middle collapses into an ellipsis that still lists every level it
+ * hid. The first and last segments survive because those are the two anyone
+ * navigates by: the bucket you are in and the folder you are looking at.
+ */
+function Crumbs({ bucket, crumbs, onGo }: { bucket: string; crumbs: string[]; onGo: (prefix: string) => void }) {
+  const to = (index: number) => `${crumbs.slice(0, index + 1).join('/')}/`;
+  const KEEP_END = 2;
+  const collapsed = crumbs.length > KEEP_END + 1;
+  const hidden = collapsed ? crumbs.slice(0, crumbs.length - KEEP_END) : [];
+  const tail = collapsed ? crumbs.slice(crumbs.length - KEEP_END) : crumbs;
+  const offset = crumbs.length - tail.length;
+
+  return (
+    <nav
+      className="flex min-w-0 shrink items-center gap-0.5 overflow-hidden font-mono text-[12px]"
+      aria-label="Path"
+      data-testid="storage-crumbs"
+    >
+      <button
+        type="button"
+        onClick={() => onGo('')}
+        title={bucket}
+        className="max-w-[160px] shrink-0 truncate rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary"
+      >
+        {bucket || '…'}
+      </button>
+      {collapsed ? (
+        <>
+          <ChevronRight size={12} className="shrink-0 text-tertiary" aria-hidden />
+          <Menu
+            label="Path"
+            testId="crumb-menu"
+            entries={hidden.map((name, index) => ({
+              id: `crumb-${index}`,
+              label: name,
+              icon: <Folder size={13} strokeWidth={1.9} />,
+              onSelect: () => onGo(to(index)),
+            }))}
+          >
+            <button
+              type="button"
+              data-testid="crumb-overflow"
+              aria-label={`${hidden.length} more folders`}
+              title={hidden.join(' / ')}
+              onClick={() => onGo(to(hidden.length - 1))}
+              className="flex h-[20px] shrink-0 items-center rounded-xs px-1 text-tertiary hover:bg-hover hover:text-primary"
+            >
+              <Ellipsis size={13} strokeWidth={2} aria-hidden />
+            </button>
+          </Menu>
+        </>
+      ) : null}
+      {tail.map((name, index) => (
+        <span key={`${name}-${index}`} className="flex min-w-0 items-center gap-0.5">
+          <ChevronRight size={12} className="shrink-0 text-tertiary" aria-hidden />
+          <button
+            type="button"
+            onClick={() => onGo(to(offset + index))}
+            title={name}
+            className="max-w-[180px] truncate rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary"
+          >
+            {name}
+          </button>
+        </span>
+      ))}
+    </nav>
+  );
 }

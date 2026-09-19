@@ -46,9 +46,16 @@ interface ResourceListProps {
   readonly menu?: ((item: KubeItem) => MenuEntry[]) | undefined;
   /** Verbs for several rows at once. A checkbox column appears when given. */
   readonly bulk?: readonly BulkAction[] | undefined;
+  /**
+   * What "there is nothing here" means for this list. The default talks about
+   * namespaces and watches, which is right for Kubernetes and nonsense for a
+   * bucket or a container list.
+   */
+  readonly empty?: { readonly title: string; readonly detail: string } | undefined;
 }
 
 const ROW_HEIGHT = 42;
+const HEADER_HEIGHT = 36;
 const MIN_WIDTH = 60;
 
 type SortState = { readonly columnId: string; readonly direction: 'asc' | 'desc' } | null;
@@ -113,6 +120,7 @@ export function ResourceList({
   onAction,
   menu,
   bulk,
+  empty,
 }: ResourceListProps) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -209,6 +217,8 @@ export function ResourceList({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
+    // The header shares the scroll container, so the rows start this far in.
+    scrollMargin: HEADER_HEIGHT,
   });
 
   const toggleSort = (column: Column<KubeItem>) => {
@@ -277,11 +287,19 @@ export function ResourceList({
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-testid="resource-list" data-kind={kind}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+      {/*
+        One scroll container, both axes. Nesting an overflow-y box inside an
+        overflow-x box gave the table two horizontal scrollbars stacked at the
+        bottom, because an element with one axis set to `auto` computes the
+        other from `visible` to `auto` as well. It also clipped the rows to the
+        viewport width while the header scrolled past them.
+      */}
+      <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto">
+       <div className="flex min-h-full min-w-max flex-col">
         <div
           role="row"
           className="sticky top-0 z-10 grid h-[36px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.06em] text-tertiary"
-          style={{ gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(96px, 1fr)` }}
+          style={{ gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(190px, 1fr)` }}
         >
           {bulk ? (
             <div className="flex h-full items-center justify-center">
@@ -353,7 +371,7 @@ export function ResourceList({
             </div>
           ))}
 
-          <div className="flex h-full items-center justify-end pr-2">
+          <div className="cell-pinned-header flex h-full items-center justify-end pr-2">
             <ColumnMenu
               all={all}
               hidden={prefs.hidden}
@@ -386,17 +404,17 @@ export function ResourceList({
           ) : (
             <EmptyState
               testId="resource-empty"
-              title={`No ${(label ?? kind).toLowerCase()} ${namespace ? `in ${namespace}` : 'in this cluster'}`}
+              title={empty?.title ?? `No ${(label ?? kind).toLowerCase()} ${namespace ? `in ${namespace}` : 'in this cluster'}`}
               detail={
-                namespace
+                empty?.detail ??
+                (namespace
                   ? 'Nothing is wrong. Another namespace may have some, or the namespace picker in the toolbar can widen the search.'
-                  : 'Nothing is wrong: this cluster genuinely has none. The watch is live, so any that appear will show up here without a refresh.'
+                  : 'Nothing is wrong: this cluster genuinely has none. The watch is live, so any that appear will show up here without a refresh.')
               }
             />
           )
         ) : (
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-            <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
               {virtualizer.getVirtualItems().map((row) => {
                 const item = visible[row.index];
                 if (!item) return null;
@@ -437,9 +455,9 @@ export function ResourceList({
                         selected ? 'row-selected' : 'row-hover'
                       }`}
                       style={{
-                        gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(96px, 1fr)`,
+                        gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(190px, 1fr)`,
                         minHeight: ROW_HEIGHT,
-                        transform: `translateY(${row.start}px)`,
+                        transform: `translateY(${row.start - HEADER_HEIGHT}px)`,
                       }}
                     >
                       {selected ? (
@@ -491,16 +509,16 @@ export function ResourceList({
                           {column.content(item)}
                         </OverflowTip>
                       ))}
-                      <div className="flex h-full items-center justify-end px-2" onClick={(event) => event.stopPropagation()}>
+                      <div className="cell-pinned flex h-full items-center justify-end px-2" onClick={(event) => event.stopPropagation()}>
                         <RowActions entries={entries} name={item.metadata?.name ?? ''} />
                       </div>
                     </div>
                   </Menu>
                 );
               })}
-            </div>
           </div>
         )}
+       </div>
       </div>
 
       <div className="flex h-[26px] shrink-0 items-center gap-3 border-t border-line bg-raised px-4 font-mono text-[11px] text-tertiary">

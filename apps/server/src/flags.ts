@@ -1,10 +1,13 @@
 import { platform, release } from 'node:os';
-import { evaluateAll, fetchFeatures, type FlagState, type UnleashContext, type UnleashFeature } from '@mjolnir/flags';
+import { evaluateAll, fetchFeatures, registerClient, sendMetrics, type FlagState, type UnleashContext, type UnleashFeature } from '@mjolnir/flags';
 import { BUILD, hostRefusal } from '@mjolnir/endpoints';
 import { logger } from '@mjolnir/logger';
 import type { SettingsStore } from './settings.ts';
 
 const log = logger.child('flags');
+
+/** Unleash's own SDKs default to a minute, and the UI is built around that. */
+const METRICS_SECONDS = 60;
 
 export interface RemoteStatus {
   readonly enabled: boolean;
@@ -33,9 +36,14 @@ export class FlagStore {
   readonly #settings: SettingsStore;
   #features: Record<string, UnleashFeature> = {};
   #timer: NodeJS.Timeout | undefined;
+  #metricsTimer: NodeJS.Timeout | undefined;
   #fetchedAt: string | undefined;
   #error: string | undefined;
   #version: string;
+  #registered = false;
+  #bucketStart = new Date();
+  readonly #started = new Date();
+  #counts = new Map<string, { yes: number; no: number }>();
 
   constructor(settings: SettingsStore, version: string) {
     this.#settings = settings;
@@ -67,7 +75,30 @@ export class FlagStore {
   }
 
   value(id: string): boolean {
-    return this.states().find((state) => state.id === id)?.value ?? false;
+    const value = this.states().find((state) => state.id === id)?.value ?? false;
+    this.#count(id, value);
+    return value;
+  }
+
+  /**
+   * One tally per toggle per reporting window.
+   *
+   * Unleash needs to know a flag is still being read to tell you it is safe to
+   * delete, and it only learns that from these counts. Numbers only: no user,
+   * no cluster, no context.
+   */
+  #count(id: string, value: boolean): void {
+    const current = this.#counts.get(id) ?? { yes: 0, no: 0 };
+    if (value) current.yes += 1;
+    else current.no += 1;
+    this.#counts.set(id, current);
+  }
+
+  /** Every flag's current answer, tallied. The client asks for all of them at once. */
+  statesCounted(): FlagState[] {
+    const states = this.states();
+    for (const state of states) this.#count(state.id, state.value);
+    return states;
   }
 
   status(): RemoteStatus {
@@ -133,6 +164,64 @@ export class FlagStore {
     return this.status();
   }
 
+  #config() {
+    const remote = this.#settings.get().flags.remote;
+    return {
+      url: remote.url,
+      token: remote.token || BUILD.flagsToken,
+      appName: 'mjolnir',
+      environment: remote.environment,
+      instanceId: this.#settings.installId(),
+    };
+  }
+
+  /**
+   * Says hello, once.
+   *
+   * Until this lands, Unleash shows every flag as "Connect SDK — Pending":
+   * it has toggles being served and no record of anything serving them.
+   */
+  async #register(): Promise<void> {
+    if (this.#registered) return;
+    try {
+      await registerClient(this.#config(), {
+        sdkVersion: `mjolnir:${this.#version}`,
+        intervalSeconds: METRICS_SECONDS,
+        started: this.#started,
+      });
+      this.#registered = true;
+      log.info('registered with unleash', { version: this.#version });
+    } catch (error) {
+      log.debug('unleash registration failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  /**
+   * Reports how each toggle answered since the last report.
+   *
+   * On its own clock, not the feature poll's. Features are re-read every
+   * fifteen minutes because a flag changing is rare; metrics go every minute
+   * because until the first bucket arrives Unleash says "Waiting for flag
+   * evaluations" and the flag looks unimplemented. The two intervals answer
+   * different questions and tying them together got the second one wrong.
+   */
+  async #report(): Promise<void> {
+    if (!this.#settings.get().flags.remote.enabled) return;
+    await this.#register();
+    const toggles = Object.fromEntries(this.#counts);
+    if (Object.keys(toggles).length === 0) return;
+    const stop = new Date();
+    try {
+      await sendMetrics(this.#config(), { start: this.#bucketStart, stop, toggles });
+      this.#counts.clear();
+      this.#bucketStart = stop;
+      log.debug('flag metrics reported', { toggles: Object.keys(toggles).length });
+    } catch (error) {
+      // Keep the counts and try again next tick rather than losing the window.
+      log.debug('unleash metrics failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   /** Start polling, or stop and restart with the interval the settings now say. */
   start(): void {
     this.stop();
@@ -141,10 +230,23 @@ export class FlagStore {
     void this.refresh();
     this.#timer = setInterval(() => void this.refresh(), remote.refreshSeconds * 1000);
     this.#timer.unref();
+
+    // Register straight away; the first bucket goes a minute later, by which
+    // point the app has asked for the flag list at least once.
+    void this.#register();
+    this.#metricsTimer = setInterval(() => void this.#report(), METRICS_SECONDS * 1000);
+    this.#metricsTimer.unref();
   }
 
   stop(): void {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = undefined;
+    if (this.#metricsTimer) clearInterval(this.#metricsTimer);
+    this.#metricsTimer = undefined;
+  }
+
+  /** Flushes the current bucket now, for shutdown and for the settings page. */
+  async flush(): Promise<void> {
+    await this.#report();
   }
 }

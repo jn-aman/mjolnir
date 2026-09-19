@@ -97,11 +97,11 @@ export function Menu({ label, entries, children, testId = 'context-menu' }: Menu
       <ContextMenu.Portal>
         <ContextMenu.Content
           data-testid={testId}
-          className="z-50 min-w-[216px] rounded-lg border border-line bg-overlay p-1 shadow-[var(--shadow-lg)]"
+          className="z-50 min-w-[216px] max-w-[340px] rounded-lg border border-line bg-overlay p-1 shadow-[var(--shadow-lg)]"
         >
           {label ? (
             <>
-              <ContextMenu.Label className="break-words [overflow-wrap:anywhere] px-2 py-1 font-mono text-[11px] text-tertiary">{label}</ContextMenu.Label>
+              <ContextMenu.Label title={label} className="block max-w-full truncate px-2 py-1 font-mono text-[11px] text-tertiary">{label}</ContextMenu.Label>
               <Separator />
             </>
           ) : null}

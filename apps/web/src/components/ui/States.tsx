@@ -129,10 +129,7 @@ export function LoadingState({
             <MarkTile size={34} pulse />
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="flex items-center gap-1.5 text-[13px] font-medium text-primary">
-              {title}
-              <Dots />
-            </span>
+            <span className="loading-sheen text-[13px] font-medium text-primary">{title}</span>
             {detail ? <span className="mt-[1px] break-words text-[11.5px] text-tertiary [overflow-wrap:anywhere]">{detail}</span> : null}
             <Track />
           </span>
@@ -161,10 +158,7 @@ function PanelLoading({ title, detail, testId }: { title: string; detail?: React
           <Halo tint="var(--accent-solid)" size={52} />
           <MarkTile size={52} pulse />
         </span>
-        <div className="relative mt-4 flex items-center gap-1.5 text-[13.5px] font-medium text-secondary">
-          {title}
-          <Dots />
-        </div>
+        <div className="loading-sheen relative mt-4 text-[13.5px] font-medium text-primary">{title}</div>
         {detail ? <p className="relative mt-1 max-w-[420px] text-center text-[12px] text-tertiary">{detail}</p> : null}
         <div className="relative mt-3 w-[190px]">
           <Track />
@@ -229,20 +223,6 @@ function Grid({ tint }: { tint: string }) {
   );
 }
 
-function Dots() {
-  return (
-    <span className="flex items-center gap-[3px]" aria-hidden>
-      {[0, 1, 2].map((dot) => (
-        <motion.span
-          key={dot}
-          className="h-[3px] w-[3px] rounded-full bg-[var(--text-tertiary)]"
-          animate={{ opacity: [0.25, 1, 0.25] }}
-          transition={{ duration: 1.1, repeat: Infinity, delay: dot * 0.16, ease: 'easeInOut' }}
-        />
-      ))}
-    </span>
-  );
-}
 
 /** A bar that catches the light as it passes, rather than blinking on and off. */
 export function Shimmer({ className = '', style, delay = 0 }: { className?: string; style?: CSSProperties; delay?: number }) {

@@ -47,9 +47,9 @@ export const FlagSettings = z.object({
       /** Empty means "use the token this build shipped with". */
       token: z.string().default(''),
       environment: z.string().default('production'),
-      refreshSeconds: z.number().int().min(30).max(86_400).default(900),
+      refreshSeconds: z.number().int().min(30).max(86_400).default(60),
     })
-    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 900 }),
+    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 60 }),
 });
 
 /**

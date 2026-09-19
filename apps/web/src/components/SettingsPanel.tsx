@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertTriangle,
@@ -130,16 +130,33 @@ const AI_PRESETS: ReadonlyArray<{ id: string; label: string; provider: 'anthropi
 
 export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown, onReplayWelcome }: SettingsPanelProps) {
   const { values: flagValues } = useFlags();
-  const sections = (scope === 'app' ? APP_SECTIONS : K8S_SECTIONS).filter((entry) => !entry.flag || flagValues[entry.flag] === true);
+  // Memoised on what it is actually made of. Built inline it was a new array
+  // every render, the effect below depends on it, and so every click reset the
+  // section back to the first one: the nav looked dead because it was.
+  const flagSignature = Object.entries(flagValues)
+    .map(([id, value]) => `${id}=${value}`)
+    .sort()
+    .join(',');
+  const sections = useMemo(
+    () => (scope === 'app' ? APP_SECTIONS : K8S_SECTIONS).filter((entry) => !entry.flag || flagValues[entry.flag] === true),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scope, flagSignature],
+  );
   const [section, setSection] = useState(sections[0]?.id ?? 'general');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [meta, setMeta] = useState<{ path: string; mcpCommand?: string } | null>(null);
 
+  // Only when the panel is asked to show a particular section, or the scope
+  // changes underneath it. Never merely because it re-rendered.
   useEffect(() => {
-    setSection(initialSection && sections.some((entry) => entry.id === initialSection) ? initialSection : (sections[0]?.id ?? 'general'));
+    setSection((current) => {
+      if (initialSection && sections.some((entry) => entry.id === initialSection)) return initialSection;
+      if (sections.some((entry) => entry.id === current)) return current;
+      return sections[0]?.id ?? 'general';
+    });
     if (initialSection) onSectionShown?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, sections, initialSection]);
+  }, [scope, flagSignature, initialSection]);
 
   const refresh = async () => {
     const response = await api.settings.get();

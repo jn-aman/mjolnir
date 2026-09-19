@@ -11,3 +11,4 @@ coverage/
 vendor/trivy*
 apps/desktop/release/
 apps/desktop/build/*.icns
+dist-types/

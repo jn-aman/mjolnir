@@ -137,7 +137,23 @@ function readAll(stream: IncomingMessage): Promise<Buffer> {
   });
 }
 
-const unescapeXml = (text: string): string => text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+/**
+ * XML entities, including the numeric ones.
+ *
+ * MinIO escapes the quotes around an ETag as `&#34;` rather than `&quot;`,
+ * which is equally valid XML and came out the other side as the literal text
+ * "&#34;abc&#34;" in the ETag column. `&amp;` is decoded last, so an escaped
+ * ampersand cannot turn its neighbours into entities on the way through.
+ */
+const unescapeXml = (text: string): string =>
+  text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number(decimal)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
 const tagValue = (xml: string, name: string): string | undefined => {
   const match = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(xml);
   return match?.[1] === undefined ? undefined : unescapeXml(match[1]);

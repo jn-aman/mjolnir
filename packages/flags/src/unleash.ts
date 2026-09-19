@@ -205,3 +205,120 @@ export async function fetchFeatures(config: UnleashConfig, signal?: AbortSignal)
   const payload = (await response.json()) as { features?: UnleashFeature[] };
   return payload.features ?? [];
 }
+
+/** Every strategy this client can actually evaluate, as Unleash wants it declared. */
+export const SUPPORTED_STRATEGIES = [
+  'default',
+  'flexibleRollout',
+  'gradualRolloutUserId',
+  'gradualRolloutSessionId',
+  'gradualRolloutRandom',
+  'userWithId',
+] as const;
+
+/**
+ * Says hello.
+ *
+ * Without this, Unleash has toggles being read and no idea by what: the
+ * project page shows "Connect SDK — Pending" forever and the Applications
+ * view is empty, even though every client is fetching happily. Registration
+ * is what fills in which builds, which platforms and which versions are out
+ * there, which for a desktop app shipped to other people's laptops is the
+ * only way to know whether a flag is safe to retire.
+ *
+ * It is advisory: a failure here never stops flags from working.
+ */
+export async function registerClient(
+  config: UnleashConfig,
+  details: { readonly sdkVersion: string; readonly intervalSeconds: number; readonly started?: Date },
+  signal?: AbortSignal,
+): Promise<void> {
+  await post(config, 'register', {
+    appName: config.appName,
+    instanceId: config.instanceId,
+    connectionId: config.instanceId,
+    sdkVersion: details.sdkVersion,
+    environment: config.environment || 'production',
+    strategies: [...SUPPORTED_STRATEGIES],
+    started: (details.started ?? new Date()).toISOString(),
+    interval: details.intervalSeconds * 1000,
+  }, signal);
+}
+
+/**
+ * How often each toggle came back on or off since the last report.
+ *
+ * Counts only, never who or what: it answers "is anyone still on the old
+ * path" and nothing else, which is the question that lets a flag be deleted.
+ */
+export async function sendMetrics(
+  config: UnleashConfig,
+  bucket: { readonly start: Date; readonly stop: Date; readonly toggles: Readonly<Record<string, { yes: number; no: number }>> },
+  signal?: AbortSignal,
+): Promise<void> {
+  if (Object.keys(bucket.toggles).length === 0) return;
+  await post(config, 'metrics', {
+    appName: config.appName,
+    instanceId: config.instanceId,
+    connectionId: config.instanceId,
+    environment: config.environment || 'production',
+    bucket: {
+      start: bucket.start.toISOString(),
+      stop: bucket.stop.toISOString(),
+      toggles: bucket.toggles,
+    },
+  }, signal);
+}
+
+async function post(config: UnleashConfig, path: 'register' | 'metrics', body: unknown, signal?: AbortSignal): Promise<void> {
+  const base = config.url.replace(/\/+$/, '').replace(/\/api\/client\/features$/, '');
+  const response = await fetch(`${base}/api/client/${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: config.token,
+      'UNLEASH-APPNAME': config.appName,
+      'UNLEASH-INSTANCEID': config.instanceId,
+      'Content-Type': 'application/json',
+      ...(config.environment ? { 'x-unleash-environment': config.environment } : {}),
+    },
+    body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Unleash ${path} answered ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`);
+  }
+}
+
+/**
+ * One line on why the server's answer came out that way.
+ *
+ * Unleash draws a toggle as "on" whenever the environment is enabled, whatever
+ * its strategies then do, so a flag at 0% rollout looks on in the dashboard
+ * and is off in every client. That gap is the single most common "the flags
+ * are broken" and it is not a bug in either place, so the app says it out
+ * loud instead of leaving two screens to contradict each other.
+ */
+export function explainFeature(feature: UnleashFeature, context: UnleashContext): string | undefined {
+  if (!feature.enabled) return 'switched off for this environment';
+  const strategies = feature.strategies ?? [];
+  if (strategies.length === 0) return undefined;
+  if (strategies.some((strategy) => strategyHolds(strategy, context, feature.name))) return undefined;
+
+  const reasons = strategies.map((strategy) => {
+    const parameters = strategy.parameters ?? {};
+    const failing = (strategy.constraints ?? []).find((constraint) => !constraintHolds(constraint, context));
+    if (failing) return `a constraint on ${failing.contextName} does not match this install`;
+    if (strategy.name === 'flexibleRollout') {
+      const rollout = Number(parameters['rollout'] ?? '100');
+      return rollout <= 0 ? 'switched on, but rolled out to 0%' : `rolled out to ${rollout}%, and this install is not in it`;
+    }
+    if (strategy.name.startsWith('gradualRollout')) {
+      const percentage = Number(parameters['percentage'] ?? '0');
+      return percentage <= 0 ? 'switched on, but rolled out to 0%' : `rolled out to ${percentage}%, and this install is not in it`;
+    }
+    if (strategy.name === 'userWithId') return 'limited to named installs, and this is not one';
+    return `strategy "${strategy.name}" is one this build cannot evaluate, so it counts as off`;
+  });
+  return reasons[0];
+}

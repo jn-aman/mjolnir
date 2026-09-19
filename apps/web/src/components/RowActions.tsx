@@ -1,59 +1,57 @@
 import { useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import type { MenuEntry } from './ui/ContextMenu.tsx';
+import { MoreHorizontal, Pin } from 'lucide-react';
+import type { MenuEntry, MenuItem } from './ui/ContextMenu.tsx';
 
 /**
  * What you can do to a row, on the row.
  *
- * The same verbs the right-click menu offers, because an action that lives
- * only behind right-click is an action most people never find. Edit and
- * delete get their own buttons since they are what people reach for; the
- * rest are behind the ellipsis. Visible on hover and whenever the menu is
- * open, so the row never flickers.
+ * Visible, always. Actions that appear only on hover are actions people do not
+ * know exist, and a button that fades out the moment you click it, because the
+ * click moved the pointer into a portal and ended the row's hover, is worse
+ * than no button. So the verbs sit at a resting weight and brighten on hover
+ * rather than appearing from nothing.
+ *
+ * Which verbs get a button is decided by id, not by the caller, so Kubernetes
+ * rows, containers and bucket objects all promote the same shapes: the thing
+ * you read (logs, preview), the thing you keep (pin), the thing you change
+ * (edit), the thing you destroy (delete). Everything else is behind the
+ * ellipsis, which still holds the full menu.
  */
+
+/** Promoted to their own button, in this order. Destructive ones sit last. */
+const PRIMARY = ['logs', 'shell', 'preview', 'download', 'pin', 'yaml', 'edit'] as const;
+const DESTRUCTIVE = ['delete', 'remove'] as const;
+/** Beyond this the row turns into a toolbar; the rest stays in the menu. */
+const MAX_PRIMARY = 4;
+
+type Item = Extract<MenuEntry, MenuItem>;
+
+const rank = (id: string) => {
+  const at = PRIMARY.indexOf(id as (typeof PRIMARY)[number]);
+  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+};
+
 export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; name: string }) {
-  // Opening the menu moves the pointer into a portal, which ends the row's
-  // hover and used to fade the buttons out from under the cursor. The wrapper
-  // has always had the rule for this; nothing was setting the attribute.
   const [open, setOpen] = useState(false);
-  const items = entries.filter((entry): entry is Extract<MenuEntry, { id: string }> => entry.type !== 'separator' && entry.type !== 'heading');
-  const edit = items.find((entry) => entry.id === 'yaml' || entry.id === 'edit');
-  const remove = items.find((entry) => entry.id === 'delete' || entry.id === 'remove');
-  const rest = items.filter((entry) => entry !== edit && entry !== remove);
+  const items = entries.filter((entry): entry is Item => entry.type !== 'separator' && entry.type !== 'heading');
+
+  const primary = items
+    .filter((entry) => PRIMARY.includes(entry.id as (typeof PRIMARY)[number]))
+    .sort((a, b) => rank(a.id) - rank(b.id))
+    .slice(0, MAX_PRIMARY);
+  const destructive = items.filter((entry) => DESTRUCTIVE.includes(entry.id as (typeof DESTRUCTIVE)[number]));
+  const shown = new Set<Item>([...primary, ...destructive]);
+  const rest = items.filter((entry) => !shown.has(entry));
 
   return (
-    <span
-      data-testid="row-actions"
-      data-open={open}
-      className="flex items-center gap-0.5 opacity-0 transition-opacity duration-100 focus-within:opacity-100 group-hover/row:opacity-100 data-[open=true]:opacity-100"
-    >
-      {edit ? (
-        <button
-          type="button"
-          data-testid="row-edit"
-          aria-label={`Edit ${name}`}
-          title={edit.label}
-          disabled={edit.disabled ?? false}
-          onClick={edit.onSelect}
-          className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary disabled:opacity-40"
-        >
-          <Pencil size={13} strokeWidth={1.9} />
-        </button>
-      ) : null}
-      {remove ? (
-        <button
-          type="button"
-          data-testid="row-delete"
-          aria-label={`Delete ${name}`}
-          title={remove.label}
-          disabled={remove.disabled ?? false}
-          onClick={remove.onSelect}
-          className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-error-bg hover:text-error disabled:opacity-40"
-        >
-          <Trash2 size={13} strokeWidth={1.9} />
-        </button>
-      ) : null}
+    <span data-testid="row-actions" data-open={open} className="flex items-center gap-0.5">
+      {primary.map((entry) => (
+        <Action key={entry.id} entry={entry} name={name} />
+      ))}
+      {destructive.map((entry) => (
+        <Action key={entry.id} entry={entry} name={name} danger />
+      ))}
       {rest.length ? (
         <DropdownMenu.Root open={open} onOpenChange={setOpen}>
           <DropdownMenu.Trigger asChild>
@@ -61,6 +59,7 @@ export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; n
               type="button"
               data-testid="row-more"
               aria-label={`More actions for ${name}`}
+              title="More actions"
               className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary data-[state=open]:bg-hover data-[state=open]:text-primary"
             >
               <MoreHorizontal size={14} strokeWidth={2} />
@@ -72,10 +71,10 @@ export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; n
               sideOffset={4}
               collisionPadding={8}
               data-testid="row-more-menu"
-              className="z-50 min-w-[216px] rounded-lg border border-line bg-overlay p-1 shadow-[var(--shadow-lg)]"
+              className="z-50 min-w-[216px] max-w-[340px] rounded-lg border border-line bg-overlay p-1 shadow-[var(--shadow-lg)]"
               style={{ transformOrigin: 'var(--radix-dropdown-menu-content-transform-origin)' }}
             >
-              <DropdownMenu.Label className="break-words [overflow-wrap:anywhere] px-2 py-1 font-mono text-[11px] text-tertiary">{name}</DropdownMenu.Label>
+              <DropdownMenu.Label title={name} className="block max-w-full truncate px-2 py-1 font-mono text-[11px] text-tertiary">{name}</DropdownMenu.Label>
               <DropdownMenu.Separator className="my-1 h-px bg-[var(--border-subtle)]" />
               {rest.map((entry) => (
                 <DropdownMenu.Item
@@ -97,5 +96,33 @@ export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; n
         </DropdownMenu.Root>
       ) : null}
     </span>
+  );
+}
+
+function Action({ entry, name, danger }: { entry: Item; name: string; danger?: boolean }) {
+  // Pin earns the accent: it is the one verb here that is not obvious from an
+  // icon alone, and it is how the dock gets used at all.
+  const pin = entry.id === 'pin';
+  return (
+    <button
+      type="button"
+      data-testid={`row-${entry.id}`}
+      aria-label={`${entry.label} ${name}`}
+      title={entry.label}
+      disabled={entry.disabled ?? false}
+      onClick={(event) => {
+        event.stopPropagation();
+        entry.onSelect();
+      }}
+      className={`flex h-[26px] w-[26px] items-center justify-center rounded-md transition-colors duration-100 disabled:opacity-40 ${
+        danger
+          ? 'text-tertiary hover:bg-error-bg hover:text-error'
+          : pin
+            ? 'text-tertiary hover:bg-accent-subtle hover:text-accent'
+            : 'text-tertiary hover:bg-hover hover:text-primary'
+      }`}
+    >
+      {entry.icon ?? <Pin size={13} strokeWidth={1.9} />}
+    </button>
   );
 }

@@ -393,6 +393,10 @@ export function ResourceDrawer({
                 if (encoded === undefined) throw new Error(`Secret ${secret} has no key ${key}`);
                 return atob(encoded);
               }}
+              onReadSecret={async (secret) => {
+                const object = await api.get<{ data?: Record<string, string> }>(context, 'Secret', secret, namespace || undefined);
+                return Object.fromEntries(Object.entries(object.data ?? {}).map(([key, value]) => [key, atob(value)]));
+              }}
               onOpenWorkspace={(id) => onNavigate?.({ kind: 'Pod', workspace: id })}
               onForward={onForward ? (port) => onForward(item, port) : undefined}
               onShell={onShell ? (container) => onShell(item, container) : undefined}

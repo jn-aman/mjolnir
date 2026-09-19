@@ -118,6 +118,8 @@ export interface FlagState {
   source: 'override' | 'remote' | 'default';
   fallback: boolean;
   remote?: boolean;
+  /** Why the flag server's answer is what it is, when the toggle alone does not say. */
+  remoteReason?: string;
 }
 
 export interface RemoteFlagStatus {

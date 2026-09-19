@@ -339,3 +339,72 @@
 @media (prefers-reduced-motion: reduce) {
   .shimmer { animation: none; }
 }
+
+/*
+ * The title of a loading screen, lit from left to right.
+ *
+ * It replaces the three dots that used to sit beside it. Dots are a second
+ * animation competing with the pulse on the mark and the sweep on the bar,
+ * and at 3px they read as a stray ellipsis rather than as motion. A sheen
+ * across the word itself says "working" with no extra object on screen.
+ */
+.loading-sheen {
+  background: linear-gradient(
+    100deg,
+    var(--text-primary) 0%,
+    var(--text-primary) 38%,
+    color-mix(in oklab, var(--accent-base) 85%, var(--text-primary)) 50%,
+    var(--text-primary) 62%,
+    var(--text-primary) 100%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mjolnir-sheen 2.6s ease-in-out infinite;
+}
+
+@keyframes mjolnir-sheen {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-sheen {
+    animation: none;
+    background: none;
+    color: var(--text-primary);
+  }
+}
+
+/*
+ * The verbs stay reachable however wide the table gets.
+ *
+ * With a column per action the row is easily wider than the window, and the
+ * actions are at the end, so on a laptop they sat off-screen: visible in the
+ * DOM and useless. Pinning the last cell to the right edge is what a
+ * spreadsheet does with a frozen column, and it is right for the same reason.
+ * Each row state paints the cell itself, because `background: inherit` would
+ * drag the selected row's gradient into a box it was not drawn for.
+ */
+.cell-pinned {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface-ground);
+  box-shadow: -10px 0 12px -10px var(--shadow-colour, rgb(0 0 0 / 0.45));
+}
+.row-hover:hover .cell-pinned { background: var(--surface-hover); }
+.row-selected .cell-pinned { background: var(--surface-pressed); }
+[data-state='open'] > .cell-pinned { background: var(--surface-hover); }
+.cell-pinned-header {
+  position: sticky;
+  right: 0;
+  z-index: 11;
+  background: var(--surface-raised);
+  box-shadow: -10px 0 12px -10px var(--shadow-colour, rgb(0 0 0 / 0.45));
+}

@@ -81,6 +81,8 @@ export function App() {
    */
   const viewMemory = useRef<Record<string, { filter: string; status: string; selected: string | null; tab: string | undefined }>>({});
   const viewKey = (sel: NavSelection) => `${sel.kind}:${sel.value}`;
+  /** Which module a view belongs to, so the rail can return you to it. */
+  const moduleOf = (sel: NavSelection) => (sel.kind === 'workspace' ? (sel.value.split(':')[0] ?? '') : KUBERNETES_MODULE.id);
   // Read at click time, not from a closure that may be a render behind.
   const latestView = useRef({ selection, filter: '', status: '', selected: null as string | null, tab: undefined as string | undefined });
   const [pendingName, setPendingName] = useState<string | null>(route.selected ?? null);
@@ -312,6 +314,7 @@ export function App() {
   }, [selection, filter, statusFilter, selected, drawerTab]);
 
   /** Leaves the current view, remembering it, and enters another, restoring it. */
+  const moduleMemory = useRef<Record<string, NavSelection>>({});
   const go = useCallback(
     (next: NavSelection) => {
       const leaving = latestView.current;
@@ -320,6 +323,15 @@ export function App() {
       const remembered = viewMemory.current[viewKey(next)];
       if (next.kind === 'resource') setKind(next.value);
       if (next.kind === 'workspace') setLastSection((current) => ({ ...current, [next.value.split(':')[0] ?? '']: next.value }));
+      // Leaving a module and coming back should land where you left it. The
+      // rail used to send Kubernetes to the overview every time, which threw
+      // away the kind, the filter and the selected object you had just been
+      // reading, and made the rail feel like a reload rather than a tab.
+      // Settings is not a place in a module, so returning to Kubernetes must
+      // not land you back in it.
+      if (!(leaving.selection.kind === 'page' && leaving.selection.value.endsWith('settings'))) {
+        moduleMemory.current[moduleOf(leaving.selection)] = leaving.selection;
+      }
       setFilter(remembered?.filter ?? '');
       setStatusFilter(remembered?.status ?? '');
       setSelected(null);
@@ -702,7 +714,14 @@ export function App() {
             expanded={railOpen}
             onToggleExpanded={() => setRailOpen((current) => !current)}
             settingsActive={isAppSettings}
-            onSelect={(id) => go(id === KUBERNETES_MODULE.id ? { kind: 'page', value: 'overview' } : { kind: 'workspace', value: lastSection[id] ?? id })}
+            onSelect={(id) =>
+              go(
+                moduleMemory.current[id] ??
+                  (id === KUBERNETES_MODULE.id
+                    ? { kind: 'page', value: 'overview' }
+                    : { kind: 'workspace', value: lastSection[id] ?? id }),
+              )
+            }
             onSettings={() => setSelection({ kind: 'page', value: 'app-settings' })}
           />
           ) : null}

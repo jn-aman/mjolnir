@@ -11,7 +11,7 @@ export function flagRoutes(flags: FlagStore, settings: SettingsStore): Router {
   router.get(
     '/',
     handle(async (_req, res) => {
-      res.json({ flags: flags.states(), remote: flags.status(), context: flags.context() });
+      res.json({ flags: flags.statesCounted(), remote: flags.status(), context: flags.context() });
     }),
   );
 

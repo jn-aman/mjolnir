@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { murmur3, normalise } from './hash.ts';
-import { evaluateFeature, type UnleashContext, type UnleashFeature } from './unleash.ts';
+import { evaluateFeature, explainFeature, type UnleashContext, type UnleashFeature } from './unleash.ts';
 import { evaluateAll } from './evaluate.ts';
 
 const context: UnleashContext = {
@@ -126,5 +126,50 @@ describe('precedence', () => {
   it('a remote toggle for a flag this build does not declare is ignored', () => {
     const states = evaluateAll({ overrides: {}, features: { unknown: { name: 'unknown', enabled: true } }, context, definitions });
     expect(states.map((s) => s.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('explainFeature', () => {
+  const context = {
+    userId: 'install-1',
+    sessionId: 'install-1',
+    environment: 'production',
+    appName: 'mjolnir',
+    properties: {},
+  };
+
+  it('says nothing when the flag is simply on', () => {
+    expect(explainFeature({ name: 'a', enabled: true, strategies: [{ name: 'default' }] }, context)).toBeUndefined();
+  });
+
+  it('names the case that looks broken: on, at zero per cent', () => {
+    const feature = {
+      name: 'a',
+      enabled: true,
+      strategies: [{ name: 'flexibleRollout', parameters: { rollout: '0', groupId: 'a', stickiness: 'default' } }],
+    };
+    expect(explainFeature(feature, context)).toMatch(/rolled out to 0%/);
+  });
+
+  it('says so when the environment is off', () => {
+    expect(explainFeature({ name: 'a', enabled: false }, context)).toMatch(/switched off/);
+  });
+
+  it('blames the constraint when one excludes this install', () => {
+    const feature = {
+      name: 'a',
+      enabled: true,
+      strategies: [
+        {
+          name: 'default',
+          constraints: [{ contextName: 'environment', operator: 'IN', values: ['development'] }],
+        },
+      ],
+    };
+    expect(explainFeature(feature, context)).toMatch(/constraint on environment/);
+  });
+
+  it('admits when it cannot judge a strategy', () => {
+    expect(explainFeature({ name: 'a', enabled: true, strategies: [{ name: 'mysteryStrategy' }] }, context)).toMatch(/cannot evaluate/);
   });
 });

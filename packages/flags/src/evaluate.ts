@@ -1,5 +1,5 @@
 import { FLAGS, type FlagDefinition } from './registry.ts';
-import { evaluateFeature, type UnleashContext, type UnleashFeature } from './unleash.ts';
+import { evaluateFeature, explainFeature, type UnleashContext, type UnleashFeature } from './unleash.ts';
 
 /**
  * Where a value came from, which is the part people actually argue about.
@@ -25,6 +25,13 @@ export interface FlagState {
   readonly fallback: boolean;
   /** What the remote said, when it said anything. */
   readonly remote?: boolean | undefined;
+  /**
+   * Why the remote's answer is what it is, when the toggle alone does not
+   * explain it. An Unleash toggle switched on with a 0% rollout is off for
+   * everyone, and its own UI still draws it as on, so without this the app
+   * and the server look like they disagree when they do not.
+   */
+  readonly remoteReason?: string | undefined;
 }
 
 export interface EvaluateInput {
@@ -54,6 +61,7 @@ export function evaluateAll(input: EvaluateInput): FlagState[] {
       source,
       fallback: definition.fallback,
       remote,
+      ...(feature ? { remoteReason: explainFeature(feature, input.context) } : {}),
     };
   });
 }

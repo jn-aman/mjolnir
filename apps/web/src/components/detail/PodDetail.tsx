@@ -113,6 +113,7 @@ interface PodDetailProps {
   readonly onEditContainer?: ((container: string, change: ContainerChange) => Promise<void>) | undefined;
   /** Decodes a key of a Secret in the pod's namespace, on request. */
   readonly onRevealSecret?: ((secret: string, key: string) => Promise<string>) | undefined;
+  readonly onReadSecret?: ((secret: string) => Promise<Record<string, string>>) | undefined;
   readonly onOpenWorkspace?: ((id: string) => void) | undefined;
   /** Opens the port-forward dialog, on this port. */
   readonly onForward?: ((port: number) => void) | undefined;
@@ -123,7 +124,7 @@ interface PodDetailProps {
   readonly storageContext?: string | undefined;
 }
 
-export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onOpenWorkspace, onForward, onShell, parent, storageContext }: PodDetailProps) {
+export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadata, onEditContainer, onRevealSecret, onReadSecret, onOpenWorkspace, onForward, onShell, parent, storageContext }: PodDetailProps) {
   const storage = detectObjectStorage(pod.spec?.containers as never);
   const statuses = pod.status?.containerStatuses ?? [];
   const initStatuses = pod.status?.initContainerStatuses ?? [];
@@ -157,6 +158,7 @@ export function PodDetail({ pod, metrics, onOpenLogs, onNavigate, onPatchMetadat
           namespace={pod.metadata?.namespace ?? ''}
           podIP={(pod.status as { podIP?: string } | undefined)?.podIP}
           onRevealSecret={onRevealSecret}
+          onReadSecret={onReadSecret}
           onOpenBrowser={onOpenWorkspace ? () => onOpenWorkspace('storage') : undefined}
           context={storageContext}
         />
