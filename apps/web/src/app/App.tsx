@@ -25,6 +25,7 @@ import { Button } from '../components/ui/Button.tsx';
 import type { MetricsResponse } from '../lib/metrics.ts';
 import { Dock, type DockTab } from '../components/Dock.tsx';
 import { CommandPalette } from '../components/CommandPalette.tsx';
+import { useFlags } from '../lib/flags.tsx';
 import { ToolPanel } from '../components/ToolPanel.tsx';
 import { ScaleDialog } from '../components/ScaleDialog.tsx';
 import { KUBERNETES_MODULE, toolById } from '../lib/tools.ts';
@@ -54,6 +55,15 @@ export function App() {
   const [kinds, setKinds] = useState<ResourceDefinition[]>([]);
   /** The kinds this cluster defines itself, discovered from its CRDs. */
   const [customKinds, setCustomKinds] = useState<CustomResource[]>([]);
+  // Surfaces ask for themselves. Every one of these defaults on, so a build
+  // with no flag server looks exactly like this one; the flags exist so a
+  // surface can be narrowed for a customer, or turned off from the server when
+  // it misbehaves in the field, without cutting a release.
+  const { values: flagValues } = useFlags();
+  const canPalette = flagValues['ui.command-palette'] ?? true;
+  const canFilters = flagValues['ui.filters'] ?? true;
+  const canDock = flagValues['ui.dock'] ?? true;
+  const canScan = flagValues['scan.images'] ?? true;
   // Where the URL says we were, so a reload does not start over.
   const [route] = useState(readRoute);
   const [selection, setSelection] = useState<NavSelection>(route.selection ?? { kind: 'page', value: 'overview' });
@@ -226,6 +236,7 @@ export function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        if (!canPalette) return;
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }
@@ -696,7 +707,7 @@ export function App() {
   }, [drawerItem, podMetrics]);
 
   return (
-    <Tooltip.Provider delayDuration={400}>
+    <Tooltip.Provider delayDuration={0} skipDelayDuration={600}>
       <div className="flex h-full flex-col bg-ground text-primary">
         <TitleBar
           module={tool && moduleId !== KUBERNETES_MODULE.id ? { label: tool.label, tint: tool.tint, icon: tool.icon } : isAppSettings ? null : { label: KUBERNETES_MODULE.label, tint: KUBERNETES_MODULE.tint, icon: null }}
@@ -838,11 +849,11 @@ export function App() {
                     leading={<Search size={13} strokeWidth={2} aria-hidden className="shrink-0 text-tertiary" />}
                   />
 
-                  {definition?.namespaced ? (
+                  {canFilters && definition?.namespaced ? (
                     <NamespacePicker all={allNamespaces.length ? allNamespaces : namespacesSeen} selected={namespaces} onChange={rememberNamespaces} />
                   ) : null}
 
-                  {statusOptions.length ? (
+                  {canFilters && statusOptions.length ? (
                     <Select
                       label="Status"
                       width={150}
@@ -921,7 +932,7 @@ export function App() {
             </div>
 
             <AnimatePresence>
-            {dockTabs.length ? (
+            {canDock && dockTabs.length ? (
               <Dock
                 key="dock"
                 assistant={{ incoming: incomingAsk, onOpenSettings: () => setSelection({ kind: 'page', value: 'app-settings' }) }}
@@ -953,7 +964,7 @@ export function App() {
         </div>
 
         <CommandPalette
-          open={paletteOpen}
+          open={canPalette && paletteOpen}
           onOpenChange={setPaletteOpen}
           kinds={kinds}
           clusters={clusters?.contexts ?? []}
@@ -1042,7 +1053,7 @@ export function App() {
         />
 
         <PortForwardDialog context={context ?? ''} pod={forwarding} onClose={() => setForwarding(null)} />
-        <ScanDialog image={scanningImage} onClose={() => setScanningImage(null)} />
+        <ScanDialog image={canScan ? scanningImage : null} onClose={() => setScanningImage(null)} />
 
         <ConfirmDialog
           open={bulkDelete !== null}

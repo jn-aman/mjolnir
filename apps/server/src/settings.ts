@@ -47,9 +47,9 @@ export const FlagSettings = z.object({
       /** Empty means "use the token this build shipped with". */
       token: z.string().default(''),
       environment: z.string().default('production'),
-      refreshSeconds: z.number().int().min(30).max(86_400).default(60),
+      refreshSeconds: z.number().int().min(15).max(86_400).default(30),
     })
-    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 60 }),
+    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 30 }),
 });
 
 /**
@@ -214,9 +214,21 @@ export class SettingsStore {
   }
 }
 
+/**
+ * A deep merge where `null` removes the key, as JSON Merge Patch defines it.
+ *
+ * Without the removal rule there is no way to take an entry out of a map: an
+ * empty object merges to a no-op, so "hand this flag back" wrote the same
+ * overrides straight back and the switch never let go. Every value the schema
+ * actually holds is a string, number, boolean, array or object, so `null` is
+ * free to mean this and nothing else.
+ */
 function merge(target: unknown, patch: unknown): unknown {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return patch;
   const out: Record<string, unknown> = target && typeof target === 'object' && !Array.isArray(target) ? { ...(target as Record<string, unknown>) } : {};
-  for (const [key, value] of Object.entries(patch as Record<string, unknown>)) out[key] = merge(out[key], value);
+  for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
+    if (value === null) delete out[key];
+    else out[key] = merge(out[key], value);
+  }
   return out;
 }

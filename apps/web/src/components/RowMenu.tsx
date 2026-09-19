@@ -60,8 +60,20 @@ interface RowMenuProps {
   readonly item: KubeItem;
   readonly kind: string;
   readonly act: (action: RowActionId) => void;
+  readonly flags?: FlagValues;
   readonly children: ReactNode;
 }
+
+/**
+ * Flags, as the menu sees them: a map, not a hook.
+ *
+ * The entry list is a pure function so that it can be tested and so that the
+ * row menu and the row's own buttons cannot drift apart. Reading a context
+ * inside it would make it neither. An absent map means every verb, which is
+ * what the flag defaults say anyway and keeps callers that do not care simple.
+ */
+export type FlagValues = Readonly<Record<string, boolean>>;
+const on = (flags: FlagValues | undefined, id: string): boolean => flags?.[id] ?? true;
 
 const SCALABLE = new Set(['Deployment', 'StatefulSet', 'ReplicaSet']);
 const RESTARTABLE = new Set(['Deployment', 'StatefulSet', 'DaemonSet']);
@@ -72,7 +84,7 @@ const icon = (Icon: typeof FileText) => <Icon size={13} strokeWidth={1.9} />;
  * The entries for one row. Shared by the right-click menu and the row's own
  * actions button, so both offer exactly the same verbs.
  */
-export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowActionId) => void): MenuEntry[] {
+export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowActionId) => void, flags?: FlagValues): MenuEntry[] {
   const name = item.metadata?.name ?? '';
   const namespace = item.metadata?.namespace;
   const node = typeof item.spec?.['nodeName'] === 'string' ? (item.spec['nodeName'] as string) : undefined;
@@ -95,26 +107,36 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
     { id: 'open', label: 'Open details', icon: icon(FileText), shortcut: '↵', onSelect: () => act('open') },
     // Pinned objects live in the dock and survive navigating away, which is
     // the point: you read the pods while the deployment stays in front of you.
-    { id: 'pin', label: 'Keep open in the dock', icon: icon(PinIcon), onSelect: () => act('pin') },
+    ...(on(flags, 'ui.dock')
+      ? [{ id: 'pin', label: 'Keep open in the dock', icon: icon(PinIcon), onSelect: () => act('pin') }]
+      : []),
     askEntry(isPod && problem ? 'Ask why it is failing' : 'Ask the assistant about this', askPrompt),
     ...(isPod
       ? [
-          { id: 'logs', label: 'Logs', icon: icon(ScrollText), onSelect: () => act('logs') },
-          { id: 'dock-logs', label: 'Open logs in dock', icon: icon(ArrowDownToLine), onSelect: () => act('dock-logs') },
-          { id: 'shell', label: 'Shell', icon: icon(Terminal), onSelect: () => act('shell') },
-          { id: 'forward', label: 'Port forward…', icon: icon(ArrowLeftRight), onSelect: () => act('forward') },
-          ...((item.spec as { containers?: Array<{ image?: string }> } | undefined)?.containers?.[0]?.image
+          ...(on(flags, 'kubernetes.logs')
+            ? [
+                { id: 'logs', label: 'Logs', icon: icon(ScrollText), onSelect: () => act('logs') },
+                ...(on(flags, 'ui.dock')
+                  ? [{ id: 'dock-logs', label: 'Open logs in dock', icon: icon(ArrowDownToLine), onSelect: () => act('dock-logs') }]
+                  : []),
+              ]
+            : []),
+          ...(on(flags, 'kubernetes.exec') ? [{ id: 'shell', label: 'Shell', icon: icon(Terminal), onSelect: () => act('shell') }] : []),
+          ...(on(flags, 'kubernetes.port-forward')
+            ? [{ id: 'forward', label: 'Port forward…', icon: icon(ArrowLeftRight), onSelect: () => act('forward') }]
+            : []),
+          ...(on(flags, 'scan.images') && (item.spec as { containers?: Array<{ image?: string }> } | undefined)?.containers?.[0]?.image
             ? [{ id: 'scan', label: 'Scan image with Trivy', icon: icon(ShieldAlert), onSelect: () => scanImage((item.spec as { containers: Array<{ image?: string }> }).containers[0]?.image ?? '') }]
             : []),
         ]
       : []),
-    { id: 'yaml', label: 'Edit YAML', icon: icon(FileText), onSelect: () => act('yaml') },
+    ...(on(flags, 'kubernetes.edit') ? [{ id: 'yaml', label: 'Edit YAML', icon: icon(FileText), onSelect: () => act('yaml') }] : []),
     SEPARATOR,
-    ...(RESTARTABLE.has(kind)
+    ...(on(flags, 'kubernetes.edit') && RESTARTABLE.has(kind)
       ? [{ id: 'restart', label: 'Restart rollout', icon: icon(RotateCw), onSelect: () => act('restart') }]
       : []),
-    ...(SCALABLE.has(kind) ? [{ id: 'scale', label: 'Scale…', icon: icon(Scale), onSelect: () => act('scale') }] : []),
-    ...(kind === 'Deployment'
+    ...(on(flags, 'kubernetes.edit') && SCALABLE.has(kind) ? [{ id: 'scale', label: 'Scale…', icon: icon(Scale), onSelect: () => act('scale') }] : []),
+    ...(on(flags, 'kubernetes.edit') && kind === 'Deployment'
       ? [
           paused
             ? { id: 'resume', label: 'Resume rollout', icon: icon(Play), onSelect: () => act('resume') }
@@ -122,7 +144,7 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
           { id: 'undo', label: 'Undo rollout (previous revision)', icon: icon(Undo2), onSelect: () => act('undo') },
         ]
       : []),
-    ...(kind === 'Node'
+    ...(on(flags, 'kubernetes.edit') && kind === 'Node'
       ? [
           cordoned
             ? { id: 'uncordon', label: 'Uncordon, allow scheduling', icon: icon(CirclePlay), onSelect: () => act('uncordon') }
@@ -132,10 +154,10 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
         ]
       : []),
     SEPARATOR,
-    ...(namespace
+    ...(on(flags, 'ui.filters') && namespace
       ? [{ id: 'filter-namespace', label: `Only namespace ${namespace}`, icon: icon(Filter), onSelect: () => act('filter-namespace') }]
       : []),
-    ...(node ? [{ id: 'filter-node', label: `Only node ${node}`, icon: icon(Server), onSelect: () => act('filter-node') }] : []),
+    ...(on(flags, 'ui.filters') && node ? [{ id: 'filter-node', label: `Only node ${node}`, icon: icon(Server), onSelect: () => act('filter-node') }] : []),
     SEPARATOR,
     ...copyEntry('copy-name', 'Copy name', name),
     ...copyEntry('copy-namespace', 'Copy namespace', namespace),
@@ -145,15 +167,17 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
       `kubectl ${scope}${isPod ? 'logs' : `get ${kind.toLowerCase()}`} ${name}`,
     ),
     SEPARATOR,
-    { id: 'delete', label: 'Delete…', icon: icon(Trash2), danger: true, onSelect: () => act('delete') },
+    ...(on(flags, 'kubernetes.edit')
+      ? [{ id: 'delete', label: 'Delete…', icon: icon(Trash2), danger: true, onSelect: () => act('delete') }]
+      : []),
   ];
 
   return entries;
 }
 
-export function RowMenu({ item, kind, act, children }: RowMenuProps) {
+export function RowMenu({ item, kind, act, flags, children }: RowMenuProps) {
   return (
-    <Menu label={item.metadata?.name ?? ''} entries={rowMenuEntries(item, kind, act)} testId="row-menu">
+    <Menu label={item.metadata?.name ?? ''} entries={rowMenuEntries(item, kind, act, flags)} testId="row-menu">
       {children}
     </Menu>
   );

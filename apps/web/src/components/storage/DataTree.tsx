@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, Copy, Minimize2, Maximize2, Search } from 'lucide-react';
 import { copyText } from '../ui/ContextMenu.tsx';
 import { Menu, type MenuEntry } from '../ui/ContextMenu.tsx';
+import { Tip } from '../ui/Tooltip.tsx';
 
 /**
  * Structured data as structure.
@@ -153,26 +154,28 @@ export function DataTree({ value, testId = 'data-tree' }: { value: unknown; test
             {found.hits} {found.hits === 1 ? 'match' : 'matches'}
           </span>
         ) : null}
-        <button
-          type="button"
-          title="Expand everything"
-          aria-label="Expand everything"
-          data-testid="tree-expand"
-          onClick={() => setExpanded(allContainers(value))}
-          className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
-        >
-          <Maximize2 size={12} strokeWidth={2} />
-        </button>
-        <button
-          type="button"
-          title="Collapse everything"
-          aria-label="Collapse everything"
-          data-testid="tree-collapse"
-          onClick={() => setExpanded(new Set(['$']))}
-          className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
-        >
-          <Minimize2 size={12} strokeWidth={2} />
-        </button>
+        <Tip label="Expand everything" hint="Every node, however deep">
+          <button
+            type="button"
+            aria-label="Expand everything"
+            data-testid="tree-expand"
+            onClick={() => setExpanded(allContainers(value))}
+            className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
+          >
+            <Maximize2 size={12} strokeWidth={2} />
+          </button>
+        </Tip>
+        <Tip label="Collapse everything" hint="Back to the root">
+          <button
+            type="button"
+            aria-label="Collapse everything"
+            data-testid="tree-collapse"
+            onClick={() => setExpanded(new Set(['$']))}
+            className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
+          >
+            <Minimize2 size={12} strokeWidth={2} />
+          </button>
+        </Tip>
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto py-1 font-mono text-[12px]">

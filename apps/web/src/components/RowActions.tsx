@@ -2,6 +2,7 @@ import { useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Pin } from 'lucide-react';
 import type { MenuEntry, MenuItem } from './ui/ContextMenu.tsx';
+import { Tip } from './ui/Tooltip.tsx';
 
 /**
  * What you can do to a row, on the row.
@@ -54,17 +55,25 @@ export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; n
       ))}
       {rest.length ? (
         <DropdownMenu.Root open={open} onOpenChange={setOpen}>
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              data-testid="row-more"
-              aria-label={`More actions for ${name}`}
-              title="More actions"
-              className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary data-[state=open]:bg-hover data-[state=open]:text-primary"
-            >
-              <MoreHorizontal size={14} strokeWidth={2} />
-            </button>
-          </DropdownMenu.Trigger>
+          {/*
+            Tooltip outside, menu trigger inside. Radix composes `asChild` in
+            one direction only: the outer one has to receive an element, and a
+            Tooltip.Root renders no DOM of its own, so the other order hands
+            the menu trigger a context provider to clone and the tooltip never
+            fires.
+          */}
+          <Tip label="More actions" hint="The same verbs as a right-click">
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                data-testid="row-more"
+                aria-label={`More actions for ${name}`}
+                className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary data-[state=open]:bg-hover data-[state=open]:text-primary"
+              >
+                <MoreHorizontal size={14} strokeWidth={2} />
+              </button>
+            </DropdownMenu.Trigger>
+          </Tip>
           <DropdownMenu.Portal>
             <DropdownMenu.Content
               align="end"
@@ -104,11 +113,11 @@ function Action({ entry, name, danger }: { entry: Item; name: string; danger?: b
   // icon alone, and it is how the dock gets used at all.
   const pin = entry.id === 'pin';
   return (
+    <Tip label={entry.label} {...(entry.shortcut ? { shortcut: entry.shortcut } : {})} {...(pin ? { hint: 'It stays there while you navigate elsewhere' } : {})}>
     <button
       type="button"
       data-testid={`row-${entry.id}`}
       aria-label={`${entry.label} ${name}`}
-      title={entry.label}
       disabled={entry.disabled ?? false}
       onClick={(event) => {
         event.stopPropagation();
@@ -124,5 +133,6 @@ function Action({ entry, name, danger }: { entry: Item; name: string; danger?: b
     >
       {entry.icon ?? <Pin size={13} strokeWidth={1.9} />}
     </button>
+    </Tip>
   );
 }

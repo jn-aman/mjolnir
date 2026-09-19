@@ -4,6 +4,7 @@ import { readZipEntry, zipFolders, type ZipEntry } from '../../lib/zip.ts';
 import { formatBytes } from '../columns.tsx';
 import { formatDateTime } from '../../lib/time.ts';
 import { EmptyState } from '../ui/States.tsx';
+import { Tip } from '../ui/Tooltip.tsx';
 
 /**
  * Inside the archive, without leaving.
@@ -78,14 +79,16 @@ export function ArchiveView({
     <div className="flex min-h-0 flex-1 flex-col" data-testid="archive-view">
       <div className="flex shrink-0 items-center gap-2 border-b border-line px-2.5 py-1.5">
         {prefix ? (
-          <button
-            type="button"
-            aria-label="Up one folder"
-            onClick={() => onPrefix(crumbs.slice(0, -1).map((part) => `${part}/`).join(''))}
-            className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
-          >
-            <ArrowLeft size={13} strokeWidth={2} />
-          </button>
+          <Tip label="Up one folder">
+            <button
+              type="button"
+              aria-label="Up one folder"
+              onClick={() => onPrefix(crumbs.slice(0, -1).map((part) => `${part}/`).join(''))}
+              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
+            >
+              <ArrowLeft size={13} strokeWidth={2} />
+            </button>
+          </Tip>
         ) : null}
         <nav className="flex min-w-0 shrink items-center gap-0.5 overflow-hidden font-mono text-[12px]" aria-label="Path inside the archive">
           <button type="button" onClick={() => onPrefix('')} className="shrink-0 rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary">
@@ -163,15 +166,16 @@ export function ArchiveView({
               <span className="w-[150px] shrink-0 text-right font-mono text-[11.5px] text-tertiary">
                 {entry.modified ? formatDateTime(entry.modified.toISOString()) : ''}
               </span>
-              <button
-                type="button"
-                aria-label={`Save ${entry.name}`}
-                title="Save this entry"
-                onClick={() => void save(entry)}
-                className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
-              >
-                <Download size={12} strokeWidth={1.9} />
-              </button>
+              <Tip label="Save this entry" hint="Extracted here, without downloading the whole archive">
+                <button
+                  type="button"
+                  aria-label={`Save ${entry.name}`}
+                  onClick={() => void save(entry)}
+                  className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
+                >
+                  <Download size={12} strokeWidth={1.9} />
+                </button>
+              </Tip>
             </div>
           ))}
         </div>

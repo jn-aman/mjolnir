@@ -56,6 +56,12 @@ export interface ToolDefinition {
   readonly sections?: readonly string[];
   /** Built and working today. Anything without this is honestly labelled planned. */
   readonly built?: boolean;
+  /**
+   * The flag that decides whether this cluster tool appears at all. Absent
+   * means always, which is right for a tool that is only a page of commands:
+   * there is nothing there to turn off.
+   */
+  readonly flag?: string;
 }
 
 /** The Kubernetes module, alongside the others; it is not the app. */
@@ -77,6 +83,11 @@ export function modules(enabled: Readonly<Record<string, boolean>> = {}): ToolDe
   return TOOLS.filter((tool) => tool.area === 'workspace' && (tool.built === true || enabled[`module.${tool.id}`] === true));
 }
 
+/** The cluster tools this build shows, by their own flags. */
+export function clusterTools(enabled: Readonly<Record<string, boolean>> = {}): ToolDefinition[] {
+  return TOOLS.filter((tool) => tool.area === 'tools' && (!tool.flag || (enabled[tool.flag] ?? true)));
+}
+
 /** Every module the code knows about, flag or no flag. For settings and docs. */
 export function allModules(): ToolDefinition[] {
   return TOOLS.filter((tool) => tool.area === 'workspace');
@@ -89,6 +100,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     icon: Package,
     tint: 'var(--series-1)',
     area: 'tools',
+    flag: 'kubernetes.helm',
     summary: 'Every release in the cluster with its history, values, manifest and notes, read from the release Secrets. Upgrades and rollbacks arrive with the Helm engine.',
     detail: [
       'Releases per namespace with chart, version, status and when they last deployed',
@@ -118,6 +130,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     icon: ArrowLeftRight,
     tint: 'var(--series-3)',
     area: 'tools',
+    flag: 'kubernetes.port-forward',
     summary: 'Forward a pod port to localhost and keep it alive while the app runs. Services and reconnect-survival next.',
     detail: [
       'Start a forward from any pod or service row, with the local port chosen for you',

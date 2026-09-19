@@ -122,12 +122,9 @@ export class FlagStore {
 
   /** Move a switch, or hand the flag back to whatever else has an opinion. */
   override(id: string, value: boolean | null): FlagState[] {
-    const overrides = { ...this.#settings.get().flags.overrides };
-    if (value === null) delete overrides[id];
-    else overrides[id] = value;
-    // The store deep-merges, so a removal has to replace the whole map.
-    this.#settings.update({ flags: { overrides: {} } });
-    this.#settings.update({ flags: { overrides } });
+    // `null` is the store's removal marker, so handing a flag back is one
+    // write and not a clear-then-rewrite that merged straight back into place.
+    this.#settings.update({ flags: { overrides: { [id]: value } } });
     return this.states();
   }
 

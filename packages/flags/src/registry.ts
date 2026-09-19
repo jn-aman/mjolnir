@@ -163,6 +163,157 @@ export const FLAGS: readonly FlagDefinition[] = [
     stage: 'stable',
     module: 'mjolnir',
   },
+
+  /*
+   * Surfaces, not modules.
+   *
+   * Everything below is shipped and on. They are flagged so that a build in
+   * front of a customer can be narrowed without cutting one, and so that when
+   * a surface breaks in the field it can be turned off from the server instead
+   * of waiting on a release. A flag that defaults to off would be hiding
+   * finished work, which is a different thing and not what these are for.
+   */
+  {
+    id: 'ui.command-palette',
+    label: 'Command palette',
+    description: 'Cmd K: jump to any kind, cluster, namespace or object, and run verbs on what you find.',
+    fallback: true,
+    stage: 'stable',
+    module: 'mjolnir',
+  },
+  {
+    id: 'ui.deep-search',
+    label: 'Search inside objects',
+    description: 'The filter box reads every field of every object, not only the columns on screen, so an image tag or an env value finds its row.',
+    fallback: true,
+    stage: 'stable',
+    module: 'mjolnir',
+  },
+  {
+    id: 'ui.filters',
+    label: 'Status and namespace filters',
+    description: 'Narrow a list by health and by namespace from the toolbar.',
+    fallback: true,
+    stage: 'stable',
+    module: 'mjolnir',
+  },
+  {
+    id: 'ui.columns',
+    label: 'Column layout',
+    description: 'Resize, reorder and hide columns, remembered per kind.',
+    fallback: true,
+    stage: 'stable',
+    module: 'mjolnir',
+  },
+  {
+    id: 'ui.bulk-actions',
+    label: 'Act on several rows',
+    description: 'Tick rows and run one verb across all of them.',
+    fallback: true,
+    stage: 'stable',
+    module: 'mjolnir',
+    warning: 'A bulk delete asks once for the whole selection, not once per object.',
+  },
+  {
+    id: 'ui.dock',
+    label: 'Bottom dock',
+    description: 'Keep logs, shells, the assistant and pinned objects open along the bottom while you navigate elsewhere.',
+    fallback: true,
+    stage: 'stable',
+    module: 'mjolnir',
+  },
+  {
+    id: 'kubernetes.logs',
+    label: 'Pod logs',
+    description: 'Follow, search and download container logs, including previous containers after a crash.',
+    fallback: true,
+    stage: 'stable',
+    module: 'kubernetes',
+  },
+  {
+    id: 'kubernetes.exec',
+    label: 'Shell into a container',
+    description: 'Open an interactive terminal in a running container.',
+    fallback: true,
+    stage: 'stable',
+    module: 'kubernetes',
+    warning: 'A shell in a container is a shell in your cluster, with whatever that container can reach.',
+  },
+  {
+    id: 'kubernetes.port-forward',
+    label: 'Port forwarding',
+    description: 'Forward a pod or service port to this machine and keep it open in the background.',
+    fallback: true,
+    stage: 'stable',
+    module: 'kubernetes',
+  },
+  {
+    id: 'kubernetes.edit',
+    label: 'Edit and apply YAML',
+    description: 'Change an object in the editor and apply it, plus scale, restart, cordon, drain and delete.',
+    fallback: true,
+    stage: 'stable',
+    module: 'kubernetes',
+    warning: 'These write to the live cluster. Turning this off leaves every read intact.',
+  },
+  {
+    id: 'kubernetes.helm',
+    label: 'Helm releases',
+    description: 'List releases, read their values and manifests, and see their history.',
+    fallback: true,
+    stage: 'stable',
+    module: 'kubernetes',
+  },
+  {
+    id: 'kubernetes.metrics',
+    label: 'CPU and memory',
+    description: 'Read live usage from metrics-server and draw it on nodes, pods and workloads.',
+    fallback: true,
+    stage: 'stable',
+    module: 'kubernetes',
+  },
+  {
+    id: 'scan.images',
+    label: 'Image scanning',
+    description: 'Scan a container image with Trivy and read the findings, with search, filters and CSV export.',
+    fallback: true,
+    stage: 'beta',
+    module: 'kubernetes',
+    warning: 'Trivy downloads its vulnerability database on first run, which needs the network.',
+  },
+  {
+    id: 'storage.presigned',
+    label: 'Presigned links',
+    description: 'Mint a time-limited URL for an object that anyone with the link can use.',
+    fallback: true,
+    stage: 'stable',
+    module: 'storage',
+    warning: 'A presigned link works without any credentials until it expires.',
+  },
+  {
+    id: 'storage.write',
+    label: 'Upload and delete objects',
+    description: 'Put objects into a bucket, create buckets and remove what is there.',
+    fallback: true,
+    stage: 'stable',
+    module: 'storage',
+  },
+  {
+    id: 'storage.archives',
+    label: 'Open archives in place',
+    description: 'Browse a zip, jar or wheel in the object viewer and open what is inside it without downloading.',
+    fallback: true,
+    stage: 'beta',
+    module: 'storage',
+  },
+  {
+    id: 'docker.write',
+    label: 'Container actions',
+    description: 'Start, stop, restart and remove containers, images, volumes and networks through the local engine.',
+    fallback: true,
+    stage: 'stable',
+    module: 'docker',
+  },
 ];
 
 const BY_ID = new Map(FLAGS.map((flag) => [flag.id, flag]));

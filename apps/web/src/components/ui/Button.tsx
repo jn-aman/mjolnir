@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { Tip } from './Tooltip.tsx';
 
 /**
  * Four variants, one size.
@@ -21,6 +22,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly icon?: ReactNode;
   /** Square, icon-only. Requires aria-label. */
   readonly iconOnly?: boolean;
+  /** Overrides the tooltip text, which is otherwise the aria-label. */
+  readonly tip?: ReactNode;
+  readonly shortcut?: string;
+  /** A second tooltip line: the consequence, or the caveat. */
+  readonly hint?: ReactNode;
+  readonly tipSide?: 'top' | 'right' | 'bottom' | 'left';
 }
 
 export function Button({
@@ -28,10 +35,19 @@ export function Button({
   icon,
   iconOnly = false,
   className = '',
+  tip,
+  shortcut,
+  hint,
+  tipSide = 'top',
   children,
   ...rest
 }: ButtonProps) {
-  return (
+  // An icon-only button labels itself, always. Asking every call site to
+  // remember is how half of them end up unlabelled; the aria-label it already
+  // needs for screen readers is the same sentence a tooltip wants.
+  const label = tip ?? (iconOnly ? rest['aria-label'] : undefined);
+
+  const button = (
     <button
       type="button"
       {...rest}
@@ -46,5 +62,12 @@ export function Button({
       {icon}
       {iconOnly ? null : children}
     </button>
+  );
+
+  if (!label && !hint) return button;
+  return (
+    <Tip label={label} side={tipSide} {...(shortcut ? { shortcut } : {})} {...(hint ? { hint } : {})}>
+      {button}
+    </Tip>
   );
 }

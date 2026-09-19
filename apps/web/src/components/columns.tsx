@@ -4,6 +4,7 @@ import { tintFor } from '../lib/tint.ts';
 import { formatDateTime } from '../lib/time.ts';
 import { Clock, RotateCw, Server } from 'lucide-react';
 import { Truncate } from './ui/Truncate.tsx';
+import { Tip } from './ui/Tooltip.tsx';
 
 /**
  * The column registry.
@@ -102,14 +103,20 @@ const ageColumn = <T extends KubeItem>(): Column<T> => ({
   header: 'Age',
   width: '72px',
   align: 'right',
+  // "11m" is the number you scan by; the wall clock time is the one you put in
+  // the incident notes, so both are here and neither costs a column.
   content: (item) => (
-    <span
-      className="inline-flex items-center gap-1.5 tabular-nums text-[12.5px] text-tertiary"
-      title={item.metadata?.creationTimestamp ? `created ${formatDateTime(item.metadata.creationTimestamp)}` : undefined}
+    <Tip
+      label={item.metadata?.creationTimestamp ? formatDateTime(item.metadata.creationTimestamp) : 'No creation time recorded'}
+      hint={item.metadata?.creationTimestamp ? 'when this object was created' : undefined}
+      align="end"
+      disabled={!item.metadata?.creationTimestamp}
     >
-      <Clock size={11} strokeWidth={2} aria-hidden className="opacity-70" />
-      {age(item.metadata?.creationTimestamp)}
-    </span>
+      <span className="inline-flex items-center gap-1.5 tabular-nums text-[12.5px] text-tertiary">
+        <Clock size={11} strokeWidth={2} aria-hidden className="opacity-70" />
+        {age(item.metadata?.creationTimestamp)}
+      </span>
+    </Tip>
   ),
   sortBy: (item) => item.metadata?.creationTimestamp ?? '',
 });

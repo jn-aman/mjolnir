@@ -3,10 +3,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { ResourceDefinition } from '@mjolnir/k8s';
 import { CATEGORY_TINT } from '../lib/tint.ts';
 import { KIND_ICON } from '../lib/kindIcons.ts';
-import { TOOLS, type ToolDefinition } from '../lib/tools.ts';
+import { clusterTools, type ToolDefinition } from '../lib/tools.ts';
+import { useFlags } from '../lib/flags.tsx';
 import type { CustomResource } from '../lib/api.ts';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import { Boxes, ChevronDown, LayoutDashboard, Settings, Shapes } from 'lucide-react';
+import { Tip } from './ui/Tooltip.tsx';
 
 /**
  * Resource navigation.
@@ -72,6 +74,8 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
       return next;
     });
 
+  const { values: flagValues } = useFlags();
+
   const isActive = (candidate: NavSelection) =>
     candidate.kind === selection.kind && candidate.value === selection.value;
 
@@ -80,7 +84,7 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
     { id: 'collapse-others', label: 'Collapse other sections', onSelect: () => setCollapsed(new Set(allSections.filter((c) => c !== category))) },
     { id: 'expand-all', label: 'Expand all sections', onSelect: () => setCollapsed(new Set()) },
   ];
-  const tools = TOOLS.filter((tool) => tool.area === 'tools');
+  const tools = clusterTools(flagValues);
 
   if (module) {
     const [, activeSection] = selection.kind === 'workspace' ? selection.value.split(':') : [];
@@ -361,8 +365,13 @@ function Entry({
 }) {
   return (
     <Menu label={label} entries={menu} testId="nav-menu">
+    {/*
+      Collapsed, the row is an icon and a number with no words at all, so the
+      tooltip is not a nicety: it is the only label there is. Expanded, the
+      label is already on screen and a tooltip repeating it is noise.
+    */}
+    <Tip label={label} side="right" disabled={!compact} {...(count === undefined ? {} : { hint: `${count} in this cluster` })}>
     <button
-      title={compact ? label : undefined}
       type="button"
       data-testid={testId}
       data-active={active}
@@ -402,6 +411,7 @@ function Entry({
         </span>
       ) : null}
     </button>
+    </Tip>
     </Menu>
   );
 }

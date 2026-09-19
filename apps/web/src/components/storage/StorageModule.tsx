@@ -17,6 +17,7 @@ import { FileViewer } from './FileViewer.tsx';
 import type { ToolDefinition } from '../../lib/tools.ts';
 import { bucketName, url as urlRule } from '../../lib/validate.ts';
 import { useSticky } from '../../lib/sticky.ts';
+import { useFlags } from '../../lib/flags.tsx';
 
 /**
  * Buckets as folders.
@@ -156,6 +157,9 @@ interface Entry {
 }
 
 function Buckets({ connections, connectionId, onConnection }: { connections: StorageConnection[]; connectionId: string; onConnection: (id: string) => void }) {
+  const { values: flags } = useFlags();
+  const canWrite = flags['storage.write'] ?? true;
+  const canPresign = flags['storage.presigned'] ?? true;
   const [buckets, setBuckets] = useState<Array<{ name: string; created: string }>>([]);
   // Where you were, kept across leaving the module and coming back.
   const [bucket, setBucket] = useSticky('storage.bucket', '');
@@ -253,13 +257,17 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
       : [
           { id: 'preview', label: 'Preview', icon: <Eye size={13} strokeWidth={1.9} />, onSelect: () => void open(entry) },
           { id: 'download', label: 'Download', icon: <Download size={13} strokeWidth={1.9} />, onSelect: () => window.open(api.storage.objectUrl(connectionId, bucket, entry.key), '_blank') },
-          { id: 'presign', label: 'Presigned link (1 hour)…', icon: <Link2 size={13} strokeWidth={1.9} />, onSelect: () => void api.storage.presign(connectionId, bucket, entry.key, 3600).then((r) => { setPresigned({ key: entry.key, ...r }); copyText(r.url, 'Presigned link copied'); }) },
+          ...(canPresign
+            ? [{ id: 'presign', label: 'Presigned link (1 hour)…', icon: <Link2 size={13} strokeWidth={1.9} />, onSelect: () => void api.storage.presign(connectionId, bucket, entry.key, 3600).then((r) => { setPresigned({ key: entry.key, ...r }); copyText(r.url, 'Presigned link copied'); }) }]
+            : []),
           SEPARATOR,
           ...copyEntry('copy-key', 'Copy key', entry.key),
           ...copyEntry('copy-s3', 'Copy s3:// URI', `s3://${bucket}/${entry.key}`),
           ...copyEntry('copy-mc', 'Copy mc command', `mc cp <alias>/${bucket}/${entry.key} .`),
           SEPARATOR,
-          { id: 'delete', label: 'Delete…', icon: <Trash2 size={13} strokeWidth={1.9} />, danger: true, onSelect: () => setConfirm({ title: `Delete ${entry.name}?`, body: 'The object is removed from the bucket. Versioned buckets keep a delete marker.', run: () => api.storage.remove(connectionId, bucket, entry.key) }) },
+          ...(canWrite
+            ? [{ id: 'delete', label: 'Delete…', icon: <Trash2 size={13} strokeWidth={1.9} />, danger: true, onSelect: () => setConfirm({ title: `Delete ${entry.name}?`, body: 'The object is removed from the bucket. Versioned buckets keep a delete marker.', run: () => api.storage.remove(connectionId, bucket, entry.key) }) }]
+            : []),
         ];
 
   const isObject = (item: KubeItem) => (item.spec as { kind?: string } | undefined)?.kind === 'object';
@@ -272,7 +280,7 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
       label: 'Delete…',
       icon: <Trash2 size={12} strokeWidth={2} />,
       danger: true,
-      applies: isObject,
+      applies: (item: KubeItem) => canWrite && isObject(item),
       run: (chosen) =>
         setConfirm({
           title: `Delete ${chosen.length} object${chosen.length === 1 ? '' : 's'}?`,
@@ -302,14 +310,18 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
       <div className="flex h-[50px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3.5">
         <Select label="Connection" value={connectionId} onChange={onConnection} testId="storage-connection" options={connections.map((c) => ({ value: c.id, label: c.name, hint: c.source ? 'pod' : new URL(c.endpoint || 'http://x').host }))} />
         <Select label="Bucket" value={bucket} onChange={(b) => { setBucket(b); setPrefix(''); }} testId="storage-bucket" mono options={buckets.map((b) => ({ value: b.name, label: b.name }))} />
-        <Button iconOnly variant="ghost" aria-label="New bucket" onClick={() => setCreatingBucket(true)} icon={<FolderPlus size={13} strokeWidth={1.9} />} />
+        {canWrite ? (
+          <Button iconOnly variant="ghost" aria-label="New bucket" hint="Creates it on this endpoint" onClick={() => setCreatingBucket(true)} icon={<FolderPlus size={13} strokeWidth={1.9} />} />
+        ) : null}
         <Crumbs bucket={bucket} crumbs={crumbs} onGo={setPrefix} />
         <Field id="storage-filter" label="Filter" hideLabel mono value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" className="ml-2 w-[180px] shrink-0" />
         <div className="flex-1" />
-        <label className="inline-flex cursor-pointer">
-          <input type="file" multiple className="hidden" data-testid="storage-upload-input" onChange={(e) => void upload(e.target.files)} />
-          <span className="inline-flex h-[30px] items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 text-[13px] text-primary hover:border-strong"><Upload size={13} strokeWidth={1.9} aria-hidden /> Upload</span>
-        </label>
+        {canWrite ? (
+          <label className="inline-flex cursor-pointer">
+            <input type="file" multiple className="hidden" data-testid="storage-upload-input" onChange={(e) => void upload(e.target.files)} />
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 text-[13px] text-primary hover:border-strong"><Upload size={13} strokeWidth={1.9} aria-hidden /> Upload</span>
+          </label>
+        ) : null}
         <Button iconOnly variant="ghost" aria-label="Refresh" onClick={() => void loadObjects()} icon={<RefreshCw size={13} strokeWidth={2} />} />
       </div>
       {error ? <div className="border-b border-[var(--status-error-border)] bg-error-bg px-3 py-2 text-[12.5px] text-error">{error}</div> : null}

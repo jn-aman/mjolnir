@@ -12,6 +12,7 @@ import { TableView } from './TableView.tsx';
 import { ArchiveView } from './ArchiveView.tsx';
 import { Markdown } from './Markdown.tsx';
 import { readZip, type ZipEntry } from '../../lib/zip.ts';
+import { useFlags } from '../../lib/flags.tsx';
 
 /**
  * Any object, viewed in place, in the form it is actually in.
@@ -106,7 +107,15 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<string>('');
 
-  const mode = file ? modeFor(file.key, file.type) : 'hex';
+  const { values: flags } = useFlags();
+  const canArchives = flags['storage.archives'] ?? true;
+  const canPresign = flags['storage.presigned'] ?? true;
+
+  // Without the archive flag a zip is just bytes, and bytes get a hex dump
+  // rather than nothing: "no preview" is the answer a tool gives when it has
+  // given up.
+  const detected = file ? modeFor(file.key, file.type) : 'hex';
+  const mode: Mode = detected === 'archive' && !canArchives ? 'hex' : detected;
 
   useEffect(() => {
     setText(null);
@@ -261,9 +270,11 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
               Copy contents
             </Button>
           ) : null}
-          <Button variant="ghost" onClick={() => void onPresign(file.key).then((url) => copyText(url, 'Presigned link copied'))} icon={<Link2 size={12} strokeWidth={1.9} />}>
-            Presigned link
-          </Button>
+          {canPresign ? (
+            <Button variant="ghost" hint="A URL that works without credentials until it expires" onClick={() => void onPresign(file.key).then((url) => copyText(url, 'Presigned link copied'))} icon={<Link2 size={12} strokeWidth={1.9} />}>
+              Presigned link
+            </Button>
+          ) : null}
           <Button variant="ghost" onClick={() => window.open(raw, '_blank')} icon={<ExternalLink size={12} strokeWidth={1.9} />}>
             Open raw
           </Button>

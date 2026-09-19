@@ -13,6 +13,7 @@ import { KindMark } from './ui/KindMark.tsx';
 import { OverflowTip } from './ui/OverflowTip.tsx';
 import { EmptyState, LoadingState } from './ui/States.tsx';
 import { useTablePrefs } from '../lib/tablePrefs.ts';
+import { useFlags } from '../lib/flags.tsx';
 
 /**
  * One table for every resource kind.
@@ -122,6 +123,14 @@ export function ResourceList({
   bulk,
   empty,
 }: ResourceListProps) {
+  const { values: flags } = useFlags();
+  // Each surface asks for itself rather than reading one "advanced table"
+  // flag, so a build can keep the columns and drop the bulk verbs, which is
+  // the combination people actually ask for.
+  const canColumns = flags['ui.columns'] ?? true;
+  const canBulk = (flags['ui.bulk-actions'] ?? true) && Boolean(bulk?.length);
+  const deepSearch = flags['ui.deep-search'] ?? true;
+
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
@@ -194,7 +203,10 @@ export function ResourceList({
             .filter(Boolean)
             .join(' ')
             .toLowerCase();
-          const whole = deepText(item);
+          // Without the deep flag the filter only sees what is on screen,
+          // which is the behaviour every other table has and is a defensible
+          // build; with it, an image tag or an env value finds its row.
+          const whole = deepSearch ? deepText(item) : '';
           return words.every((word) => shown.includes(word) || whole.includes(word));
         })
       : items;
@@ -210,7 +222,7 @@ export function ResourceList({
       if (left === right) return 0;
       return left > right ? direction : -direction;
     });
-  }, [items, filter, sort, columns]);
+  }, [items, filter, sort, columns, deepSearch]);
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -299,9 +311,9 @@ export function ResourceList({
         <div
           role="row"
           className="sticky top-0 z-10 grid h-[36px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.06em] text-tertiary"
-          style={{ gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(190px, 1fr)` }}
+          style={{ gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(190px, 1fr)` }}
         >
-          {bulk ? (
+          {canBulk ? (
             <div className="flex h-full items-center justify-center">
               <Checkbox
                 checked={visible.length > 0 && visible.every((item) => picked.has(rowKey(item)))}
@@ -315,7 +327,7 @@ export function ResourceList({
           {columns.map((column) => (
             <div
               key={column.id}
-              draggable
+              draggable={canColumns}
               onDragStart={() => setDragging(column.id)}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -333,12 +345,14 @@ export function ResourceList({
                 dropTarget === column.id ? 'bg-accent-subtle' : ''
               }`}
             >
-              <GripVertical
-                size={11}
-                strokeWidth={2}
-                aria-hidden
-                className="absolute left-0.5 cursor-grab text-transparent group-hover:text-[var(--border-strong)]"
-              />
+              {canColumns ? (
+                <GripVertical
+                  size={11}
+                  strokeWidth={2}
+                  aria-hidden
+                  className="absolute left-0.5 cursor-grab text-transparent group-hover:text-[var(--border-strong)]"
+                />
+              ) : null}
               <button
                 type="button"
                 onClick={() => toggleSort(column)}
@@ -361,6 +375,7 @@ export function ResourceList({
               ) : null}
 
               {/* A wide invisible grip: a 1px divider is not a usable target. */}
+              {canColumns ? (
               <span
                 onPointerDown={(event) => startResize(event, column)}
                 role="separator"
@@ -368,10 +383,12 @@ export function ResourceList({
                 aria-label={`Resize ${column.header}`}
                 className="absolute right-0 top-0 h-full w-[7px] cursor-col-resize after:absolute after:right-[3px] after:top-[6px] after:h-[20px] after:w-px after:bg-[var(--border-default)] hover:after:bg-accent"
               />
+              ) : null}
             </div>
           ))}
 
           <div className="cell-pinned-header flex h-full items-center justify-end pr-2">
+            {canColumns ? (
             <ColumnMenu
               all={all}
               hidden={prefs.hidden}
@@ -384,6 +401,7 @@ export function ResourceList({
               }
               onReset={reset}
             />
+            ) : null}
           </div>
         </div>
 
@@ -421,7 +439,7 @@ export function ResourceList({
                 const selected = item.metadata?.name === selectedName;
                 const act = (action: string) => onAction?.(action, item);
 
-                const entries = menu ? menu(item) : rowMenuEntries(item, kind, act as (action: RowActionId) => void);
+                const entries = menu ? menu(item) : rowMenuEntries(item, kind, act as (action: RowActionId) => void, flags);
                 const key = rowKey(item);
                 return (
                   <Menu key={item.metadata?.name ?? row.index} label={item.metadata?.name ?? ''} entries={entries} testId="row-menu">
@@ -431,7 +449,7 @@ export function ResourceList({
                       role="row"
                       tabIndex={0}
                       onClick={(event) => {
-                        if (bulk && (event.metaKey || event.ctrlKey)) {
+                        if (canBulk && (event.metaKey || event.ctrlKey)) {
                           setPicked((current) => {
                             const out = new Set(current);
                             if (out.has(key)) out.delete(key);
@@ -455,7 +473,7 @@ export function ResourceList({
                         selected ? 'row-selected' : 'row-hover'
                       }`}
                       style={{
-                        gridTemplateColumns: `${bulk ? '38px ' : ''}${template} minmax(190px, 1fr)`,
+                        gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(190px, 1fr)`,
                         minHeight: ROW_HEIGHT,
                         transform: `translateY(${row.start - HEADER_HEIGHT}px)`,
                       }}
@@ -463,7 +481,7 @@ export function ResourceList({
                       {selected ? (
                         <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-accent" />
                       ) : null}
-                      {bulk ? (
+                      {canBulk ? (
                         <div className="flex h-full items-center justify-center" onClick={(event) => event.stopPropagation()}>
                           <Checkbox
                             checked={picked.has(key)}
@@ -531,7 +549,7 @@ export function ResourceList({
         {state === 'error' ? <span className="text-warn">reconnecting</span> : null}
       </div>
       <AnimatePresence>
-        {bulk && picked.size > 0 ? (
+        {canBulk && bulk && picked.size > 0 ? (
           <motion.div
             key="bulk-bar"
             data-testid="bulk-bar"
