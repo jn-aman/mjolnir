@@ -165,7 +165,7 @@ export const mjolnirUrl: Validator = (value) => {
   try {
     parsed = new URL(text);
   } catch {
-    return 'That is not a URL. It should look like https://flags.mjolnir.sh';
+    return 'That is not a URL. It should look like https://unleash.mjolnir.sh';
   }
   const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '::1';
   if (loopback) return null;

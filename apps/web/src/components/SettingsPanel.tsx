@@ -20,7 +20,6 @@ import {
   SlidersHorizontal,
   Trash2,
   Wrench,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,6 +38,8 @@ import { FlagsSection } from './settings/FlagsSection.tsx';
 import { PrivacySection } from './settings/PrivacySection.tsx';
 import { UpdatesSection } from './settings/UpdatesSection.tsx';
 import { filePath, licenceKey, modelName, namespaceName, optionalUrl } from '../lib/validate.ts';
+import { MarkTile } from './ui/Mark.tsx';
+import { useFlags } from '../lib/flags.tsx';
 
 /**
  * Settings, in two scopes.
@@ -72,6 +73,8 @@ interface Section {
   readonly label: string;
   readonly icon: LucideIcon;
   readonly planned?: string;
+  /** Present only when this flag is on. Settings for a module nobody has is noise. */
+  readonly flag?: string;
 }
 
 const APP_SECTIONS: readonly Section[] = [
@@ -82,7 +85,7 @@ const APP_SECTIONS: readonly Section[] = [
   { id: 'flags', label: 'Feature flags', icon: Flag },
   { id: 'updates', label: 'Updates', icon: Download },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-  { id: 'cloud', label: 'Cloud access', icon: Cloud, planned: 'Identities, sessions and where credentials are kept arrive with the Cloud access workspace.' },
+  { id: 'cloud', label: 'Cloud access', icon: Cloud, flag: 'module.cloud', planned: 'Identities, sessions and where credentials are kept arrive with the Cloud access workspace.' },
   { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
   { id: 'advanced', label: 'Advanced', icon: SlidersHorizontal, planned: 'Log level, data directory, local API port and the reset button.' },
   { id: 'about', label: 'About', icon: Info },
@@ -126,7 +129,8 @@ const AI_PRESETS: ReadonlyArray<{ id: string; label: string; provider: 'anthropi
 ];
 
 export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown, onReplayWelcome }: SettingsPanelProps) {
-  const sections = scope === 'app' ? APP_SECTIONS : K8S_SECTIONS;
+  const { values: flagValues } = useFlags();
+  const sections = (scope === 'app' ? APP_SECTIONS : K8S_SECTIONS).filter((entry) => !entry.flag || flagValues[entry.flag] === true);
   const [section, setSection] = useState(sections[0]?.id ?? 'general');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [meta, setMeta] = useState<{ path: string; mcpCommand?: string } | null>(null);
@@ -167,7 +171,6 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
           </span>
           <div>
             <div className="text-[13px] font-semibold text-primary">{scope === 'app' ? 'Mjolnir settings' : 'Kubernetes settings'}</div>
-            <div className="text-[10.5px] text-tertiary">{scope === 'app' ? 'the app itself' : 'the Kubernetes module'}</div>
           </div>
         </div>
         {sections.map((entry) => {
@@ -244,7 +247,7 @@ function General({ theme, onTheme, settings }: { theme: ThemeChoice; onTheme: (c
         <Row
           label="Timezone"
           hint={`Every timestamp in the app is shown in this zone. Now ${offsetLabel(timezone.zone)}.`}
-          control={<Select label="Timezone" value={timezone.choice} onChange={timezone.set} testId="timezone-select" align="end" mono options={timezoneOptions()} />}
+          control={<Select label="Timezone" value={timezone.choice} onChange={timezone.set} testId="timezone-select" align="end" mono width={220} options={timezoneOptions()} />}
         />
       </Card>
       <Card title="Behaviour">
@@ -294,7 +297,7 @@ function Ai({ settings, onSave }: { settings: AppSettings | null; onSave: (patch
   return (
     <>
       <Card title="Provider" subtitle="Anthropic natively, and anything that speaks the OpenAI chat API. The key stays on this machine.">
-        <Row label="Provider" control={<Select label="Provider" value={preset.id} onChange={choosePreset} testId="ai-preset" align="end" options={AI_PRESETS.map((p) => ({ value: p.id, label: p.label }))} />} />
+        <Row label="Provider" control={<Select label="Provider" value={preset.id} onChange={choosePreset} testId="ai-preset" align="end" width={220} options={AI_PRESETS.map((p) => ({ value: p.id, label: p.label }))} />} />
         <Divider />
         <Row
           label="API key"
@@ -473,9 +476,7 @@ function About({ path }: { path: string | undefined }) {
     <>
       <Card title="Mjolnir" subtitle="Kubernetes, containers, storage, cloud access and more, in one desktop app.">
         <div className="flex items-center gap-4">
-          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl text-white" style={{ background: 'linear-gradient(145deg, color-mix(in oklab, var(--accent-solid) 100%, white 22%), color-mix(in oklab, var(--accent-solid) 100%, black 18%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 10px 24px color-mix(in oklab, var(--accent-solid) 45%, transparent)' }} aria-hidden>
-            <Zap size={26} strokeWidth={2.2} />
-          </span>
+          <MarkTile size={52} />
           <div>
             <div className="text-[16px] font-semibold text-primary">Mjolnir <span className="font-mono text-[13px] text-tertiary">0.1.0</span></div>
             <div className="text-[12.5px] text-secondary">mjolnir.sh · Elastic License 2.0</div>

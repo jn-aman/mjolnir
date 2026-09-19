@@ -13,6 +13,7 @@ import { YamlEditor } from './YamlEditor.tsx';
 import { Field } from './ui/Field.tsx';
 import { Button } from './ui/Button.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
+import { LoadingState } from './ui/States.tsx';
 
 /**
  * Helm, read from the cluster.
@@ -178,7 +179,7 @@ function HelmDrawer({ context, summary, onClose, menu }: { context: string; summ
                 </div>
               ) : null}
             </div>
-          ) : <p className="text-[12.5px] text-tertiary">Loading…</p>}
+          ) : <LoadingState title="Reading release history" rows={4} />}
         </Tabs.Content>
         <Tabs.Content value="values" className="flex min-h-0 flex-1 flex-col outline-none">
           {release ? <YamlEditor key={`${summary.name}:${release.revision}:values`} value={Object.keys(release.values).length ? stringify(release.values, { lineWidth: 0 }) : '# no user-supplied values; the chart defaults apply\n'} /> : null}

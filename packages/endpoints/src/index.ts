@@ -8,7 +8,7 @@
  * *.mjolnir.sh" is a rule an ops team can actually write down and audit.
  *
  * Third parties still do the work behind these names. Unleash Edge answers on
- * flags.mjolnir.sh, the update feed is object storage behind
+ * unleash.mjolnir.sh, the update feed is object storage behind
  * updates.mjolnir.sh, Paddle is reached through api.mjolnir.sh. That is a
  * deployment detail. From the app's side there is one apex, and
  * `isAllowedHost` is the check that keeps it that way.
@@ -22,7 +22,7 @@ export const ENDPOINTS = {
   /** Licence activation and account calls, which proxy the payment provider. */
   api: 'https://api.mjolnir.sh',
   /** Unleash Edge. The app reads toggles; it never writes them. */
-  flags: 'https://flags.mjolnir.sh',
+  flags: 'https://unleash.mjolnir.sh',
   /** Usage events and crash reports, when the person has said yes. */
   telemetry: 'https://telemetry.mjolnir.sh',
   /** The electron-updater feed: the channel file and the artefacts beside it. */
@@ -64,6 +64,6 @@ export function hostRefusal(candidate: string): string | null {
     if (url.protocol !== 'https:') return 'Use https. Mjolnir will not send anything over a plain connection.';
     return `Mjolnir only contacts ${APEX} and its subdomains, so ${url.hostname} is refused.`;
   } catch {
-    return 'That is not a URL. It should look like https://flags.mjolnir.sh';
+    return 'That is not a URL. It should look like https://unleash.mjolnir.sh';
   }
 }

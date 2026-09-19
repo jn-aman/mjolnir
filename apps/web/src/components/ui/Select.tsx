@@ -79,7 +79,15 @@ export function Select({
             style={{ width, transitionProperty: 'border-color', transitionDuration: '90ms' }}
           >
             {selected?.icon}
-            <span className={`min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-left ${mono ? 'font-mono' : ''}`}>
+            {/* One line, always. A trigger that grows to fit its longest
+                option changes the height of the row it sits in and shifts
+                everything beside it the moment the value changes, which is the
+                one thing a control in a toolbar must never do. The full value
+                is in the menu, and on hover. */}
+            <span
+              title={selected?.label ?? label}
+              className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left ${mono ? 'font-mono' : ''}`}
+            >
               {selected?.label ?? label}
             </span>
             <ChevronDown

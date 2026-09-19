@@ -313,3 +313,29 @@
   .glow-dot.breathe { animation: none; }
   .lift:hover { transform: none; }
 }
+
+/**
+ * A shimmer for skeleton rows.
+ *
+ * A pulse blinks, which reads as a fault. A highlight travelling left to right
+ * reads as work in progress, which is what is actually happening.
+ */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    color-mix(in oklab, var(--surface-raised) 100%, var(--text-tertiary) 12%) 45%,
+    var(--surface-sunken) 90%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 140% 0; }
+  to { background-position: -40% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; }
+}

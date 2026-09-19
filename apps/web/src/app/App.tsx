@@ -3,7 +3,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { toast, Toaster } from 'sonner';
 import type { ClusterContext, ResourceDefinition, WatchState } from '@mjolnir/k8s';
 import { AnimatePresence, motion } from 'motion/react';
-import { Ban, Circle, CirclePlay, Command as CommandIcon, Copy, Moon, Plus, RotateCw, Search, Sparkles, Sun, Tag, Trash2, Zap } from 'lucide-react';
+import { Ban, Circle, CirclePlay, Command as CommandIcon, Copy, Moon, Plus, RotateCw, Search, Sparkles, Sun, Tag, Trash2 } from 'lucide-react';
 import { api, type AppSettings, type ClustersResponse } from '../lib/api.ts';
 import { useTheme } from '../lib/theme.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
@@ -45,6 +45,7 @@ import { DockerModule, type DockerSection } from '../components/docker/DockerMod
 import { ScanDialog } from '../components/ScanDialog.tsx';
 import { HelmPanel } from '../components/HelmPanel.tsx';
 import { StorageModule, type StorageSection } from '../components/storage/StorageModule.tsx';
+import { MarkTile } from '../components/ui/Mark.tsx';
 
 export function App() {
   const theme = useTheme();
@@ -815,6 +816,7 @@ export function App() {
                     state={state}
                     error={error}
                     filter={filter}
+                    onClearFilter={() => setFilter('')}
                     selectedName={drawerItem?.metadata?.name}
                     onSelect={(item) => {
                       setSelected(item);
@@ -1169,9 +1171,7 @@ function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistan
       <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px" style={{ background: `linear-gradient(90deg, transparent, color-mix(in oklab, ${tint} 55%, transparent) 30%, transparent 80%)` }} />
 
       <span className="flex items-center gap-2" data-testid="brand">
-        <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] text-white" style={{ background: 'linear-gradient(145deg, color-mix(in oklab, var(--accent-solid) 100%, white 22%), color-mix(in oklab, var(--accent-solid) 100%, black 18%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 4px 12px color-mix(in oklab, var(--accent-solid) 50%, transparent)' }}>
-          <Zap size={14} strokeWidth={2.4} aria-hidden />
-        </span>
+        <MarkTile size={26} />
         <span className="text-[13.5px] font-semibold tracking-[-0.01em] text-primary">Mjolnir</span>
       </span>
 

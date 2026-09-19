@@ -30,7 +30,7 @@ export const AiSettings = z.object({
   instructions: z.string().default(''),
 });
 
-/** Flags: switches the person moved, and the Unleash Edge behind flags.mjolnir.sh. */
+/** Flags: switches the person moved, and the Unleash Edge behind unleash.mjolnir.sh. */
 export const FlagSettings = z.object({
   overrides: z.record(z.string(), z.boolean()).default({}),
   remote: z

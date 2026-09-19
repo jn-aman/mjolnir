@@ -95,7 +95,7 @@ refused before a request is made.
 |---|---|---|
 | `updates.mjolnir.sh` | The update feed and installer | on, and asks before installing |
 | `telemetry.mjolnir.sh` | Crash reports, usage counters | **off** until you say yes |
-| `flags.mjolnir.sh` | Feature toggles, Unleash | off |
+| `unleash.mjolnir.sh` | Feature toggles, Unleash | off |
 | `api.mjolnir.sh` | Licence activation | only when you enter a key |
 
 Your clusters, container engines and object stores are reached straight from

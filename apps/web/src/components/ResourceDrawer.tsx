@@ -19,6 +19,7 @@ import { KindMark } from './ui/KindMark.tsx';
 import { kindTint } from '../lib/kindIcons.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
+import { LoadingState } from './ui/States.tsx';
 
 /**
  * The detail panel.
@@ -438,7 +439,7 @@ export function ResourceDrawer({
 
         <Tabs.Content value="events" className="min-h-0 flex-1 overflow-auto p-4 outline-none">
           {events === null ? (
-            <p className="text-[12.5px] text-tertiary">Loading…</p>
+            <LoadingState title="Reading the object" rows={0} />
           ) : events.length === 0 ? (
             <p className="py-8 text-center text-[12.5px] text-tertiary">
               No events recorded for this {kind.toLowerCase()}.
@@ -473,7 +474,7 @@ export function ResourceDrawer({
 
         <Tabs.Content value="yaml" className="flex min-h-0 flex-1 flex-col outline-none">
           {yaml === null ? (
-            <div className="flex flex-1 items-center justify-center text-[13px] text-tertiary">Loading…</div>
+            <LoadingState title="Reading the object" rows={0} />
           ) : (
             <YamlEditor
               key={`${name}:${namespace}`}

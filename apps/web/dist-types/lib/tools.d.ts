@@ -41,7 +41,17 @@ export declare const KUBERNETES_MODULE: {
     readonly tint: 'var(--series-1)';
 };
 export declare function isModule(id: string): boolean;
-export declare function modules(): ToolDefinition[];
+/**
+ * The modules this build shows.
+ *
+ * Every module except Kubernetes, Containers and Bucket store is behind a flag
+ * that is off, so a shipped rail holds only what works. `enabled` comes from
+ * the flag context; passing nothing gives the shipping set, which is what any
+ * caller outside React should see.
+ */
+export declare function modules(enabled?: Readonly<Record<string, boolean>>): ToolDefinition[];
+/** Every module the code knows about, flag or no flag. For settings and docs. */
+export declare function allModules(): ToolDefinition[];
 export declare const TOOLS: readonly ToolDefinition[];
 export declare function toolById(id: string): ToolDefinition | undefined;
 //# sourceMappingURL=tools.d.ts.map

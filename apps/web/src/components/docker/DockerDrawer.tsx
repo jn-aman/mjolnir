@@ -11,6 +11,7 @@ import { YamlEditor, toEditableYaml } from '../YamlEditor.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Menu, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { formatDateTime } from '../../lib/time.ts';
+import { LoadingState } from '../ui/States.tsx';
 
 /** One container: what it is, its logs, and everything the engine knows. */
 interface DockerDrawerProps {
@@ -118,7 +119,7 @@ export function DockerDrawer({ context, container, onClose, onOpenDock, menu }: 
           {tab === 'logs' ? <LogViewer source="docker" context={context} namespace="" pod={container.id} containers={[container.name]} /> : null}
         </Tabs.Content>
         <Tabs.Content value="inspect" className="flex min-h-0 flex-1 flex-col outline-none">
-          {inspect ? <YamlEditor key={container.id} value={toEditableYaml(inspect)} /> : <div className="p-4 text-[12.5px] text-tertiary">Loading…</div>}
+          {inspect ? <YamlEditor key={container.id} value={toEditableYaml(inspect)} /> : <LoadingState title="Inspecting the container" rows={0} />}
         </Tabs.Content>
       </Tabs.Root>
     </motion.aside>

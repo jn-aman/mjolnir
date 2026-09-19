@@ -1,0 +1,562 @@
+{
+  "project": "default",
+  "environment": "production",
+  "features": [
+    {
+      "name": "module.cloud",
+      "description": "AWS, Azure and Google identities with sessions that obtain and rotate credentials.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    },
+    {
+      "name": "module.machines",
+      "description": "Paired hosts with CPU, memory, disk and container metrics from a small agent.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    },
+    {
+      "name": "module.alerts",
+      "description": "Rules, channels, quiet hours and silences.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    },
+    {
+      "name": "module.database",
+      "description": "Query databases in the cluster and outside it, through a forward or an IAM role.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    },
+    {
+      "name": "module.kafka",
+      "description": "Topics, consumer groups, lag and messages.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    },
+    {
+      "name": "assistant.tool-calls",
+      "description": "The assistant may call read tools itself instead of only describing what it would run.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:stable"
+        },
+        {
+          "type": "simple",
+          "value": "module:assistant"
+        }
+      ]
+    },
+    {
+      "name": "assistant.writes",
+      "description": "Lets the assistant apply, scale, restart and delete, subject to the per-provider write switch.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:beta"
+        },
+        {
+          "type": "simple",
+          "value": "module:assistant"
+        }
+      ]
+    },
+    {
+      "name": "mcp.http",
+      "description": "Serve the Model Context Protocol at /mcp so other agents on this machine can use Mjolnir.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:beta"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    },
+    {
+      "name": "kubernetes.time-travel",
+      "description": "Keep a rolling history of resource versions so you can scrub back to what the cluster looked like.",
+      "type": "experiment",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:experimental"
+        },
+        {
+          "type": "simple",
+          "value": "module:kubernetes"
+        }
+      ]
+    },
+    {
+      "name": "kubernetes.traffic-graph",
+      "description": "Draw the live service-to-service graph from endpoints and network policy.",
+      "type": "experiment",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:experimental"
+        },
+        {
+          "type": "simple",
+          "value": "module:kubernetes"
+        }
+      ]
+    },
+    {
+      "name": "kubernetes.node-shell",
+      "description": "Open a root shell on a node through a privileged ephemeral pod.",
+      "type": "experiment",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:experimental"
+        },
+        {
+          "type": "simple",
+          "value": "module:kubernetes"
+        }
+      ]
+    },
+    {
+      "name": "docker.build",
+      "description": "Build images from a Dockerfile through the local engine, with BuildKit output in the dock.",
+      "type": "experiment",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:experimental"
+        },
+        {
+          "type": "simple",
+          "value": "module:docker"
+        }
+      ]
+    },
+    {
+      "name": "storage.transfers",
+      "description": "Queue uploads and downloads so large objects keep moving while you work elsewhere.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:beta"
+        },
+        {
+          "type": "simple",
+          "value": "module:storage"
+        }
+      ]
+    },
+    {
+      "name": "machines.agent",
+      "description": "Pair a small agent on a host and read its CPU, memory, disk and container metrics.",
+      "type": "experiment",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:machines"
+        }
+      ]
+    },
+    {
+      "name": "alerts.rules",
+      "description": "Evaluate alert rules locally and deliver to email, webhooks and push, with quiet hours.",
+      "type": "experiment",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:internal"
+        },
+        {
+          "type": "simple",
+          "value": "module:alerts"
+        }
+      ]
+    },
+    {
+      "name": "ui.onboarding",
+      "description": "Show the first-run welcome, and offer it again from settings.",
+      "type": "release",
+      "project": "default",
+      "enabled": false,
+      "impressionData": false,
+      "archived": false,
+      "tags": [
+        {
+          "type": "simple",
+          "value": "stage:stable"
+        },
+        {
+          "type": "simple",
+          "value": "module:mjolnir"
+        }
+      ]
+    }
+  ],
+  "featureStrategies": [
+    {
+      "featureName": "module.cloud",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "module.cloud"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "module.machines",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "module.machines"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "module.alerts",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "module.alerts"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "module.database",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "module.database"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "module.kafka",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "module.kafka"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "assistant.tool-calls",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "assistant.tool-calls"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "assistant.writes",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "assistant.writes"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "mcp.http",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "mcp.http"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "kubernetes.time-travel",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "kubernetes.time-travel"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "kubernetes.traffic-graph",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "kubernetes.traffic-graph"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "kubernetes.node-shell",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "kubernetes.node-shell"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "docker.build",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "docker.build"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "storage.transfers",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "storage.transfers"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "machines.agent",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "machines.agent"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "alerts.rules",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "alerts.rules"
+      },
+      "constraints": []
+    },
+    {
+      "featureName": "ui.onboarding",
+      "name": "flexibleRollout",
+      "parameters": {
+        "rollout": "0",
+        "stickiness": "userId",
+        "groupId": "ui.onboarding"
+      },
+      "constraints": []
+    }
+  ],
+  "featureEnvironments": [
+    {
+      "featureName": "module.cloud",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "module.machines",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "module.alerts",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "module.database",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "module.kafka",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "assistant.tool-calls",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "assistant.writes",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "mcp.http",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "kubernetes.time-travel",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "kubernetes.traffic-graph",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "kubernetes.node-shell",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "docker.build",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "storage.transfers",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "machines.agent",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "alerts.rules",
+      "environment": "production",
+      "enabled": false
+    },
+    {
+      "featureName": "ui.onboarding",
+      "environment": "production",
+      "enabled": false
+    }
+  ],
+  "tagTypes": [
+    {
+      "name": "simple",
+      "description": "Stage and module labels from the Mjolnir catalogue",
+      "icon": "#"
+    }
+  ],
+  "segments": []
+}

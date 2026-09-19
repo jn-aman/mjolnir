@@ -10,6 +10,8 @@ import { RowActions } from './RowActions.tsx';
 import { Checkbox } from './ui/Checkbox.tsx';
 import { Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import { KindMark } from './ui/KindMark.tsx';
+import { OverflowTip } from './ui/OverflowTip.tsx';
+import { EmptyState, LoadingState } from './ui/States.tsx';
 import { useTablePrefs } from '../lib/tablePrefs.ts';
 
 /**
@@ -30,6 +32,8 @@ interface ResourceListProps {
   readonly state: WatchState;
   readonly error: string | null;
   readonly filter: string;
+  /** Lets an empty result clear the search that caused it. */
+  readonly onClearFilter?: (() => void) | undefined;
   /** The kind's label as people say it: "Role bindings", not "rolebindings". */
   readonly label?: string | undefined;
   readonly namespace?: string | undefined;
@@ -98,6 +102,7 @@ export function ResourceList({
   state,
   error,
   filter,
+  onClearFilter,
   label,
   namespace,
   selectedName,
@@ -247,14 +252,23 @@ export function ResourceList({
   // "Connecting" and "genuinely empty" look identical if you only check length.
   // Conflating them is the most common way a cluster UI lies to you.
   if (state === 'connecting' && items.length === 0) {
-    return <ListMessage testId="resource-loading">Connecting to the cluster…</ListMessage>;
+    return (
+      <LoadingState
+        testId="resource-loading"
+        title={`Watching ${(label ?? kind).toLowerCase()}`}
+        detail={namespace ? `in ${namespace}` : 'across every namespace'}
+      />
+    );
   }
 
   if (state === 'error' && items.length === 0) {
     return (
-      <ListMessage testId="resource-error" tone="error">
-        {error ?? 'The watch could not be established.'}
-      </ListMessage>
+      <EmptyState
+        testId="resource-error"
+        tone="error"
+        title="The watch could not be established"
+        detail={error ?? 'The cluster did not answer. The connection pill in the header says whether it is reachable at all.'}
+      />
     );
   }
 
@@ -353,11 +367,30 @@ export function ResourceList({
         </div>
 
         {visible.length === 0 ? (
-          <ListMessage testId="resource-empty">
-            {filter
-              ? `Nothing matches “${filter}”.`
-              : `No ${(label ?? kind).toLowerCase()} ${namespace ? `in ${namespace}` : 'in this cluster'}.`}
-          </ListMessage>
+          filter ? (
+            <EmptyState
+              testId="resource-empty"
+              title={`Nothing matches “${filter}”`}
+              detail={`${items.length} ${(label ?? kind).toLowerCase()} ${items.length === 1 ? 'is' : 'are'} here, and none of them match. The filter searches every field, not only the columns on screen.`}
+              action={
+                onClearFilter ? (
+                  <button type="button" data-testid="clear-filter" onClick={onClearFilter} className="btn-secondary flex h-[28px] items-center rounded-md border border-line px-2.5 text-[12px] text-secondary hover:text-primary">
+                    Clear the filter
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <EmptyState
+              testId="resource-empty"
+              title={`No ${(label ?? kind).toLowerCase()} ${namespace ? `in ${namespace}` : 'in this cluster'}`}
+              detail={
+                namespace
+                  ? 'Nothing is wrong. Another namespace may have some, or the namespace picker in the toolbar can widen the search.'
+                  : 'Nothing is wrong: this cluster genuinely has none. The watch is live, so any that appear will show up here without a refresh.'
+              }
+            />
+          )
         ) : (
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
             <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
@@ -443,16 +476,17 @@ export function ResourceList({
                         </div>
                       ) : null}
                       {columns.map((column) => (
-                        <div
+                        <OverflowTip
                           key={column.id}
-                          data-testid={`cell-${column.id}`}
-                          className={`flex min-w-0 items-center gap-2.5 px-3 py-2 ${
+                          testId={`cell-${column.id}`}
+                          align={column.align === 'right' ? 'end' : 'start'}
+                          className={`flex min-w-0 items-center gap-2.5 overflow-hidden px-3 py-2 ${
                             column.align === 'right' ? 'justify-end' : 'justify-start'
                           }`}
                         >
                           {column.id === 'name' ? <KindMark kind={(item.spec as { kind?: string } | undefined)?.kind === 'prefix' ? 'StoragePrefix' : kind} /> : null}
                           {column.content(item)}
-                        </div>
+                        </OverflowTip>
                       ))}
                       <div className="flex h-full items-center justify-end px-2" onClick={(event) => event.stopPropagation()}>
                         <RowActions entries={entries} name={item.metadata?.name ?? ''} />
@@ -593,23 +627,3 @@ function ColumnMenu({
   );
 }
 
-function ListMessage({
-  children,
-  testId,
-  tone = 'muted',
-}: {
-  children: React.ReactNode;
-  testId: string;
-  tone?: 'muted' | 'error';
-}) {
-  return (
-    <div
-      data-testid={testId}
-      className={`flex min-h-0 flex-1 items-center justify-center p-8 text-[13px] ${
-        tone === 'error' ? 'text-error' : 'text-tertiary'
-      }`}
-    >
-      {children}
-    </div>
-  );
-}

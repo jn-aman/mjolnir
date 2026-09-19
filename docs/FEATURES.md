@@ -104,7 +104,7 @@ stop at the control plane. You can see that a MinIO pod is running and read its
 logs, but to look at what is actually in a bucket you leave the app, port-forward
 by hand, and reach for `mc` or a browser.
 
-**Object storage first**, because it is the most common and the easiest to do
+**Bucket store first**, because it is the most common and the easiest to do
 well. Detect S3-compatible services in the cluster, MinIO, RustFS, SeaweedFS,
 Ceph RGW, from their images, ports and labels, then offer to open them.
 
@@ -129,7 +129,7 @@ production is not.
 
 **The pattern generalises.** Postgres, Redis, Kafka and Elasticsearch all have
 the same shape, a service in the cluster, credentials in a Secret, a protocol
-worth a viewer. Object storage is first because the payoff is highest and the
+worth a viewer. Bucket store is first because the payoff is highest and the
 protocol is simplest. The detection and port-forward machinery is built once and
 reused.
 

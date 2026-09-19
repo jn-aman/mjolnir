@@ -24,7 +24,55 @@ export interface FlagDefinition {
   readonly warning?: string;
 }
 
+/**
+ * Module flags come first because they decide what the app looks like.
+ *
+ * A rail full of tiles marked "planned" is a promise made to someone who only
+ * wanted to look at their cluster. Shipping means the rail holds what works;
+ * everything else is behind a flag that is off, so the same build can show a
+ * whole module to the people testing it and nothing at all to everyone else.
+ */
 export const FLAGS: readonly FlagDefinition[] = [
+  {
+    id: 'module.cloud',
+    label: 'Cloud access module',
+    description: 'AWS, Azure and Google identities with sessions that obtain and rotate credentials.',
+    fallback: false,
+    stage: 'internal',
+    module: 'mjolnir',
+  },
+  {
+    id: 'module.machines',
+    label: 'Machines module',
+    description: 'Paired hosts with CPU, memory, disk and container metrics from a small agent.',
+    fallback: false,
+    stage: 'internal',
+    module: 'mjolnir',
+  },
+  {
+    id: 'module.alerts',
+    label: 'Alerts module',
+    description: 'Rules, channels, quiet hours and silences.',
+    fallback: false,
+    stage: 'internal',
+    module: 'mjolnir',
+  },
+  {
+    id: 'module.database',
+    label: 'Database browser module',
+    description: 'Query databases in the cluster and outside it, through a forward or an IAM role.',
+    fallback: false,
+    stage: 'internal',
+    module: 'mjolnir',
+  },
+  {
+    id: 'module.kafka',
+    label: 'Kafka module',
+    description: 'Topics, consumer groups, lag and messages.',
+    fallback: false,
+    stage: 'internal',
+    module: 'mjolnir',
+  },
   {
     id: 'assistant.tool-calls',
     label: 'Assistant runs tools',

@@ -20,7 +20,7 @@ import { Modal } from '../ui/Modal.tsx';
 const HOSTS = [
   { host: 'updates.mjolnir.sh', what: 'The update feed and the installer, when update checks are on.' },
   { host: 'telemetry.mjolnir.sh', what: 'Crash reports and usage counters, when you have said yes below.' },
-  { host: 'flags.mjolnir.sh', what: 'Feature toggles, when a flag server is configured.' },
+  { host: 'unleash.mjolnir.sh', what: 'Feature toggles, when a flag server is configured.' },
   { host: 'api.mjolnir.sh', what: 'Licence activation, when you enter a key.' },
 ];
 

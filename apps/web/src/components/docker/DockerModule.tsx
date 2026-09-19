@@ -15,6 +15,7 @@ import { scanImage } from '../ScanDialog.tsx';
 import { DockerDrawer } from './DockerDrawer.tsx';
 import type { ToolDefinition } from '../../lib/tools.ts';
 import { ToolPanel } from '../ToolPanel.tsx';
+import { LoadingState } from '../ui/States.tsx';
 
 /**
  * The Containers module.
@@ -363,7 +364,7 @@ export function DockerModule({ tool, section, onOpenDock }: DockerModuleProps) {
 }
 
 function SystemPage({ system, onPrune }: { system: { info: Record<string, unknown>; df: Record<string, unknown>; version: Record<string, unknown> } | null; onPrune: (what: string) => void }) {
-  if (!system) return <div className="p-4 text-[12.5px] text-tertiary">Loading…</div>;
+  if (!system) return <LoadingState title="Asking the engine" rows={5} />;
   const info = system.info;
   const df = system.df as { LayersSize?: number; Images?: Array<{ Size: number; Containers: number }>; Containers?: Array<{ SizeRw?: number }>; Volumes?: Array<{ UsageData?: { Size: number; RefCount: number } }>; BuildCache?: Array<{ Size: number; InUse: boolean }> };
   const imagesSize = df.LayersSize ?? (df.Images ?? []).reduce((n, i) => n + i.Size, 0);

@@ -4,6 +4,7 @@ import { Hexagon, Settings } from 'lucide-react';
 import { KUBERNETES_MODULE, modules } from '../lib/tools.ts';
 import { Menu } from './ui/ContextMenu.tsx';
 import { EdgeToggle } from './ui/EdgeToggle.tsx';
+import { useFlags } from '../lib/flags.tsx';
 
 /**
  * The rail: one tile per module. Kubernetes, cloud access, containers,
@@ -28,9 +29,10 @@ interface ModuleRailProps {
 }
 
 export function ModuleRail({ active, onSelect, onSettings, settingsActive, expanded, onToggleExpanded }: ModuleRailProps) {
+  const { values } = useFlags();
   const entries = [
     { id: KUBERNETES_MODULE.id, label: KUBERNETES_MODULE.label, tint: KUBERNETES_MODULE.tint, icon: Hexagon, planned: false },
-    ...modules().map((m) => ({ id: m.id, label: m.label, tint: m.tint, icon: m.icon, planned: m.built !== true })),
+    ...modules(values).map((m) => ({ id: m.id, label: m.label, tint: m.tint, icon: m.icon, planned: m.built !== true })),
   ];
   return (
     <motion.nav

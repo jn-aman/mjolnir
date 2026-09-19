@@ -14,12 +14,13 @@ import {
   ShieldCheck,
   Sparkles,
   X,
-  Zap,
 } from 'lucide-react';
 import { api, type AppSettings, type ClustersResponse, type DockerContextInfo } from '../lib/api.ts';
 import { modules } from '../lib/tools.ts';
 import { Button } from './ui/Button.tsx';
 import { Switch } from './ui/Switch.tsx';
+import { MarkTile } from './ui/Mark.tsx';
+import { useFlags } from '../lib/flags.tsx';
 
 /**
  * The first five minutes.
@@ -111,12 +112,7 @@ export function Welcome({ settings, clusters, onFinish, onOpenSettings }: Welcom
 
         <div className="hero-band shrink-0 border-b border-line px-7 py-5" style={{ ['--hero-tint' as string]: 'var(--accent-base)' }}>
           <div className="flex items-center gap-2.5">
-            <span
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] text-white"
-              style={{ background: 'linear-gradient(145deg, color-mix(in oklab, var(--accent-solid) 100%, white 22%), color-mix(in oklab, var(--accent-solid) 100%, black 18%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 4px 12px color-mix(in oklab, var(--accent-solid) 50%, transparent)' }}
-            >
-              <Zap size={16} strokeWidth={2.4} aria-hidden />
-            </span>
+            <MarkTile size={30} />
             <div className="min-w-0">
               <div className="text-[15px] font-semibold tracking-[-0.01em] text-primary">Welcome to Mjolnir</div>
               <div className="text-[12px] text-tertiary">Six short screens. Escape leaves at any point.</div>
@@ -195,7 +191,8 @@ function Heading({ title, blurb }: { title: string; blurb: string }) {
 }
 
 function Intro() {
-  const rail = [{ id: 'kubernetes', label: 'Kubernetes', tint: 'var(--series-1)', icon: Hexagon, built: true }, ...modules().map((m) => ({ id: m.id, label: m.label, tint: m.tint, icon: m.icon, built: m.built === true }))];
+  const { values } = useFlags();
+  const rail = [{ id: 'kubernetes', label: 'Kubernetes', tint: 'var(--series-1)', icon: Hexagon, built: true }, ...modules(values).map((m) => ({ id: m.id, label: m.label, tint: m.tint, icon: m.icon, built: m.built === true }))];
   return (
     <>
       <Heading

@@ -65,7 +65,20 @@ export function isModule(id: string): boolean {
   return id === KUBERNETES_MODULE.id || TOOLS.some((tool) => tool.area === 'workspace' && tool.id === id);
 }
 
-export function modules(): ToolDefinition[] {
+/**
+ * The modules this build shows.
+ *
+ * Every module except Kubernetes, Containers and Bucket store is behind a flag
+ * that is off, so a shipped rail holds only what works. `enabled` comes from
+ * the flag context; passing nothing gives the shipping set, which is what any
+ * caller outside React should see.
+ */
+export function modules(enabled: Readonly<Record<string, boolean>> = {}): ToolDefinition[] {
+  return TOOLS.filter((tool) => tool.area === 'workspace' && (tool.built === true || enabled[`module.${tool.id}`] === true));
+}
+
+/** Every module the code knows about, flag or no flag. For settings and docs. */
+export function allModules(): ToolDefinition[] {
   return TOOLS.filter((tool) => tool.area === 'workspace');
 }
 
@@ -195,7 +208,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   },
   {
     id: 'storage',
-    label: 'Object storage',
+    label: 'Bucket store',
     icon: Archive,
     tint: 'var(--log-pod-b)',
     area: 'workspace',

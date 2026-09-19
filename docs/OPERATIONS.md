@@ -17,9 +17,9 @@ Loopback is allowed for development against a stand-in.
 |---|---|---|
 | `mjolnir.sh` | Site, docs, release notes | Static hosting |
 | `api.mjolnir.sh` | Licence activation | Our API, which proxies Paddle |
-| `flags.mjolnir.sh` | Feature toggles | Unleash Edge |
+| `unleash.mjolnir.sh` | Feature toggles | Unleash Edge |
 | `telemetry.mjolnir.sh` | Usage events and crash reports | Ingest |
-| `updates.mjolnir.sh` | `latest*.yml` and the artefacts | Object storage |
+| `updates.mjolnir.sh` | `latest*.yml` and the artefacts | Bucket store |
 
 Third parties still do the work; what matters to the person running Mjolnir is
 that an egress rule of `allow *.mjolnir.sh` covers the entire app, and that a
@@ -49,7 +49,7 @@ same on a plane as in an office.
 
 ### Wiring up Unleash
 
-Run Unleash Edge behind `flags.mjolnir.sh` and give the app a client token.
+Run Unleash Edge behind `unleash.mjolnir.sh` and give the app a client token.
 Mjolnir polls `GET /api/client/features` on an interval (15 minutes by default),
 evaluates the strategies itself, and keeps the last good answer when a fetch
 fails.

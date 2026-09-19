@@ -5,6 +5,7 @@ import { formatBytes } from '../columns.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Modal } from '../ui/Modal.tsx';
 import { copyText } from '../ui/ContextMenu.tsx';
+import { LoadingState } from '../ui/States.tsx';
 
 /**
  * Any object, viewed in place.
@@ -139,7 +140,7 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
     >
       <div className="mb-4 flex h-[68vh] min-h-[320px] flex-col overflow-hidden rounded-lg border border-line bg-sunken" data-testid={`viewer-${mode}`}>
         {error ? <div className="p-4 text-[12.5px] text-error">{error}</div> : null}
-        {loading ? <div className="p-4 text-[12.5px] text-tertiary">Loading…</div> : null}
+        {loading ? <LoadingState title="Fetching the object" rows={0} /> : null}
         {!loading && !error && (mode === 'code' || mode === 'hex') && text !== null ? (
           <YamlEditor key={`${file.key}:${wrap}`} value={text} language={mode === 'hex' ? 'plain' : language} wrap={wrap} testId="viewer-editor" />
         ) : null}

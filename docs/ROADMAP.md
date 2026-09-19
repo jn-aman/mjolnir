@@ -116,7 +116,7 @@ Scan TLS Secrets, cert-manager Certificates and Ingress certs; surface in the
 menu bar. **Cheapest item here and it prevents an outage.** A day's work for a
 feature people tell their colleagues about.
 
-### 3. Object storage browser
+### 3. Bucket store browser
 MinIO, RustFS, SeaweedFS, Ceph RGW. Detect, port-forward, browse, preview.
 Builds the detection-and-forward machinery that every other data browser reuses,
 so its real cost is lower than it looks and its successors get cheaper.
@@ -144,7 +144,7 @@ is storage and UI, not integration.
 
 ### 8. Database browser
 Postgres, MySQL, Redis, MongoDB. Reuses Phase 3's detection and forwarding.
-Higher effort than object storage because each protocol needs its own client and
+Higher effort than bucket store because each protocol needs its own client and
 its own viewer, so it comes after the pattern is proven once.
 
 ### 9. Cost per workload

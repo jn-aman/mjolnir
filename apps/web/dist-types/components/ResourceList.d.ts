@@ -18,6 +18,8 @@ interface ResourceListProps {
     readonly state: WatchState;
     readonly error: string | null;
     readonly filter: string;
+    /** Lets an empty result clear the search that caused it. */
+    readonly onClearFilter?: (() => void) | undefined;
     /** The kind's label as people say it: "Role bindings", not "rolebindings". */
     readonly label?: string | undefined;
     readonly namespace?: string | undefined;
@@ -39,6 +41,6 @@ export interface BulkAction {
     /** Offered only when every selected row passes. */
     readonly applies?: (item: KubeItem) => boolean;
 }
-export declare function ResourceList({ kind, items, state, error, filter, label, namespace, selectedName, onSelect, onAction, menu, bulk, }: ResourceListProps): import("react").JSX.Element;
+export declare function ResourceList({ kind, items, state, error, filter, onClearFilter, label, namespace, selectedName, onSelect, onAction, menu, bulk, }: ResourceListProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=ResourceList.d.ts.map

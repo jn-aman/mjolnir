@@ -3,6 +3,7 @@ import { StatusChip, toneFor, type StatusTone } from './StatusChip.tsx';
 import { tintFor } from '../lib/tint.ts';
 import { formatDateTime } from '../lib/time.ts';
 import { Clock, RotateCw, Server } from 'lucide-react';
+import { Truncate } from './ui/Truncate.tsx';
 
 /**
  * The column registry.
@@ -48,7 +49,7 @@ const name = <T extends KubeItem>(): Column<T> => ({
   header: 'Name',
   width: 'minmax(260px, 2fr)',
   content: (item) => (
-    <span className="break-words [overflow-wrap:anywhere] font-mono text-[13px] text-primary">
+    <span className="truncate font-mono text-[13px] text-primary">
       {item.metadata?.name ?? '-'}
     </span>
   ),
@@ -68,7 +69,7 @@ const namespace = <T extends KubeItem>(): Column<T> => ({
         className="h-[7px] w-[7px] shrink-0 rounded-full"
         style={{ background: tintFor(item.metadata?.namespace) }}
       />
-      <span className="break-words [overflow-wrap:anywhere] text-[12.5px] text-secondary">{item.metadata?.namespace ?? '-'}</span>
+      <span className="truncate text-[12.5px] text-secondary">{item.metadata?.namespace ?? '-'}</span>
     </span>
   ),
   sortBy: (item) => item.metadata?.namespace ?? '',
@@ -223,7 +224,7 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
       if (!problem) return <span className="text-[12.5px] text-tertiary">-</span>;
       const tone = toneFor(podStatus(pod)) === 'error' ? 'text-error' : 'text-warn';
       return (
-        <span title={problem} className={`break-words [overflow-wrap:anywhere] text-[12px] ${tone}`}>
+        <span title={problem} className={`truncate text-[12px] ${tone}`}>
           {problem}
         </span>
       );
@@ -261,7 +262,7 @@ const POD_COLUMNS: Array<Column<PodItem>> = [
     content: (pod) => (
       <span className="inline-flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-tertiary">
         {pod.spec?.nodeName ? <Server size={11} strokeWidth={2} aria-hidden className="shrink-0 opacity-70" /> : null}
-        <span className="break-words [overflow-wrap:anywhere]">{pod.spec?.nodeName ?? '-'}</span>
+        <span className="truncate">{pod.spec?.nodeName ?? '-'}</span>
       </span>
     ),
     sortBy: (pod) => pod.spec?.nodeName ?? '',
@@ -318,7 +319,7 @@ const DEPLOYMENT_COLUMNS: Array<Column<DeploymentItem>> = [
     content: (item) => {
       const problem = workloadProblem(item);
       return problem ? (
-        <span title={problem} className="break-words [overflow-wrap:anywhere] text-[12px] text-warn">{problem}</span>
+        <span title={problem} className="truncate text-[12px] text-warn">{problem}</span>
       ) : (
         <span className="text-[12.5px] text-tertiary">-</span>
       );
@@ -383,7 +384,7 @@ const NODE_COLUMNS: Array<Column<NodeItem>> = [
       const problem = notReady?.message ?? (pressure ? `${pressure.type}: ${pressure.message ?? ''}` : undefined) ?? (node.spec?.unschedulable ? 'Cordoned, no new pods will schedule' : undefined);
       if (!problem) return <span className="text-[12.5px] text-tertiary">{taints ?? '-'}</span>;
       return (
-        <span title={problem} className={`break-words [overflow-wrap:anywhere] text-[12px] ${notReady ? 'text-error' : 'text-warn'}`}>
+        <span title={problem} className={`truncate text-[12px] ${notReady ? 'text-error' : 'text-warn'}`}>
           {problem}
           {taints ? <span className="text-tertiary"> · {taints}</span> : null}
         </span>
@@ -396,7 +397,7 @@ const NODE_COLUMNS: Array<Column<NodeItem>> = [
     header: 'Version',
     width: 'minmax(150px, 1fr)',
     content: (node) => (
-      <span className="break-words [overflow-wrap:anywhere] font-mono text-[12px] text-tertiary">
+      <span className="truncate font-mono text-[12px] text-tertiary">
         {node.status?.nodeInfo?.kubeletVersion ?? '-'}
       </span>
     ),
@@ -455,7 +456,7 @@ const DOCKER_CONTAINER_COLUMNS: Array<Column<DockerContainerItem>> = [
     priority: 30,
     header: 'Image',
     width: 'minmax(180px, 2fr)',
-    content: (c) => <span className="break-words [overflow-wrap:anywhere] font-mono text-[12px] text-secondary" title={c.spec?.image}>{c.spec?.image ?? '-'}</span>,
+    content: (c) => <span className="truncate font-mono text-[12px] text-secondary" title={c.spec?.image}>{c.spec?.image ?? '-'}</span>,
     sortBy: (c) => c.spec?.image ?? '',
     searchText: (c) => c.spec?.image,
   },
@@ -483,7 +484,7 @@ const DOCKER_CONTAINER_COLUMNS: Array<Column<DockerContainerItem>> = [
     header: 'Ports',
     width: 'minmax(120px, 1fr)',
     content: (c) => (
-      <span className="break-words [overflow-wrap:anywhere] font-mono text-[11.5px] text-tertiary">
+      <span className="truncate font-mono text-[11.5px] text-tertiary">
         {(c.spec?.ports ?? []).filter((p) => p.host).map((p) => `${p.host}→${p.container}`).join(', ') || '-'}
       </span>
     ),
@@ -493,7 +494,7 @@ const DOCKER_CONTAINER_COLUMNS: Array<Column<DockerContainerItem>> = [
     priority: 70,
     header: 'Compose',
     width: 'minmax(120px, 1fr)',
-    content: (c) => <span className="break-words [overflow-wrap:anywhere] text-[12px] text-tertiary">{c.spec?.project ? `${c.spec.project} / ${c.spec.service ?? ''}` : '-'}</span>,
+    content: (c) => <span className="truncate text-[12px] text-tertiary">{c.spec?.project ? `${c.spec.project} / ${c.spec.service ?? ''}` : '-'}</span>,
     sortBy: (c) => c.spec?.project ?? '',
     searchText: (c) => c.spec?.project,
   },
@@ -519,7 +520,7 @@ const DOCKER_IMAGE_COLUMNS: Array<Column<DockerImageItem>> = [
     priority: 40,
     header: 'Used by',
     width: 'minmax(160px, 2fr)',
-    content: (i) => <span className="break-words [overflow-wrap:anywhere] text-[12px] text-tertiary">{i.spec?.usedBy?.length ? i.spec.usedBy.join(', ') : 'nothing'}</span>,
+    content: (i) => <span className="truncate text-[12px] text-tertiary">{i.spec?.usedBy?.length ? i.spec.usedBy.join(', ') : 'nothing'}</span>,
     sortBy: (i) => i.spec?.usedBy?.length ?? 0,
     searchText: (i) => i.spec?.usedBy?.join(' '),
   },
@@ -544,7 +545,7 @@ const DOCKER_VOLUME_COLUMNS: Array<Column<DockerVolumeItem>> = [
     priority: 40,
     header: 'Used by',
     width: 'minmax(160px, 2fr)',
-    content: (v) => <span className="break-words [overflow-wrap:anywhere] text-[12px] text-tertiary">{v.spec?.usedBy?.length ? v.spec.usedBy.join(', ') : 'nothing'}</span>,
+    content: (v) => <span className="truncate text-[12px] text-tertiary">{v.spec?.usedBy?.length ? v.spec.usedBy.join(', ') : 'nothing'}</span>,
     sortBy: (v) => v.spec?.usedBy?.length ?? 0,
   },
   ageColumn<DockerVolumeItem>(),
@@ -562,7 +563,7 @@ const DOCKER_NETWORK_COLUMNS: Array<Column<DockerNetworkItem>> = [
     priority: 50,
     header: 'Containers',
     width: 'minmax(160px, 2fr)',
-    content: (n) => <span className="break-words [overflow-wrap:anywhere] text-[12px] text-tertiary">{n.spec?.containers?.length ? n.spec.containers.join(', ') : 'none'}</span>,
+    content: (n) => <span className="truncate text-[12px] text-tertiary">{n.spec?.containers?.length ? n.spec.containers.join(', ') : 'none'}</span>,
     sortBy: (n) => n.spec?.containers?.length ?? 0,
   },
   ageColumn<DockerNetworkItem>(),
@@ -583,8 +584,8 @@ const HELM_COLUMNS: Array<Column<HelmItem>> = [
     content: (r) => <StatusChip status={r.status?.status ?? 'unknown'} tone={r.status?.status === 'deployed' ? 'ok' : r.status?.status === 'failed' ? 'error' : r.status?.status === 'superseded' ? 'neutral' : 'warn'} />,
     sortBy: (r) => r.status?.status ?? '',
   },
-  { id: 'chart', priority: 40, header: 'Chart', width: 'minmax(180px, 2fr)', content: (r) => <span className="break-words [overflow-wrap:anywhere] font-mono text-[12px] text-secondary">{r.spec?.chart?.name}-{r.spec?.chart?.version}</span>, sortBy: (r) => r.spec?.chart?.name ?? '', searchText: (r) => r.spec?.chart?.name },
-  { id: 'app', priority: 50, header: 'App version', width: 'minmax(110px, 1fr)', content: (r) => <span className="break-words [overflow-wrap:anywhere] font-mono text-[12px] text-tertiary">{r.spec?.chart?.appVersion ?? '-'}</span> },
+  { id: 'chart', priority: 40, header: 'Chart', width: 'minmax(180px, 2fr)', content: (r) => <span className="truncate font-mono text-[12px] text-secondary">{r.spec?.chart?.name}-{r.spec?.chart?.version}</span>, sortBy: (r) => r.spec?.chart?.name ?? '', searchText: (r) => r.spec?.chart?.name },
+  { id: 'app', priority: 50, header: 'App version', width: 'minmax(110px, 1fr)', content: (r) => <span className="truncate font-mono text-[12px] text-tertiary">{r.spec?.chart?.appVersion ?? '-'}</span> },
   { id: 'revision', priority: 60, header: 'Revision', width: '84px', align: 'right', content: (r) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{r.spec?.revision ?? '-'}</span>, sortBy: (r) => r.spec?.revision ?? 0 },
   { ...ageColumn<HelmItem>(), header: 'Updated' },
 ];
@@ -601,7 +602,10 @@ const STORAGE_COLUMNS: Array<Column<StorageItem>> = [
     content: (o) => (
       <span className="flex min-w-0 items-center gap-2 font-mono text-[12.5px] text-primary">
         <span aria-hidden className={`h-[7px] w-[7px] shrink-0 rounded-[2px] ${o.spec?.kind === 'prefix' ? 'bg-[var(--series-4)]' : 'bg-[var(--log-pod-b)]'}`} />
-        <span className="break-words [overflow-wrap:anywhere]">{o.metadata?.name}{o.spec?.kind === 'prefix' ? '/' : ''}</span>
+        {/* Middle, not end: in a bucket the file name is the answer and the
+            prefixes above it are the context, so cutting the tail throws away
+            the part you came for. */}
+        <Truncate mode="middle" tail={16} text={`${o.metadata?.name ?? ''}${o.spec?.kind === 'prefix' ? '/' : ''}`} hint={o.spec?.key} />
       </span>
     ),
     sortBy: (o) => `${o.spec?.kind === 'prefix' ? '0' : '1'}${o.metadata?.name ?? ''}`,
@@ -609,7 +613,7 @@ const STORAGE_COLUMNS: Array<Column<StorageItem>> = [
   },
   { id: 'size', priority: 30, header: 'Size', width: '90px', align: 'right', content: (o) => <span className="tabular-nums font-mono text-[12.5px] text-secondary">{o.spec?.kind === 'prefix' ? '' : formatBytes(o.spec?.size)}</span>, sortBy: (o) => o.spec?.size ?? -1 },
   { id: 'class', priority: 40, header: 'Class', width: '110px', content: (o) => <span className="text-[11.5px] text-tertiary">{o.spec?.storageClass ?? ''}</span> },
-  { id: 'etag', priority: 50, header: 'ETag', width: 'minmax(120px, 1fr)', content: (o) => <span className="break-words [overflow-wrap:anywhere] font-mono text-[11px] text-tertiary">{o.spec?.etag ?? ''}</span> },
+  { id: 'etag', priority: 50, header: 'ETag', width: 'minmax(120px, 1fr)', content: (o) => <span className="truncate font-mono text-[11px] text-tertiary">{o.spec?.etag ?? ''}</span> },
   { ...ageColumn<StorageItem>(), header: 'Modified' },
 ];
 

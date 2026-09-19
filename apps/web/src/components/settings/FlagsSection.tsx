@@ -200,7 +200,7 @@ export function FlagsSection({ settings, onSave }: { settings: AppSettings | nul
 
       <Card
         title="Flag server"
-        subtitle="Unleash, reached through flags.mjolnir.sh. Mjolnir reads toggles and never writes them, and a toggle whose name is not a flag in this build is ignored rather than acted on."
+        subtitle="Unleash, reached through unleash.mjolnir.sh. Mjolnir reads toggles and never writes them, and a toggle whose name is not a flag in this build is ignored rather than acted on."
       >
         <div className="flex items-center gap-6 py-2">
           <div className="min-w-0 flex-1">
@@ -225,7 +225,7 @@ export function FlagsSection({ settings, onSave }: { settings: AppSettings | nul
                 mono
                 onChange={(event) => setUrl(event.target.value)}
                 validate={mjolnirUrl}
-                placeholder="https://flags.mjolnir.sh"
+                placeholder="https://unleash.mjolnir.sh"
               />
               <Field
                 id="flag-token"
@@ -289,7 +289,7 @@ function moduleLabel(id: string): string {
     assistant: 'AI assistant',
     kubernetes: 'Kubernetes',
     docker: 'Containers',
-    storage: 'Object storage',
+    storage: 'Bucket store',
     machines: 'Machines',
     alerts: 'Alerts',
   };

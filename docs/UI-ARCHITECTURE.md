@@ -28,7 +28,7 @@ finding room.
 
 | Region | Holds | Extension point |
 |---|---|---|
-| **Rail** | one tile per module: Kubernetes, Cloud access, Containers, Object storage, Databases, Kafka, Certificates, Image provenance; the Mjolnir settings gear below. Modules are peers; none is the app | `KUBERNETES_MODULE` plus `TOOLS` entries with `area: 'workspace'` |
+| **Rail** | one tile per module: Kubernetes, Cloud access, Containers, Bucket store, Databases, Kafka, Certificates, Image provenance; the Mjolnir settings gear below. Modules are peers; none is the app | `KUBERNETES_MODULE` plus `TOOLS` entries with `area: 'workspace'` |
 | **Cluster strip** | inside the Kubernetes module only: one tile per cluster, plus add | kubeconfig contexts |
 | **Sidebar** | per module. Kubernetes: kinds by category, Tools, Kubernetes settings. Any other module: its `sections` | resource registry (`@mjolnir/k8s`), `ToolDefinition.sections` |
 | **Content** | a list, the overview, a tool page or a settings page | `NavSelection` union in `Sidebar.tsx`; `view` switch in `App.tsx` |
@@ -52,10 +52,10 @@ Every edge between regions is draggable and remembered (`useResizable`).
 | Datadog-grade log explorer | Sidebar › Tools (cluster-wide) + the existing per-pod `LogViewer` | new `tools.ts` entry |
 | Cloud access (Leapp-class) | Rail › workspace | `tools.ts#cloud` |
 | Containers (Docker) | Rail › workspace | `tools.ts#docker` |
-| Object storage browser | Rail › workspace; per-pod tab for MinIO/RustFS pods | `tools.ts#storage` |
+| Bucket store browser | Rail › workspace; per-pod tab for MinIO/RustFS pods | `tools.ts#storage` |
 | Machines: paired agent, host metrics, Docker on hosts (Beszel-class) | Rail › module | `tools.ts#machines` |
 | Alerts: rules, email/webhook/push channels, quiet hours, history | Rail › module | `tools.ts#alerts` |
-| Database browser | Sidebar › Tools; detection card in the pod overview (like object storage) | `tools.ts#database` |
+| Database browser | Sidebar › Tools; detection card in the pod overview (like bucket store) | `tools.ts#database` |
 | Kafka consumer lag | Sidebar › Tools | `tools.ts#kafka` |
 | Diff & drift | Sidebar › Tools; per-object Diff tab in the drawer | `tools.ts#drift` |
 | Time travel | Sidebar › Tools; a scrubber in the title bar when active | `tools.ts#timetravel` |

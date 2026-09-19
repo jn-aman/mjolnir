@@ -137,7 +137,7 @@ function buildMenu(): void {
         { label: 'Nodes', click: () => go('#/nav=resource:Node') },
         { type: 'separator' },
         { label: 'Containers', click: () => go('#/nav=workspace:docker:containers') },
-        { label: 'Object storage', click: () => go('#/nav=workspace:storage:buckets') },
+        { label: 'Bucket store', click: () => go('#/nav=workspace:storage:buckets') },
         { label: 'Helm releases', click: () => go('#/nav=tool:helm') },
         { label: 'Port forwards', click: () => go('#/nav=tool:portforward') },
       ],
