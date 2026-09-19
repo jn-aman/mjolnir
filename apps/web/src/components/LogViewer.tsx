@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, Download, Maximize2, Minimize2, Regex, Search, WrapText } from 'lucide-react';
+import { ArrowDown, Download, Maximize2, Minimize2, MoreHorizontal, Regex, Search, WrapText } from 'lucide-react';
 import { useLogStream } from '../lib/useLogStream.ts';
 import { Button } from './ui/Button.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
@@ -54,6 +54,16 @@ interface LogViewerProps {
   readonly pod: string;
   readonly containers: string[];
   readonly expanded?: boolean;
+  /**
+   * One row of controls instead of a wrapping block.
+   *
+   * In the dock the whole viewer is a few hundred pixels tall, and a toolbar
+   * that wraps to two rows takes half of it: three log lines under a control
+   * panel is not a log viewer. Compact keeps the search and the follow state,
+   * which are the two things anyone touches, and moves the rest behind a
+   * menu.
+   */
+  readonly compact?: boolean;
   readonly onToggleExpand?: () => void;
   readonly initialContainer?: string | undefined;
   readonly initialPrevious?: boolean | undefined;
@@ -66,6 +76,7 @@ export function LogViewer({
   pod,
   containers,
   expanded = false,
+  compact = false,
   onToggleExpand,
   initialContainer,
   initialPrevious,
@@ -175,7 +186,7 @@ export function LogViewer({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="log-viewer">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-raised px-3 py-2">
+      <div className={`flex shrink-0 items-center gap-2 border-b border-line bg-raised ${compact ? 'h-[36px] flex-nowrap overflow-hidden px-2' : 'flex-wrap px-3 py-2'}`}>
         {containers.length > 1 ? (
           <Select
             label="Container"
@@ -217,6 +228,38 @@ export function LogViewer({
           </button>
         </div>
 
+        {compact ? (
+          // Everything the compact bar has no room for, in one menu, so
+          // nothing is lost by making the viewer short.
+          <Menu
+            label="Logs"
+            testId="log-more-menu"
+            entries={[
+              { id: 'mode-highlight', label: mode === 'highlight' ? 'Marking matches' : 'Mark matches', onSelect: () => setMode('highlight') },
+              { id: 'mode-filter', label: mode === 'filter' ? 'Showing only matches' : 'Only matches', onSelect: () => setMode('filter') },
+              SEPARATOR,
+              { id: 'current', label: previous ? 'Current container' : 'Current container \u00b7 showing', onSelect: () => setPrevious(false) },
+              { id: 'previous', label: previous ? 'Previous container \u00b7 showing' : 'Previous container', onSelect: () => setPrevious(true) },
+              SEPARATOR,
+              { id: 'wrap', label: wrap ? 'Stop wrapping lines' : 'Wrap lines', onSelect: () => setWrap((value) => !value) },
+              { id: 'download', label: 'Download these logs', onSelect: download },
+              ...(onToggleExpand ? [{ id: 'expand', label: 'Open full screen', onSelect: onToggleExpand }] : []),
+            ]}
+          >
+            <button
+              type="button"
+              data-testid="log-more"
+              aria-label="More log options"
+              className="flex h-[24px] shrink-0 items-center gap-1 rounded-md border border-line bg-sunken px-2 text-[11.5px] text-secondary hover:border-strong hover:text-primary"
+            >
+              {previous ? <span className="text-error">previous</span> : null}
+              {mode === 'filter' ? <span className="text-accent">filtered</span> : null}
+              <MoreHorizontal size={13} strokeWidth={2} aria-hidden />
+            </button>
+          </Menu>
+        ) : null}
+
+        {compact ? null : (
         <Segmented
           value={mode}
           onChange={(value) => setMode(value as 'highlight' | 'filter')}
@@ -225,7 +268,9 @@ export function LogViewer({
             { value: 'filter', label: 'Only matches' },
           ]}
         />
+        )}
 
+        {compact ? null : (
         <Segmented
           value={previous ? 'previous' : 'current'}
           onChange={(value) => setPrevious(value === 'previous')}
@@ -236,6 +281,7 @@ export function LogViewer({
             { value: 'previous', label: 'Previous' },
           ]}
         />
+        )}
 
         <button
           type="button"
@@ -265,6 +311,7 @@ export function LogViewer({
           {follow ? 'Following' : 'Paused'}
         </button>
 
+        {compact ? null : (
         <Button
           iconOnly
           aria-label="Wrap lines"
@@ -272,13 +319,16 @@ export function LogViewer({
           variant={wrap ? 'secondary' : 'ghost'}
           icon={<WrapText size={14} strokeWidth={1.9} />}
         />
+        )}
+        {compact ? null : (
         <Button
           iconOnly
           aria-label="Download logs"
           onClick={download}
           icon={<Download size={14} strokeWidth={1.9} />}
         />
-        {onToggleExpand ? (
+        )}
+        {onToggleExpand && !compact ? (
           <Button
             iconOnly
             data-testid="log-expand"

@@ -36,11 +36,20 @@ interface SelectProps {
   readonly trigger?: ReactNode;
   readonly align?: 'start' | 'end';
   readonly mono?: boolean;
+  /**
+   * A segment of a path rather than a form control.
+   *
+   * No border, no fixed width, sized to its value. For a breadcrumb where the
+   * segment happens to be choosable: it has to read as part of the path, not
+   * as a dropdown that wandered into one.
+   */
+  readonly inline?: boolean;
   /** A fixed trigger width so the toolbar does not shift when the value changes. */
   readonly width?: number;
 }
 
 export function Select({
+  inline = false,
   label,
   value,
   options,
@@ -75,8 +84,12 @@ export function Select({
             type="button"
             data-testid={testId}
             aria-label={label}
-            className="group flex h-[30px] items-center gap-1.5 rounded-md border border-line bg-sunken pl-2.5 pr-2 text-[12.5px] text-primary outline-none hover:border-strong data-[state=open]:border-focus"
-            style={{ width, transitionProperty: 'border-color', transitionDuration: '90ms' }}
+            className={
+              inline
+                ? 'group flex h-[28px] max-w-[220px] shrink-0 items-center gap-1 rounded-md px-1.5 text-[12.5px] text-primary outline-none hover:bg-hover data-[state=open]:bg-hover'
+                : 'group flex h-[30px] items-center gap-1.5 rounded-md border border-line bg-sunken pl-2.5 pr-2 text-[12.5px] text-primary outline-none hover:border-strong data-[state=open]:border-focus'
+            }
+            style={inline ? undefined : { width, transitionProperty: 'border-color', transitionDuration: '90ms' }}
           >
             {selected?.icon}
             {/* One line, always. A trigger that grows to fit its longest
@@ -91,10 +104,10 @@ export function Select({
               {selected?.label ?? label}
             </span>
             <ChevronDown
-              size={13}
+              size={inline ? 11 : 13}
               strokeWidth={2}
               aria-hidden
-              className="shrink-0 text-tertiary group-data-[state=open]:text-secondary"
+              className={`shrink-0 text-tertiary group-data-[state=open]:text-secondary ${inline ? 'opacity-0 group-hover:opacity-100 group-data-[state=open]:opacity-100' : ''}`}
             />
           </button>
         )}

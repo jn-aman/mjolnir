@@ -124,7 +124,20 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
       setError(null);
       // The server looks again on its side, so an empty pair here is not
       // fatal; it only becomes an error once it has failed there too.
-      window.dispatchEvent(new CustomEvent('mjolnir:open-storage', { detail: { name: `${pod} (${detection.product})`, source: { context: context ?? '', namespace, pod, port: detection.port }, accessKey, secretKey } }));
+      // "MinIO in data", not "minio-55f7f885c7-98nq9 (MinIO)". A pod name with
+      // a replica-set hash in it is not a name anyone recognises in a picker,
+      // and it changes every time the pod is rescheduled, so the store people
+      // chose yesterday appears to be a different one today.
+      window.dispatchEvent(
+        new CustomEvent('mjolnir:open-storage', {
+          detail: {
+            name: `${detection.product} in ${namespace}`,
+            source: { context: context ?? '', namespace, pod, port: detection.port },
+            accessKey,
+            secretKey,
+          },
+        }),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }

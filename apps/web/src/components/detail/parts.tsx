@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { ArrowUpRight } from 'lucide-react';
 import { KindMark } from '../ui/KindMark.tsx';
 import { Truncate } from '../ui/Truncate.tsx';
+import { BIG_VALUE, ValueViewer } from '../ui/ValueViewer.tsx';
 
 /**
  * The pieces every detail pane is built from.
@@ -48,15 +49,45 @@ export function Fields({ rows }: { rows: readonly (FieldRow | null | false)[] })
 /** A key=value pill. Used for labels, annotations, selectors and node labels. */
 export function Chips({ values, empty = 'none' }: { values: Record<string, string> | undefined; empty?: string }) {
   const entries = Object.entries(values ?? {});
+  const [opened, setOpened] = useState<{ key: string; value: string } | null>(null);
   if (entries.length === 0) return <span className="text-[12px] text-tertiary">{empty}</span>;
+
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {entries.map(([key, value]) => (
-        <span key={key} className="flex max-w-full items-baseline rounded-md border border-[var(--border-strong)] bg-overlay px-2 py-[3px] font-mono text-[11px]">
-          <Truncate mode="middle" tail={10} text={`${key}=${value}`} className="max-w-[420px]" />
-        </span>
-      ))}
-    </div>
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {entries.map(([key, value]) => {
+          // `last-applied-configuration` is a whole manifest in an annotation.
+          // Showing it in a tooltip gives someone eight lines of dense JSON
+          // they cannot select, search or fold, which is a worse answer than
+          // not showing it. Anything this long opens properly instead.
+          const big = value.length > BIG_VALUE;
+          const content = <Truncate mode="middle" tail={10} text={`${key}=${value}`} className="max-w-[420px]" />;
+          return big ? (
+            <button
+              key={key}
+              type="button"
+              data-testid="chip-open"
+              onClick={() => setOpened({ key, value })}
+              title={`Open ${key}`}
+              className="flex max-w-full items-baseline rounded-md border border-[var(--border-strong)] bg-overlay px-2 py-[3px] font-mono text-[11px] transition-colors duration-100 hover:border-accent hover:text-accent"
+            >
+              {content}
+            </button>
+          ) : (
+            <span key={key} className="flex max-w-full items-baseline rounded-md border border-[var(--border-strong)] bg-overlay px-2 py-[3px] font-mono text-[11px]">
+              {content}
+            </span>
+          );
+        })}
+      </div>
+      <ValueViewer
+        open={opened !== null}
+        title={opened?.key ?? ''}
+        subtitle="annotation"
+        value={opened?.value ?? ''}
+        onClose={() => setOpened(null)}
+      />
+    </>
   );
 }
 

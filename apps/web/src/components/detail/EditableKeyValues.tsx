@@ -5,6 +5,7 @@ import { Check, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'motion/react';
 import { copyEntry, Menu, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
+import { BIG_VALUE, ValueViewer } from '../ui/ValueViewer.tsx';
 
 /**
  * Labels and annotations, edited in place.
@@ -31,6 +32,7 @@ interface EditableKeyValuesProps {
 
 export function EditableKeyValues({ values, onPatch, testId, validateKey, validateValue }: EditableKeyValuesProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [opened, setOpened] = useState<{ key: string; value: string } | null>(null);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
   const [newKey, setNewKey] = useState('');
@@ -103,11 +105,21 @@ export function EditableKeyValues({ values, onPatch, testId, validateKey, valida
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-testid={testId}>
+      <ValueViewer
+        open={opened !== null}
+        title={opened?.key ?? ''}
+        subtitle={testId === 'annotations' ? 'annotation' : 'label'}
+        value={opened?.value ?? ''}
+        onClose={() => setOpened(null)}
+      />
       <AnimatePresence initial={false}>
       {entries.map(([key, value]) => {
         const isEditing = editingKey === key;
         const isBusy = busy === key;
         const chipMenu: MenuEntry[] = [
+          ...(value.length > BIG_VALUE
+            ? [{ id: 'open', label: 'Open the value', onSelect: () => setOpened({ key, value }) }]
+            : []),
           {
             id: 'edit',
             label: 'Edit value',
@@ -167,6 +179,21 @@ export function EditableKeyValues({ values, onPatch, testId, validateKey, valida
                 </span>
               ) : null}
               </span>
+            ) : value.length > BIG_VALUE ? (
+              // `last-applied-configuration` is a whole manifest inside an
+              // annotation. An inline edit box is the wrong tool for it and a
+              // tooltip is worse: eight lines of dense JSON nobody can select,
+              // search or fold. Anything this size opens in the same viewer a
+              // file gets.
+              <button
+                type="button"
+                data-testid="kv-open"
+                onClick={() => setOpened({ key, value })}
+                aria-label={`Open ${key}`}
+                className="max-w-[420px] truncate border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent hover:text-accent"
+              >
+                {value}
+              </button>
             ) : (
               <button
                 type="button"

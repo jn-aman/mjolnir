@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Maximize2, Minimize2, Plus, ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Assistant } from './Assistant.tsx';
 import { Terminal } from './Terminal.tsx';
 import { LogViewer } from './LogViewer.tsx';
@@ -7,16 +8,34 @@ import { ResizeHandle } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
 import { copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { KindMark } from './ui/KindMark.tsx';
+import { Tip } from './ui/Tooltip.tsx';
 import { DockResource } from './DockResource.tsx';
 
 /**
- * The dock: a strip along the bottom that holds things you want to keep open
- * while you go somewhere else.
+ * The dock: a strip along the bottom that holds what you want to keep open
+ * while you go and look at something else.
  *
- * A log tail in the dock stays streaming while you inspect the deployment
- * that owns the pod. Terminals and port forwards land here for the same
- * reason. It is one component so every kind of tab is closed, resized and
- * reordered the same way, and it is gone entirely when it has nothing to show.
+ * A log tail keeps streaming while you read the deployment that owns the pod.
+ * Terminals and pinned objects land here for the same reason. One component,
+ * so every kind of tab is opened, closed, resized and reordered identically.
+ *
+ * Three things make it work rather than merely exist, and the first version
+ * had none of them.
+ *
+ * **It is always there.** A dock that appears only once something has put a
+ * tab in it is a dock nobody discovers, and it leaves no way to simply open a
+ * terminal. The bar stays; the panel is what comes and goes.
+ *
+ * **Clicking the active tab collapses it.** That is how you glance at a log,
+ * put it away, and still have it streaming when you come back. Closing the tab
+ * to get your screen back would throw away the stream you were watching.
+ *
+ * **Hidden tabs keep their size.** They are hidden with `visibility`, not
+ * `display: none`, because an element with `display: none` has no dimensions:
+ * a terminal in that state measures itself as zero columns and comes back
+ * wrapped at the wrong width, and a log list virtualises against a height of
+ * nothing. Keeping them laid out costs a little and is the difference between
+ * switching tabs and rebuilding them.
  */
 
 export interface DockTab {
@@ -41,130 +60,250 @@ interface DockProps {
   readonly activeId: string | null;
   readonly height: number;
   readonly dragging: boolean;
+  readonly collapsed: boolean;
+  readonly onToggleCollapsed: () => void;
   readonly onResizeStart: (event: React.PointerEvent) => void;
   readonly onActivate: (id: string) => void;
   readonly onClose: (id: string) => void;
   readonly onCloseAll: () => void;
+  readonly onReorder: (from: string, to: string) => void;
   /** Opens the tab's subject in the details panel, full size. */
   readonly onExpand: (tab: DockTab) => void;
   /** Lets a pinned object's reference chips open other objects. */
   readonly onNavigate?: ((target: { kind: string; name?: string; namespace?: string }) => void) | undefined;
+  /** What the plus button offers. Empty means no plus button. */
+  readonly newTabs?: readonly { id: string; label: string; detail?: string; onSelect: () => void }[] | undefined;
   readonly assistant?: { readonly incoming: { readonly id: number; readonly text: string } | null; readonly onOpenSettings: () => void } | undefined;
 }
 
-export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActivate, onClose, onCloseAll, onExpand, onNavigate, assistant }: DockProps) {
+/** Bar only. Chosen so two lines of a log are never *almost* visible. */
+const BAR_HEIGHT = 34;
+
+export function Dock({
+  tabs,
+  activeId,
+  height,
+  dragging,
+  collapsed,
+  onToggleCollapsed,
+  onResizeStart,
+  onActivate,
+  onClose,
+  onCloseAll,
+  onReorder,
+  onExpand,
+  onNavigate,
+  newTabs,
+  assistant,
+}: DockProps) {
   const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
-  if (!active) return null;
+  const [maximised, setMaximised] = useState(false);
+  const [dragTab, setDragTab] = useState<string | null>(null);
+  const strip = useRef<HTMLDivElement>(null);
+
+  const open = Boolean(active) && !collapsed;
+  const panelHeight = maximised ? Math.max(height, 620) : height;
+
+  // A newly opened tab should be visible, not merely present.
+  useEffect(() => {
+    if (!activeId) return;
+    strip.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeId, tabs.length]);
 
   return (
     <motion.section
       data-testid="dock"
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height, opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+      data-open={open}
+      initial={false}
+      animate={{ height: open ? panelHeight + BAR_HEIGHT : BAR_HEIGHT }}
+      transition={dragging ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 40 }}
       className="relative flex shrink-0 flex-col overflow-hidden border-t border-line bg-ground"
     >
-      <ResizeHandle side="top" label="Resize dock" dragging={dragging} onPointerDown={onResizeStart} />
+      {open ? <ResizeHandle side="top" label="Resize dock" dragging={dragging} onPointerDown={onResizeStart} /> : null}
 
-      <div className="flex h-[34px] shrink-0 items-stretch border-b border-line bg-raised pl-1 pr-1" role="tablist">
-        {tabs.map((tab) => {
-          const isActive = tab.id === active.id;
-          const entries: MenuEntry[] = [
-            { id: 'close', label: 'Close', onSelect: () => onClose(tab.id) },
-            {
-              id: 'close-others',
-              label: 'Close others',
-              disabled: tabs.length < 2,
-              onSelect: () => tabs.filter((other) => other.id !== tab.id).forEach((other) => onClose(other.id)),
-            },
-            { id: 'close-all', label: 'Close all', onSelect: onCloseAll },
-            SEPARATOR,
-            { id: 'expand', label: 'Open in details panel', onSelect: () => onExpand(tab) },
-            SEPARATOR,
-            ...copyEntry('copy-pod', 'Copy pod name', tab.pod),
-          ];
-          return (
-            <Menu key={tab.id} label={tab.title} entries={entries} testId="dock-tab-menu">
+      <div className="flex h-[34px] shrink-0 items-stretch border-b border-line bg-raised" role="tablist">
+        <div ref={strip} className="flex min-w-0 flex-1 items-stretch overflow-x-auto pl-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {tabs.map((tab) => {
+            const isActive = tab.id === active?.id;
+            const entries: MenuEntry[] = [
+              { id: 'close', label: 'Close', onSelect: () => onClose(tab.id) },
+              {
+                id: 'close-others',
+                label: 'Close others',
+                disabled: tabs.length < 2,
+                onSelect: () => tabs.filter((other) => other.id !== tab.id).forEach((other) => onClose(other.id)),
+              },
+              { id: 'close-all', label: 'Close all', onSelect: onCloseAll },
+              SEPARATOR,
+              { id: 'expand', label: 'Open in details panel', onSelect: () => onExpand(tab) },
+              SEPARATOR,
+              ...copyEntry('copy-pod', 'Copy pod name', tab.pod),
+            ];
+            return (
+              <Menu key={tab.id} label={tab.title} entries={entries} testId="dock-tab-menu">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  data-testid="dock-tab"
+                  data-active={isActive}
+                  draggable
+                  onDragStart={() => setDragTab(tab.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => {
+                    if (dragTab && dragTab !== tab.id) onReorder(dragTab, tab.id);
+                    setDragTab(null);
+                  }}
+                  onDragEnd={() => setDragTab(null)}
+                  // Clicking the tab you are already on puts the panel away
+                  // and keeps the stream running, which is the whole point of
+                  // a dock rather than a drawer.
+                  onClick={() => (isActive ? onToggleCollapsed() : activateAndOpen(tab.id))}
+                  className={`group relative flex shrink-0 items-center gap-2 px-3 text-[12px] transition-colors duration-100 ${
+                    isActive ? 'text-primary' : 'text-tertiary hover:text-secondary'
+                  } ${dragTab === tab.id ? 'opacity-40' : ''}`}
+                >
+                  {isActive ? (
+                    <motion.span
+                      layoutId="dock-active"
+                      aria-hidden
+                      className="absolute inset-x-1 bottom-0 h-[2px] rounded-full bg-accent"
+                      transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                    />
+                  ) : null}
+                  <TabIcon tab={tab} active={isActive} />
+                  <span className="max-w-[210px] truncate font-mono">{tab.title}</span>
+                  {tab.subtitle ? <span className="max-w-[120px] truncate text-[11px] text-tertiary">{tab.subtitle}</span> : null}
+                  <span
+                    role="button"
+                    aria-label={`Close ${tab.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onClose(tab.id);
+                    }}
+                    className="ml-1 rounded-xs p-[2px] text-transparent hover:bg-hover hover:text-primary group-hover:text-tertiary"
+                  >
+                    <X size={11} strokeWidth={2.2} />
+                  </span>
+                </button>
+              </Menu>
+            );
+          })}
+
+          {newTabs && newTabs.length > 0 ? (
+            <Menu
+              label="Open in the dock"
+              testId="dock-new-menu"
+              entries={newTabs.map((entry) => ({ id: entry.id, label: entry.label, onSelect: entry.onSelect }))}
+            >
               <button
                 type="button"
-                role="tab"
-                aria-selected={isActive}
-                data-testid="dock-tab"
-                onClick={() => onActivate(tab.id)}
-                className={`group relative flex items-center gap-2 px-3 text-[12px] transition-colors duration-100 ${
-                  isActive ? 'text-primary' : 'text-tertiary hover:text-secondary'
-                }`}
+                data-testid="dock-new"
+                aria-label="Open something in the dock"
+                onClick={() => newTabs[0]?.onSelect()}
+                className="flex w-[30px] shrink-0 items-center justify-center text-tertiary hover:text-primary"
               >
-                {isActive ? (
-                  <motion.span
-                    layoutId="dock-active"
-                    aria-hidden
-                    className="absolute inset-x-1 bottom-0 h-[2px] rounded-full bg-accent"
-                    transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                  />
-                ) : null}
-                {tab.kind === 'logs' ? (
-                  <ScrollText size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
-                ) : tab.kind === 'assistant' ? (
-                  <Sparkles size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
-                ) : tab.kind === 'resource' ? (
-                  <KindMark kind={tab.resourceKind ?? ''} />
-                ) : (
-                  <TerminalIcon size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
-                )}
-                <span className="font-mono">{tab.title}</span>
-                {tab.subtitle ? <span className="text-[11px] text-tertiary">{tab.subtitle}</span> : null}
-                <span
-                  role="button"
-                  aria-label={`Close ${tab.title}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onClose(tab.id);
-                  }}
-                  className="ml-1 rounded-xs p-[2px] text-transparent hover:bg-hover hover:text-primary group-hover:text-tertiary"
-                >
-                  <X size={11} strokeWidth={2.2} />
-                </span>
+                <Plus size={14} strokeWidth={2} />
               </button>
             </Menu>
-          );
-        })}
-        <div className="flex-1" />
-        <div className="flex items-center">
-          <Button iconOnly variant="ghost" aria-label="Close dock" onClick={onCloseAll} icon={<X size={13} strokeWidth={2} />} />
+          ) : null}
+
+          {tabs.length === 0 ? (
+            <span className="flex items-center px-2 text-[11.5px] text-tertiary">
+              Logs, shells and pinned objects stay here while you work elsewhere.
+            </span>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5 pr-1">
+          {open ? (
+            <Tip label={maximised ? 'Restore the dock' : 'Make the dock taller'}>
+              <button
+                type="button"
+                data-testid="dock-maximise"
+                aria-label={maximised ? 'Restore the dock' : 'Make the dock taller'}
+                onClick={() => setMaximised((current) => !current)}
+                className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
+              >
+                {maximised ? <Minimize2 size={12} strokeWidth={2} /> : <Maximize2 size={12} strokeWidth={2} />}
+              </button>
+            </Tip>
+          ) : null}
+          {active ? (
+            <Tip label={open ? 'Put the dock away' : 'Bring the dock back'} shortcut="⌘`" hint={open ? 'Everything here keeps running' : undefined}>
+              <button
+                type="button"
+                data-testid="dock-collapse"
+                aria-label={open ? 'Put the dock away' : 'Bring the dock back'}
+                aria-expanded={open}
+                onClick={onToggleCollapsed}
+                className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
+              >
+                {open ? <ChevronDown size={13} strokeWidth={2} /> : <ChevronUp size={13} strokeWidth={2} />}
+              </button>
+            </Tip>
+          ) : null}
+          {tabs.length > 0 ? (
+            <Button iconOnly variant="ghost" aria-label="Close every tab" hint="Closes them all; nothing is kept" onClick={onCloseAll} icon={<X size={13} strokeWidth={2} />} />
+          ) : null}
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        {tabs.map((tab) => (
-          <div key={tab.id} className="absolute inset-0 flex flex-col" style={{ display: tab.id === active.id ? 'flex' : 'none' }}>
-            {tab.kind === 'logs' && tab.pod ? (
-              <LogViewer
-                source={tab.source}
-                context={tab.context}
-                namespace={tab.namespace ?? ''}
-                pod={tab.pod}
-                containers={[...(tab.containers ?? [])]}
-                expanded={false}
-                onToggleExpand={() => onExpand(tab)}
-              />
-            ) : tab.kind === 'assistant' ? (
-              <Assistant context={tab.context || null} incoming={assistant?.incoming ?? null} onOpenSettings={assistant?.onOpenSettings ?? (() => undefined)} />
-            ) : tab.kind === 'terminal' && tab.pod ? (
-              <Terminal source={tab.source} context={tab.context} namespace={tab.namespace ?? ''} pod={tab.pod} container={tab.container} />
-            ) : tab.kind === 'resource' && tab.resourceKind && tab.name ? (
-              <DockResource
-                context={tab.context}
-                kind={tab.resourceKind}
-                name={tab.name}
-                namespace={tab.namespace}
-                {...(onNavigate ? { onNavigate } : {})}
-              />
-            ) : null}
-          </div>
-        ))}
+      {/*
+        Every tab stays mounted and laid out. `visibility` rather than
+        `display`, so a terminal that is not on screen still knows how wide it
+        is and does not come back re-wrapped.
+      */}
+      <div className="relative flex min-h-0 flex-1 flex-col" aria-hidden={!open}>
+        {tabs.map((tab) => {
+          const shown = tab.id === active?.id && open;
+          return (
+            <div
+              key={tab.id}
+              className="absolute inset-0 flex flex-col"
+              style={{ visibility: shown ? 'visible' : 'hidden', pointerEvents: shown ? 'auto' : 'none', zIndex: shown ? 1 : 0 }}
+            >
+              {tab.kind === 'logs' && tab.pod ? (
+                <LogViewer
+                  source={tab.source}
+                  context={tab.context}
+                  namespace={tab.namespace ?? ''}
+                  pod={tab.pod}
+                  containers={[...(tab.containers ?? [])]}
+                  expanded={false}
+                  compact
+                  onToggleExpand={() => onExpand(tab)}
+                />
+              ) : tab.kind === 'assistant' ? (
+                <Assistant context={tab.context || null} incoming={assistant?.incoming ?? null} onOpenSettings={assistant?.onOpenSettings ?? (() => undefined)} />
+              ) : tab.kind === 'terminal' && tab.pod ? (
+                <Terminal source={tab.source} context={tab.context} namespace={tab.namespace ?? ''} pod={tab.pod} container={tab.container} />
+              ) : tab.kind === 'resource' && tab.resourceKind && tab.name ? (
+                <DockResource
+                  context={tab.context}
+                  kind={tab.resourceKind}
+                  name={tab.name}
+                  namespace={tab.namespace}
+                  {...(onNavigate ? { onNavigate } : {})}
+                />
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </motion.section>
   );
+
+  function activateAndOpen(id: string): void {
+    onActivate(id);
+    if (collapsed) onToggleCollapsed();
+  }
+}
+
+function TabIcon({ tab, active }: { tab: DockTab; active: boolean }) {
+  const tint = active ? 'text-accent' : '';
+  if (tab.kind === 'logs') return <ScrollText size={12} strokeWidth={1.9} aria-hidden className={tint} />;
+  if (tab.kind === 'assistant') return <Sparkles size={12} strokeWidth={1.9} aria-hidden className={tint} />;
+  if (tab.kind === 'resource') return <KindMark kind={tab.resourceKind ?? ''} />;
+  return <TerminalIcon size={12} strokeWidth={1.9} aria-hidden className={tint} />;
 }

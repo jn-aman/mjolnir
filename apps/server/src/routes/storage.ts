@@ -273,12 +273,21 @@ export function storageRoutes(settings: SettingsStore, forwards: ForwardManager,
       const key = query(req, 'key');
       if (!key) throw HttpError.badRequest('key is required');
       const client = await clientFor(param(req, 'id'));
+      // Two separate questions that used to be one flag, which is why PDFs
+      // downloaded instead of opening. `inline` is about how much to read:
+      // the first few megabytes, for a text preview. `download` is about what
+      // the browser does with it. A PDF wants all the bytes *and* to be
+      // rendered, and the old code could not express that.
       const inline = query(req, 'inline') === '1';
+      const download = query(req, 'download') === '1';
       const upstream = await wrap(() => client.getObject(param(req, 'bucket'), key, inline ? 'bytes=0-4194303' : undefined));
       res.status(upstream.statusCode === 206 ? 200 : (upstream.statusCode ?? 200));
       res.setHeader('content-type', String(upstream.headers['content-type'] ?? 'application/octet-stream'));
       if (upstream.headers['content-length'] && !inline) res.setHeader('content-length', String(upstream.headers['content-length']));
-      res.setHeader('content-disposition', `${inline ? 'inline' : 'attachment'}; filename="${key.split('/').pop() ?? 'object'}"`);
+      // Accept-ranges matters for a PDF: the viewer fetches the trailer first
+      // and will not render at all without it on a large file.
+      if (upstream.headers['accept-ranges']) res.setHeader('accept-ranges', String(upstream.headers['accept-ranges']));
+      res.setHeader('content-disposition', `${download ? 'attachment' : 'inline'}; filename="${key.split('/').pop() ?? 'object'}"`);
       upstream.pipe(res);
     }),
   );

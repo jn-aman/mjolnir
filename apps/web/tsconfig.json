@@ -28,6 +28,9 @@
     },
     {
       "path": "../../packages/licensing"
+    },
+    {
+      "path": "../../packages/brand"
     }
   ]
 }

@@ -124,7 +124,7 @@ export function DataTree({ value, testId = 'data-tree' }: { value: unknown; test
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 22,
+    estimateSize: () => 24,
     overscan: 20,
   });
 
@@ -178,7 +178,7 @@ export function DataTree({ value, testId = 'data-tree' }: { value: unknown; test
         </Tip>
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto py-1 font-mono text-[12px]">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto py-1 font-mono text-[12.5px]">
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((row) => {
             const node = rows[row.index];
@@ -219,39 +219,96 @@ function Row({
     ...(node.kind === 'leaf' ? [] : [{ id: 'copy-json', label: 'Copy as JSON', icon: <Copy size={13} strokeWidth={1.9} />, onSelect: () => copyText(JSON.stringify(node.value), 'JSON copied') }]),
   ];
 
+  // An array index is not a name. Showing `0 :` beside `sku :` invites the eye
+  // to read them as the same kind of thing when one is a label and the other
+  // is a position, so indices are bracketed and dimmed.
+  const isIndex = /^\d+$/.test(node.label) && node.path.endsWith(`[${node.label}]`);
+
   return (
     <Menu label={node.path} entries={entries} testId="tree-menu">
       <div
-        style={{ ...style, paddingLeft: 8 + node.depth * 14 }}
+        style={{ ...style, paddingLeft: 10 + node.depth * 16 }}
         data-testid="tree-row"
-        className="flex items-center gap-1 pr-3 leading-[22px] hover:bg-hover"
+        className="group/row relative flex items-center gap-1.5 pr-8 leading-[24px] hover:bg-hover"
       >
+        {/*
+          One guide per level of depth. Without them, a value nine levels down
+          is a string floating in whitespace and there is no way to see what it
+          belongs to; with them the eye follows a line back to the parent.
+        */}
+        {Array.from({ length: node.depth }, (_, level) => (
+          <span
+            key={level}
+            aria-hidden
+            className="pointer-events-none absolute top-0 h-full border-l border-[var(--border-subtle)]"
+            style={{ left: 14 + level * 16 }}
+          />
+        ))}
+
         {node.kind === 'leaf' ? (
-          <span className="w-[13px] shrink-0" />
+          <span className="w-[14px] shrink-0" />
         ) : (
           <button
             type="button"
             onClick={onToggle}
             aria-label={open ? `Collapse ${node.label}` : `Expand ${node.label}`}
-            className="flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-xs text-tertiary hover:text-primary"
+            className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-xs text-tertiary hover:bg-hover hover:text-primary"
           >
             <ChevronRight size={11} strokeWidth={2.4} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }} />
           </button>
         )}
-        <span className="shrink-0 text-[var(--syntax-key,var(--text-primary))]">
-          <Highlight text={node.label} needle={needle} />
+
+        <span className={`shrink-0 ${isIndex ? 'text-tertiary' : 'font-medium text-primary'}`}>
+          {isIndex ? `[${node.label}]` : <Highlight text={node.label} needle={needle} />}
         </span>
-        <span className="shrink-0 text-tertiary">:</span>
+
         {node.kind === 'leaf' ? (
-          <Leaf value={node.value} needle={needle} />
+          <>
+            <span className="shrink-0 text-tertiary">:</span>
+            <Leaf value={node.value} needle={needle} />
+          </>
         ) : (
-          <span className="min-w-0 truncate text-tertiary">
-            {node.kind === 'array' ? `[ ${node.count} ]` : `{ ${node.count} }`}
-            {open ? '' : <span className="ml-2 opacity-70">{preview(node.value)}</span>}
+          <span className="flex min-w-0 items-center gap-2">
+            <Count kind={node.kind} count={node.count} />
+            {open ? null : <span className="min-w-0 truncate text-tertiary opacity-80">{preview(node.value)}</span>}
           </span>
         )}
+
+        {/* Copy appears under the pointer, not in a column of its own. */}
+        <button
+          type="button"
+          aria-label={`Copy ${node.path}`}
+          title="Copy this value"
+          onClick={(event) => {
+            event.stopPropagation();
+            copyText(node.kind === 'leaf' ? String(node.value) : JSON.stringify(node.value, null, 2), 'Copied');
+          }}
+          className="absolute right-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-xs text-transparent hover:bg-hover hover:text-primary group-hover/row:text-tertiary"
+        >
+          <Copy size={11} strokeWidth={1.9} />
+        </button>
       </div>
     </Menu>
+  );
+}
+
+/**
+ * How many are inside, as a chip rather than punctuation.
+ *
+ * `{ 4 }` and `[ 2 ]` read as syntax, which is exactly what a tree view is
+ * for getting away from. A chip says "four things in here" at a glance and
+ * distinguishes a list from a record by colour rather than by bracket shape.
+ */
+function Count({ kind, count }: { kind: NodeKind; count: number }) {
+  const tint = kind === 'array' ? 'var(--series-4)' : 'var(--series-2)';
+  return (
+    <span
+      className="shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold tabular-nums"
+      style={{ color: tint, background: `color-mix(in oklab, ${tint} 14%, transparent)` }}
+      title={kind === 'array' ? `${count} items` : `${count} keys`}
+    >
+      {count} {kind === 'array' ? (count === 1 ? 'item' : 'items') : count === 1 ? 'key' : 'keys'}
+    </span>
   );
 }
 
@@ -274,18 +331,37 @@ function short(value: unknown): string {
   return String(value);
 }
 
+/**
+ * A value, typed by colour and shape rather than by punctuation.
+ *
+ * The quotes around a string go: in a tree the column already tells you it is
+ * a value, and `"Sunglasses"` is harder to read than `Sunglasses` for no
+ * information gained. `null` and booleans keep a shape of their own because
+ * the difference between the string "false" and the boolean false is the sort
+ * of thing people are actually looking for in here.
+ */
 function Leaf({ value, needle }: { value: unknown; needle: string }) {
-  const tone =
-    value === null || value === undefined
-      ? 'text-tertiary'
-      : typeof value === 'number'
-        ? 'text-[var(--series-3)]'
-        : typeof value === 'boolean'
-          ? 'text-[var(--series-5)]'
-          : 'text-[var(--series-1)]';
-  const text = value === null ? 'null' : value === undefined ? 'undefined' : typeof value === 'string' ? `"${value}"` : String(value);
+  if (value === null || value === undefined) {
+    return <span className="shrink-0 rounded-xs border border-line px-1 text-[10.5px] uppercase tracking-[0.04em] text-tertiary">null</span>;
+  }
+  if (typeof value === 'boolean') {
+    const tint = value ? 'var(--status-ok)' : 'var(--text-tertiary)';
+    return (
+      <span className="shrink-0 rounded-xs px-1 text-[10.5px] font-semibold uppercase tracking-[0.04em]" style={{ color: tint, background: `color-mix(in oklab, ${tint} 14%, transparent)` }}>
+        {String(value)}
+      </span>
+    );
+  }
+  if (typeof value === 'number') {
+    return (
+      <span className="min-w-0 truncate tabular-nums text-[var(--series-3)]" title={String(value)}>
+        <Highlight text={String(value)} needle={needle} />
+      </span>
+    );
+  }
+  const text = String(value);
   return (
-    <span className={`min-w-0 truncate ${tone}`} title={text}>
+    <span className="min-w-0 truncate text-[var(--series-1)]" title={text}>
       <Highlight text={text} needle={needle} />
     </span>
   );

@@ -463,7 +463,16 @@ export const api = {
     createBucket: (id: string, name: string) => request<{ ok: boolean }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets`, { method: 'POST', body: JSON.stringify({ name }) }),
     objects: (id: string, bucket: string, prefix: string, token?: string) =>
       request<{ objects: StorageObject[]; prefixes: string[]; next?: string }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/objects?prefix=${encodeURIComponent(prefix)}${token ? `&token=${encodeURIComponent(token)}` : ''}`),
-    objectUrl: (id: string, bucket: string, key: string, inline = false) => `${base()}/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}${inline ? '&inline=1' : ''}`,
+    /**
+     * A URL for an object.
+     *
+     * `inline` limits the read to the first few megabytes, for a text
+     * preview. `download` decides what the browser does with it. They are
+     * separate because a PDF wants every byte *and* to be rendered, and one
+     * flag could not say that: it is why PDFs downloaded instead of opening.
+     */
+    objectUrl: (id: string, bucket: string, key: string, inline = false, download = false) =>
+      `${base()}/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}${inline ? '&inline=1' : ''}${download ? '&download=1' : ''}`,
     head: (id: string, bucket: string, key: string) => request<{ size: number; type: string; lastModified: string }>(`/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/head?key=${encodeURIComponent(key)}`),
     upload: async (id: string, bucket: string, key: string, file: Blob) => {
       const response = await fetch(`${base()}/api/storage/connections/${encodeURIComponent(id)}/buckets/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, { method: 'PUT', body: file, headers: { 'content-type': file.type || 'application/octet-stream' } });

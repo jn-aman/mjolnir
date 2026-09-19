@@ -31,7 +31,7 @@ import { useFlags } from '../../lib/flags.tsx';
 interface FileViewerProps {
   readonly file: { key: string; type: string; size: number } | null;
   /** Streams the object through the server; `inline` limits to the first bytes. */
-  readonly urlFor: (key: string, inline: boolean) => string;
+  readonly urlFor: (key: string, inline: boolean, download?: boolean) => string;
   readonly onPresign: (key: string) => Promise<string>;
   readonly onClose: () => void;
 }
@@ -217,6 +217,8 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
 
   if (!file) return null;
   const raw = urlFor(file.key, false);
+  // The same object, but asked for as a download rather than a view.
+  const saveUrl = urlFor(file.key, false, true);
   const name = shownKey.split('/').pop() ?? shownKey;
   const showing = view || views[0] || 'source';
 
@@ -278,7 +280,7 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
           <Button variant="ghost" onClick={() => window.open(raw, '_blank')} icon={<ExternalLink size={12} strokeWidth={1.9} />}>
             Open raw
           </Button>
-          <Button onClick={() => window.open(raw, '_blank')} icon={<Download size={12} strokeWidth={1.9} />}>
+          <Button onClick={() => window.open(saveUrl, '_blank')} icon={<Download size={12} strokeWidth={1.9} />}>
             Download
           </Button>
         </>

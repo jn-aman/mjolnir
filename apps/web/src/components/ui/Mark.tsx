@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { MARK_HAFT, MARK_HEAD, MARK_VIEWBOX } from '@mjolnir/brand';
 
 /**
  * The Mjolnir mark.
@@ -12,18 +13,18 @@ import { motion } from 'motion/react';
  * Drawn as solid shapes with the bolt as negative space, so it survives being
  * 13 pixels wide in a menu and 72 wide on an empty page, and so it works in one
  * colour on a tinted tile.
+ *
+ * The geometry comes from `@mjolnir/brand`, the same source the favicon, the
+ * application icon and the tray image are generated from. It used to be copied
+ * here, and the copies drifted: the favicon kept a straight haft for months
+ * after the app was redrawn with a flared grip.
  */
 export function Mark({ size = 20, className = '' }: { size?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden className={className}>
-      <path
-        d="M4.9 3.4h14.2c1 0 1.8.8 1.8 1.8v4.9c0 1-.8 1.8-1.8 1.8H4.9c-1 0-1.8-.8-1.8-1.8V5.2c0-1 .8-1.8 1.8-1.8Zm8.9 2.1-4 4.3h2.3l-.7 2.4 4-4.4h-2.3l.7-2.3Z"
-        fill="currentColor"
-        fillRule="evenodd"
-        clipRule="evenodd"
-      />
+    <svg viewBox={MARK_VIEWBOX} width={size} height={size} fill="none" aria-hidden className={className}>
+      <path d={MARK_HEAD} fill="currentColor" fillRule="evenodd" clipRule="evenodd" />
       {/* The haft, flaring into a grip. */}
-      <path d="M10.75 12.6h2.5l.62 6.6a1.87 1.87 0 0 1-3.74 0l.62-6.6Z" fill="currentColor" />
+      <path d={MARK_HAFT} fill="currentColor" />
     </svg>
   );
 }

@@ -159,6 +159,21 @@ export function App() {
   const dock = useResizable({ key: 'dock', initial: 280, min: 120, max: 720, direction: 'up' });
   const [dockTabs, setDockTabs] = useState<DockTab[]>([]);
   const [dockActive, setDockActive] = useState<string | null>(null);
+  // Remembered, because someone who put the dock away meant it to stay away.
+  const [dockCollapsed, setDockCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('mjolnir.dock.collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('mjolnir.dock.collapsed', dockCollapsed ? '1' : '0');
+    } catch {
+      // A preference that cannot be saved still applies for this session.
+    }
+  }, [dockCollapsed]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [scaling, setScaling] = useState<KubeItem | null>(null);
   const [draining, setDraining] = useState<KubeItem | null>(null);
@@ -235,6 +250,14 @@ export function App() {
   // than one chord away, whatever has focus.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // Cmd+` for the dock: the same chord every terminal-shaped panel uses,
+      // and it toggles rather than opens, because putting it away is the half
+      // people do more often.
+      if ((event.metaKey || event.ctrlKey) && event.key === '`') {
+        event.preventDefault();
+        setDockCollapsed((current) => !current);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         if (!canPalette) return;
         event.preventDefault();
@@ -511,6 +534,35 @@ export function App() {
       setDockActive(id);
     },
     [context],
+  );
+
+  /**
+   * What the dock's plus button offers.
+   *
+   * A shell into a pod rather than a shell into "the cluster", because there
+   * is no such thing: kubectl has no cluster-wide exec, and pretending there
+   * is one would mean silently picking a pod for someone. Opening the
+   * assistant belongs here too; it is a thing you keep beside your work.
+   */
+  const dockNewTabs = useMemo(
+    () => [
+      {
+        id: 'assistant',
+        label: 'Assistant',
+        onSelect: () => openAssistant(),
+      },
+      {
+        id: 'pods',
+        label: 'Shell into a pod\u2026',
+        onSelect: () => {
+          navigate({ kind: 'Pod' });
+          toast.message('Pick a pod, then Shell from its menu', { description: 'Right-click any row, or use the terminal button on it.' });
+        },
+      },
+    ],
+    // openAssistant and navigate are stable callbacks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   const openShell = useCallback(
@@ -931,8 +983,12 @@ export function App() {
             </AnimatePresence>
             </div>
 
-            <AnimatePresence>
-            {canDock && dockTabs.length ? (
+            {/*
+              Always mounted, never conditional on having tabs. A dock that
+              appears only once something has filled it is a dock nobody finds,
+              and it leaves no way to simply open a terminal.
+            */}
+            {canDock ? (
               <Dock
                 key="dock"
                 assistant={{ incoming: incomingAsk, onOpenSettings: () => setSelection({ kind: 'page', value: 'app-settings' }) }}
@@ -940,8 +996,21 @@ export function App() {
                 activeId={dockActive}
                 height={dock.width}
                 dragging={dock.dragging}
+                collapsed={dockCollapsed}
+                onToggleCollapsed={() => setDockCollapsed((current) => !current)}
                 onResizeStart={dock.onPointerDown}
                 onActivate={setDockActive}
+                newTabs={dockNewTabs}
+                onReorder={(from, to) =>
+                  setDockTabs((current) => {
+                    const next = [...current];
+                    const at = next.findIndex((tab) => tab.id === from);
+                    const onto = next.findIndex((tab) => tab.id === to);
+                    if (at < 0 || onto < 0) return current;
+                    next.splice(onto, 0, ...next.splice(at, 1));
+                    return next;
+                  })
+                }
                 onClose={(id) => {
                   setDockTabs((current) => current.filter((tab) => tab.id !== id));
                   setDockActive((active) => (active === id ? null : active));
@@ -959,7 +1028,6 @@ export function App() {
                 }}
               />
             ) : null}
-            </AnimatePresence>
           </main>
         </div>
 

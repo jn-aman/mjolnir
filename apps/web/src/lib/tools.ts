@@ -234,7 +234,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       'Bucket policies, versioning, lifecycle and replication shown and editable where the store supports them',
     ],
     today: [{ label: 'List a bucket', command: 'mc ls <alias>/<bucket>' }],
-    sections: ['Connections', 'Buckets', 'Transfers', 'Presigned links'],
+    sections: ['Buckets', 'Stores', 'Transfers', 'Presigned links'],
     built: true,
   },
   {

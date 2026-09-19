@@ -26,6 +26,7 @@
     "@codemirror/view": "^6.43.12",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@mjolnir/brand": "*",
     "@mjolnir/k8s": "*",
     "@mjolnir/licensing": "*",
     "@mjolnir/schemas": "*",

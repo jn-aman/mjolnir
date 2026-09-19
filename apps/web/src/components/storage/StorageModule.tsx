@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, Download, Ellipsis, ExternalLink, Eye, Folder, FolderPlus, Link2, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { Archive, ChevronRight, Download, ExternalLink, Eye, Folder, FolderPlus, Link2, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, type StorageConnection, type StorageObject } from '../../lib/api.ts';
 import { formatDateTime } from '../../lib/time.ts';
@@ -11,7 +11,7 @@ import { Select } from '../ui/Select.tsx';
 import { Switch } from '../ui/Switch.tsx';
 import { Card } from '../ui/Card.tsx';
 import { ConfirmDialog, Modal } from '../ui/Modal.tsx';
-import { Menu, copyEntry, copyText, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
+import { copyEntry, copyText, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { ToolPanel } from '../ToolPanel.tsx';
 import { FileViewer } from './FileViewer.tsx';
 import type { ToolDefinition } from '../../lib/tools.ts';
@@ -27,7 +27,7 @@ import { useFlags } from '../../lib/flags.tsx';
  * and images in place, and every object has its menu: download, presign,
  * copy the key, delete.
  */
-export type StorageSection = 'connections' | 'buckets' | 'transfers' | 'presigned-links';
+export type StorageSection = 'stores' | 'connections' | 'buckets' | 'transfers' | 'presigned-links';
 
 interface StorageModuleProps {
   readonly tool: ToolDefinition;
@@ -65,7 +65,7 @@ export function StorageModule({ tool, section, focusConnection }: StorageModuleP
   }, [connectionId]);
 
   if (section === 'transfers' || section === 'presigned-links') return <ToolPanel tool={tool} section={section === 'transfers' ? 'Transfers' : 'Presigned links'} />;
-  if (section === 'connections') return <Connections connections={connections} onChanged={refreshConnections} />;
+  if (section === 'stores' || section === 'connections') return <Connections connections={connections} onChanged={refreshConnections} />;
   return <Buckets connections={connections} connectionId={connectionId} onConnection={setConnectionId} />;
 }
 
@@ -273,7 +273,7 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
   const isObject = (item: KubeItem) => (item.spec as { kind?: string } | undefined)?.kind === 'object';
   const keyOf = (item: KubeItem) => String((item.spec as { key?: string } | undefined)?.key ?? '');
   const bulk: BulkAction[] = [
-    { id: 'download', label: 'Download', icon: <Download size={12} strokeWidth={2} />, applies: isObject, run: (chosen) => { for (const item of chosen) window.open(api.storage.objectUrl(connectionId, bucket, keyOf(item)), '_blank'); } },
+    { id: 'download', label: 'Download', icon: <Download size={12} strokeWidth={2} />, applies: isObject, run: (chosen) => { for (const item of chosen) window.open(api.storage.objectUrl(connectionId, bucket, keyOf(item), false, true), '_blank'); } },
     { id: 'copy', label: 'Copy keys', icon: <Link2 size={12} strokeWidth={2} />, run: (chosen) => copyText(chosen.map(keyOf).join('\n'), `${chosen.length} keys copied`) },
     {
       id: 'delete',
@@ -307,15 +307,67 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="storage-buckets">
-      <div className="flex h-[50px] shrink-0 items-center gap-2 border-b border-line bg-raised px-3.5">
-        <Select label="Connection" value={connectionId} onChange={onConnection} testId="storage-connection" options={connections.map((c) => ({ value: c.id, label: c.name, hint: c.source ? 'pod' : new URL(c.endpoint || 'http://x').host }))} />
-        <Select label="Bucket" value={bucket} onChange={(b) => { setBucket(b); setPrefix(''); }} testId="storage-bucket" mono options={buckets.map((b) => ({ value: b.name, label: b.name }))} />
+      {/*
+        One path, not three controls.
+        
+        Store, bucket and folder are the same journey, and showing them as a
+        dropdown, a second dropdown and then a breadcrumb made people navigate
+        the same thing in three different ways. It is one breadcrumb now: every
+        segment is clickable, and the first two open a menu instead of leading
+        deeper. That is how a file manager works, and a bucket is a folder.
+      */}
+      <div className="flex h-[46px] shrink-0 items-center gap-1 border-b border-line bg-raised px-3">
+        <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden text-[12.5px]" aria-label="Path" data-testid="storage-path">
+          <Select
+            label="Store"
+            value={connectionId}
+            onChange={onConnection}
+            testId="storage-connection"
+            inline
+            options={connections.map((c) => ({
+              value: c.id,
+              label: storeName(c),
+              hint: c.source ? `${c.source.namespace} \u00b7 in the cluster` : new URL(c.endpoint || 'http://x').host,
+            }))}
+          />
+          <ChevronRight size={13} className="shrink-0 text-tertiary" aria-hidden />
+          <Select
+            label="Bucket"
+            value={bucket}
+            onChange={(b) => setBucket(b)}
+            testId="storage-bucket"
+            inline
+            mono
+            options={buckets.map((b) => ({ value: b.name, label: b.name }))}
+          />
+          {crumbs.map((part, index) => (
+            <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-0.5">
+              <ChevronRight size={13} className="shrink-0 text-tertiary" aria-hidden />
+              <button
+                type="button"
+                onClick={() => setPrefix(`${crumbs.slice(0, index + 1).join('/')}/`)}
+                title={part}
+                className="max-w-[170px] truncate rounded-md px-1.5 py-1 font-mono text-secondary hover:bg-hover hover:text-primary"
+              >
+                {part}
+              </button>
+            </span>
+          ))}
+        </nav>
+
+        <Field
+          id="storage-filter"
+          label="Filter"
+          hideLabel
+          mono
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter"
+          className="ml-2 w-[180px] shrink-0"
+        />
         {canWrite ? (
-          <Button iconOnly variant="ghost" aria-label="New bucket" hint="Creates it on this endpoint" onClick={() => setCreatingBucket(true)} icon={<FolderPlus size={13} strokeWidth={1.9} />} />
+          <Button iconOnly variant="ghost" aria-label="New bucket" hint="Creates it on this store" onClick={() => setCreatingBucket(true)} icon={<FolderPlus size={13} strokeWidth={1.9} />} />
         ) : null}
-        <Crumbs bucket={bucket} crumbs={crumbs} onGo={setPrefix} />
-        <Field id="storage-filter" label="Filter" hideLabel mono value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" className="ml-2 w-[180px] shrink-0" />
-        <div className="flex-1" />
         {canWrite ? (
           <label className="inline-flex cursor-pointer">
             <input type="file" multiple className="hidden" data-testid="storage-upload-input" onChange={(e) => void upload(e.target.files)} />
@@ -359,7 +411,7 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
 
       <FileViewer
         file={preview}
-        urlFor={(key, inline) => api.storage.objectUrl(connectionId, bucket, key, inline)}
+        urlFor={(key, inline, download) => api.storage.objectUrl(connectionId, bucket, key, inline, download)}
         onPresign={(key) => api.storage.presign(connectionId, bucket, key, 3600).then((r) => r.url)}
         onClose={() => setPreview(null)}
       />
@@ -380,75 +432,19 @@ export function formatObjectDate(value: string | undefined): string {
   return value ? formatDateTime(value) : '';
 }
 
-/**
- * The path, however deep it goes.
- *
- * A key eight folders deep is normal in a bucket and the toolbar is one line,
- * so the middle collapses into an ellipsis that still lists every level it
- * hid. The first and last segments survive because those are the two anyone
- * navigates by: the bucket you are in and the folder you are looking at.
- */
-function Crumbs({ bucket, crumbs, onGo }: { bucket: string; crumbs: string[]; onGo: (prefix: string) => void }) {
-  const to = (index: number) => `${crumbs.slice(0, index + 1).join('/')}/`;
-  const KEEP_END = 2;
-  const collapsed = crumbs.length > KEEP_END + 1;
-  const hidden = collapsed ? crumbs.slice(0, crumbs.length - KEEP_END) : [];
-  const tail = collapsed ? crumbs.slice(crumbs.length - KEEP_END) : crumbs;
-  const offset = crumbs.length - tail.length;
 
-  return (
-    <nav
-      className="flex min-w-0 shrink items-center gap-0.5 overflow-hidden font-mono text-[12px]"
-      aria-label="Path"
-      data-testid="storage-crumbs"
-    >
-      <button
-        type="button"
-        onClick={() => onGo('')}
-        title={bucket}
-        className="max-w-[160px] shrink-0 truncate rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary"
-      >
-        {bucket || '…'}
-      </button>
-      {collapsed ? (
-        <>
-          <ChevronRight size={12} className="shrink-0 text-tertiary" aria-hidden />
-          <Menu
-            label="Path"
-            testId="crumb-menu"
-            entries={hidden.map((name, index) => ({
-              id: `crumb-${index}`,
-              label: name,
-              icon: <Folder size={13} strokeWidth={1.9} />,
-              onSelect: () => onGo(to(index)),
-            }))}
-          >
-            <button
-              type="button"
-              data-testid="crumb-overflow"
-              aria-label={`${hidden.length} more folders`}
-              title={hidden.join(' / ')}
-              onClick={() => onGo(to(hidden.length - 1))}
-              className="flex h-[20px] shrink-0 items-center rounded-xs px-1 text-tertiary hover:bg-hover hover:text-primary"
-            >
-              <Ellipsis size={13} strokeWidth={2} aria-hidden />
-            </button>
-          </Menu>
-        </>
-      ) : null}
-      {tail.map((name, index) => (
-        <span key={`${name}-${index}`} className="flex min-w-0 items-center gap-0.5">
-          <ChevronRight size={12} className="shrink-0 text-tertiary" aria-hidden />
-          <button
-            type="button"
-            onClick={() => onGo(to(offset + index))}
-            title={name}
-            className="max-w-[180px] truncate rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary"
-          >
-            {name}
-          </button>
-        </span>
-      ))}
-    </nav>
-  );
+/**
+ * A name a person recognises.
+ *
+ * Connections made before this rewrite are called things like
+ * "minio-55f7f885c7-98nq9 (MinIO)", which is a replica-set hash nobody reads
+ * and which changes every time the pod is rescheduled: the store you chose
+ * yesterday looks like a different one today. The product and the namespace
+ * are the two things that actually identify it.
+ */
+export function storeName(connection: StorageConnection): string {
+  if (!connection.source) return connection.name;
+  const product = /\(([^)]+)\)\s*$/.exec(connection.name)?.[1];
+  if (!product) return connection.name;
+  return `${product} in ${connection.source.namespace}`;
 }
