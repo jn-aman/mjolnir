@@ -37,6 +37,7 @@ const SOURCE_TEXT: Record<FlagState['source'], string> = {
 export function FlagsSection({ settings, onSave }: { settings: AppSettings | null; onSave: (patch: unknown, said?: string) => Promise<void> }) {
   const [flags, setFlags] = useState<FlagState[]>([]);
   const [remote, setRemote] = useState<RemoteFlagStatus | null>(null);
+  const [showUnreleased, setShowUnreleased] = useState(false);
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState(settings?.flags.remote.url ?? '');
   const [token, setToken] = useState('');
@@ -89,8 +90,23 @@ export function FlagsSection({ settings, onSave }: { settings: AppSettings | nul
     }
   };
 
+  /**
+   * Shipped first, unbuilt behind a switch.
+   *
+   * Thirty-five switches on one page is the complication, and most of them
+   * are for features that do not exist yet: an `internal` or `experimental`
+   * flag is a placeholder, and offering someone a switch for a thing that is
+   * not there is how a settings page becomes something people stop reading.
+   *
+   * The shipped ones are the ones worth a decision, so those are the page.
+   * The rest are one line away for anyone who wants them.
+   */
+  const shipped = flags.filter((flag) => flag.stage === 'stable' || flag.stage === 'beta');
+  const unreleased = flags.filter((flag) => flag.stage !== 'stable' && flag.stage !== 'beta');
+  const visible = showUnreleased ? flags : shipped;
+
   const grouped = new Map<string, FlagState[]>();
-  for (const flag of flags) {
+  for (const flag of visible) {
     const list = grouped.get(flag.module) ?? [];
     list.push(flag);
     grouped.set(flag.module, list);
@@ -126,6 +142,16 @@ export function FlagsSection({ settings, onSave }: { settings: AppSettings | nul
               onClick={() => void onSave({ flags: { overrides: {} } }, 'Overrides cleared').then(load)}
             >
               Clear every override
+            </Button>
+          ) : null}
+          {unreleased.length > 0 ? (
+            <Button
+              variant="ghost"
+              data-testid="flags-show-unreleased"
+              onClick={() => setShowUnreleased((current) => !current)}
+              hint="Switches for features that are not built yet. They do nothing until they are."
+            >
+              {showUnreleased ? 'Hide' : `Show ${unreleased.length} not built yet`}
             </Button>
           ) : null}
         </div>

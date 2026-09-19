@@ -7,6 +7,7 @@ import { Card } from '../ui/Card.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Select } from '../ui/Select.tsx';
 import { Switch } from '../ui/Switch.tsx';
+import { usePolling } from '../../lib/usePolling.ts';
 
 /**
  * Updates, from updates.mjolnir.sh.
@@ -37,10 +38,10 @@ export function UpdatesSection() {
   }, []);
 
   useEffect(() => {
-    void load().catch(() => undefined);
-    const timer = setInterval(() => void load().catch(() => undefined), 4000);
-    return () => clearInterval(timer);
+    void load();
   }, [load]);
+  // Stops when the window is not on screen, and refreshes the moment it is.
+  usePolling(load, 4000);
 
   const preferences = view?.preferences;
   const state = view?.state;

@@ -140,40 +140,25 @@ async function push(): Promise<void> {
       await call(`${url}/api/admin/features/${encodeURIComponent(flag.id)}/tags`, token, { type: 'simple', value });
     }
 
-    // Only a brand new toggle gets a strategy. Adding one to a toggle that
-    // already exists would sit alongside whatever is really rolled out.
-    if (created.status === 409 && !adopt) continue;
-
+    /**
+     * The toggle, and nothing else.
+     *
+     * This used to create a `flexibleRollout` strategy per flag and pin it to
+     * a percentage, which meant a flag had two controls that could disagree:
+     * switching one on in the Unleash UI left it off in every client because
+     * the rollout underneath was still zero, and nothing on either screen
+     * said so.
+     *
+     * Unleash attaches its own strategy when a toggle is enabled and manages
+     * it. That is its business. Ours is the toggle, so this sets the state and
+     * leaves everything else alone, and there is one control with one meaning.
+     */
     for (const environment of environments) {
+      // An existing toggle keeps whatever a person decided; that decision is
+      // the whole point of it being a flag. `UNLEASH_ADOPT=1` overrides, for
+      // putting the server back to the build's own defaults.
+      if (created.status === 409 && !adopt) continue;
       const base = `${url}/api/admin/projects/${PROJECT}/features/${encodeURIComponent(flag.id)}/environments/${encodeURIComponent(environment)}`;
-      // Always 100. The toggle is the on/off switch, and a strategy pinned at
-      // 0% makes it a switch that does nothing: flipping a flag on in the
-      // Unleash UI left it off in every client, with no indication why. If a
-      // gradual rollout is wanted, that is a deliberate edit to the strategy
-      // afterwards, not the state every flag starts in.
-      const rollout = '100';
-
-      // Adopting means replacing whatever strategies are there, so the result
-      // is the build default and not the build default plus someone's old 40%.
-      if (adopt) {
-        const existing = await call(`${base}/strategies`, token, undefined, 'GET');
-        if (existing.status < 400) {
-          for (const strategy of JSON.parse(existing.text || '[]') as Array<{ id: string }>) {
-            await call(`${base}/strategies/${strategy.id}`, token, undefined, 'DELETE');
-          }
-        }
-      }
-
-      const strategy = await call(`${base}/strategies`, token, {
-        name: 'flexibleRollout',
-        // `default` stickiness follows userId then sessionId, which is what
-        // the app sends, so a machine inside a partial rollout stays inside it
-        // between restarts.
-        parameters: { rollout, stickiness: 'default', groupId: flag.id },
-        constraints: [],
-      });
-      steps.push({ flag: flag.id, what: `strategy in ${environment}`, status: strategy.status, ...(strategy.status >= 400 ? { note: strategy.text.slice(0, 160) } : {}) });
-
       const state = await call(`${base}/${flag.fallback ? 'on' : 'off'}`, token, undefined);
       steps.push({ flag: flag.id, what: `${flag.fallback ? 'on' : 'off'} in ${environment}`, status: state.status, ...(state.status >= 400 ? { note: state.text.slice(0, 160) } : {}) });
     }
@@ -187,9 +172,9 @@ async function push(): Promise<void> {
   for (const step of failed) process.stdout.write(`  FAILED ${step.flag} ${step.what}: ${step.status} ${step.note ?? ''}\n`);
   const on = FLAGS.filter((flag) => flag.fallback).length;
   process.stdout.write(
-    `\n  ${on} toggles on, ${FLAGS.length - on} off, which is exactly what this build\n` +
-      `  already does. Every strategy is at 100%, so the toggle is the switch:\n` +
-      `  turn one on and every install has it within 30 seconds.\n\n`,
+    `\n  ${on} on, ${FLAGS.length - on} off, which is exactly what this build already\n` +
+      `  does. The toggle is the only control; turning one on reaches every\n` +
+      `  install within 30 seconds.\n\n`,
   );
   if (failed.length > 0) process.exit(1);
 }

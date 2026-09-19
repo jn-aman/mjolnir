@@ -3,6 +3,7 @@ import { ArrowLeftRight, ExternalLink, Square } from 'lucide-react';
 import { api, type ForwardRecord } from '../lib/api.ts';
 import { Button } from './ui/Button.tsx';
 import { copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
+import { usePolling } from '../lib/usePolling.ts';
 
 /** Every active port forward, across clusters, with what to do about each. */
 export function ForwardsPanel({ onOpenPod }: { readonly onOpenPod?: ((record: ForwardRecord) => void) | undefined }) {
@@ -17,9 +18,9 @@ export function ForwardsPanel({ onOpenPod }: { readonly onOpenPod?: ((record: Fo
   };
   useEffect(() => {
     void refresh();
-    const timer = setInterval(() => void refresh(), 2000);
-    return () => clearInterval(timer);
-  }, []);
+  }, [refresh]);
+  // Stops when the window is not on screen, and refreshes the moment it is.
+  usePolling(refresh, 2000);
 
   return (
     <div className="mjolnir-fade-in min-h-0 flex-1 overflow-y-auto p-4" data-testid="forwards-panel">

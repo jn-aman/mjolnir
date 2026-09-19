@@ -148,6 +148,24 @@ export function ResourceList({
     setPicked(new Set());
   }, [kind]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * Freeze the actions only when there is something to scroll.
+   *
+   * A frozen column floats over whatever is beneath it, which is the point
+   * when the table is wider than the window and the wrong thing entirely when
+   * it is not: the actions sat on top of the last two columns and hid them
+   * for no gain, because nothing was out of reach in the first place.
+   */
+  const [overflowing, setOverflowing] = useState(false);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const check = () => setOverflowing(element.scrollWidth > element.clientWidth + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
   const [sort, setSort] = useState<SortState>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -311,7 +329,7 @@ export function ResourceList({
         <div
           role="row"
           className="sticky top-0 z-10 grid h-[36px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.06em] text-tertiary"
-          style={{ gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(190px, 1fr)` }}
+          style={{ gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(176px, max-content)${overflowing ? ' 176px' : ''}` }}
         >
           {canBulk ? (
             <div className="flex h-full items-center justify-center">
@@ -387,7 +405,7 @@ export function ResourceList({
             </div>
           ))}
 
-          <div className="cell-pinned-header flex h-full items-center justify-end pr-2">
+          <div className={`flex h-full items-center justify-end pr-2 ${overflowing ? 'cell-pinned-header' : ''}`}>
             {canColumns ? (
             <ColumnMenu
               all={all}
@@ -473,7 +491,10 @@ export function ResourceList({
                         selected ? 'row-selected' : 'row-hover'
                       }`}
                       style={{
-                        gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(190px, 1fr)`,
+                        // A spacer as wide as the frozen cell, so scrolling
+                        // right brings every column out from under it instead
+                        // of leaving the last one permanently covered.
+                        gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(176px, max-content)${overflowing ? ' 176px' : ''}`,
                         minHeight: ROW_HEIGHT,
                         transform: `translateY(${row.start - HEADER_HEIGHT}px)`,
                       }}
@@ -527,7 +548,7 @@ export function ResourceList({
                           {column.content(item)}
                         </OverflowTip>
                       ))}
-                      <div className="cell-pinned flex h-full items-center justify-end px-2" onClick={(event) => event.stopPropagation()}>
+                      <div className={`flex h-full items-center justify-end px-2 ${overflowing ? 'cell-pinned' : ''}`} onClick={(event) => event.stopPropagation()}>
                         <RowActions entries={entries} name={item.metadata?.name ?? ''} />
                       </div>
                     </div>

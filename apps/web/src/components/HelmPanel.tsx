@@ -14,6 +14,7 @@ import { Field } from './ui/Field.tsx';
 import { Button } from './ui/Button.tsx';
 import { askEntry, copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { LoadingState } from './ui/States.tsx';
+import { usePolling } from '../lib/usePolling.ts';
 
 /**
  * Helm, read from the cluster.
@@ -55,9 +56,9 @@ export function HelmPanel({ context, namespace, onNavigate }: HelmPanelProps) {
   }, [context, namespace]);
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 10_000);
-    return () => clearInterval(timer);
   }, [load]);
+  // Stops when the window is not on screen, and refreshes the moment it is.
+  usePolling(load, 10000);
 
   const items = useMemo(() => releases.map(toItem), [releases]);
   const byKey = useMemo(() => new Map(releases.map((r) => [`${r.namespace}/${r.name}`, r])), [releases]);

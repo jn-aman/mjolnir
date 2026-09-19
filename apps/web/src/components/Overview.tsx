@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCpu, formatMemory, type MetricsResponse } from '../lib/metrics.ts';
 import { parseCpu, parseMemory } from '@mjolnir/schemas';
 import { TimeSeries } from './TimeSeries.tsx';
@@ -8,6 +8,7 @@ import { Button } from './ui/Button.tsx';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
 import { useLiveList } from '../lib/live.ts';
 import { useFlags } from '../lib/flags.tsx';
+import { usePolling } from '../lib/usePolling.ts';
 import { ClusterHero } from './ClusterHero.tsx';
 import { Activity, AlertTriangle, ArrowRight, Bell, Gauge as GaugeIcon, PieChart } from 'lucide-react';
 import { StatusChip, toneFor } from './StatusChip.tsx';
@@ -64,28 +65,26 @@ export function Overview({ context, cluster, onDecorChanged, onNavigate }: Overv
   // The charts/lists split is the user's. Stored like every other edge.
   const split = useResizable({ key: 'overview-split', initial: 640, min: 360, max: 1100, direction: 'right' });
 
+  const loadMetrics = useCallback(async () => {
+    // Metrics are sampled, not watched: a poll is the honest shape for them.
+    // Off means the app does not ask. A flag that hid a chart while still
+    // polling the cluster for it would be a setting that changes nothing
+    // except what the person reading it believes.
+    if (!(flagValues['kubernetes.metrics'] ?? true)) {
+      setNodeMetrics({ available: false, reason: 'Metrics are turned off in settings.', series: [] });
+      return;
+    }
+    const response = await fetch(`/api/metrics/${encodeURIComponent(context)}/nodes`);
+    setNodeMetrics((await response.json()) as MetricsResponse);
+  }, [context, flagValues]);
+
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      // Metrics are sampled, not watched: a poll is the honest shape for them.
-      // Off means the app does not ask. A flag that hides a chart while still
-      // polling the cluster for it would be a setting that does nothing except
-      // to the person reading it.
-      if (!(flagValues['kubernetes.metrics'] ?? true)) {
-        setNodeMetrics({ available: false, reason: 'Metrics are turned off in settings.', series: [] });
-        return;
-      }
-      const response = await fetch(`/api/metrics/${encodeURIComponent(context)}/nodes`);
-      const body = (await response.json()) as MetricsResponse;
-      if (!cancelled) setNodeMetrics(body);
-    };
-    void load();
-    const timer = setInterval(() => void load(), 5_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [context]);
+    void loadMetrics();
+  }, [loadMetrics]);
+  // Stops while the window is not on screen, and refreshes the instant it
+  // comes back: resuming a timer instead shows stale numbers at exactly the
+  // moment someone has looked at them.
+  usePolling(loadMetrics, 5_000);
 
   const health = useMemo(() => {
     const tally = { ok: 0, warn: 0, error: 0 };
