@@ -1,6 +1,6 @@
 import { platform, release } from 'node:os';
 import { evaluateAll, fetchFeatures, registerClient, sendMetrics, type FlagState, type UnleashContext, type UnleashFeature } from '@mjolnir/flags';
-import { BUILD, hostRefusal } from '@mjolnir/endpoints';
+import { BUILD, FLAG_ENVIRONMENT, hostRefusal } from '@mjolnir/endpoints';
 import { logger } from '@mjolnir/logger';
 import type { SettingsStore } from './settings.ts';
 
@@ -41,6 +41,7 @@ export class FlagStore {
   #error: string | undefined;
   #version: string;
   #registered = false;
+  #account: (() => { tier: string; email?: string; accountId?: string; plan?: string } | undefined) | undefined;
   #bucketStart = new Date();
   readonly #started = new Date();
   #counts = new Map<string, { yes: number; no: number }>();
@@ -50,20 +51,59 @@ export class FlagStore {
     this.#version = version;
   }
 
+  /**
+   * What Unleash is told about this install, so it can decide.
+   *
+   * `userId` is the person's email once they are signed in, because that is
+   * what "turn this on for this customer" means and Unleash's own
+   * `userWithId` strategy takes a list of them. Signed out, or with the
+   * privacy switch off, it falls back to the install id, so a rollout still
+   * has something stable to be sticky on.
+   *
+   * `sessionId` is always the install id, never the email. That keeps the
+   * per-machine identity available as a stickiness option: a rollout keyed on
+   * `sessionId` stays put when someone signs in or out, which is the property
+   * a gradual rollout needs and the one a person-keyed rollout cannot have.
+   *
+   * The account also appears in the properties, where a constraint can match
+   * the plan or the tier, so "this is a Pro feature" is a server decision
+   * rather than a compiled-in one. That does mean the flag server learns the
+   * email of signed-in users, which is a real thing to have decided, so it is
+   * a switch on the privacy page.
+   */
   context(): UnleashContext {
-    const remote = this.#settings.get().flags.remote;
+    const settings = this.#settings.get();
+    const remote = settings.flags.remote;
+    const account = remote.identify ? this.#account?.() : undefined;
     return {
-      userId: this.#settings.installId(),
+      userId: account?.email || this.#settings.installId(),
       sessionId: this.#settings.installId(),
-      environment: remote.environment || 'production',
+      environment: FLAG_ENVIRONMENT,
       appName: 'mjolnir',
       properties: {
         platform: platform(),
         osRelease: release(),
         version: this.#version,
-        channel: this.#settings.get().updates.channel,
+        channel: settings.updates.channel,
+        // Always present, so a constraint can be written against the free
+        // tier without having to express "the property is missing".
+        tier: account?.tier ?? 'free',
+        ...(account?.email ? { email: account.email } : {}),
+        ...(account?.accountId ? { accountId: account.accountId } : {}),
+        ...(account?.plan ? { plan: account.plan } : {}),
       },
     };
+  }
+
+  /**
+   * Where the account comes from.
+   *
+   * A function rather than a reference, because the flag store is built before
+   * the account store and must not care whether one exists: a build with no
+   * account at all evaluates flags exactly as it does now.
+   */
+  setAccountSource(source: () => { tier: string; email?: string; accountId?: string; plan?: string } | undefined): void {
+    this.#account = source;
   }
 
   states(): FlagState[] {
@@ -147,7 +187,7 @@ export class FlagStore {
         // with, so nobody has to paste anything for flags to work.
         token: remote.token || BUILD.flagsToken,
         appName: 'mjolnir',
-        environment: remote.environment,
+        environment: FLAG_ENVIRONMENT,
         instanceId: this.#settings.installId(),
       });
       this.#features = Object.fromEntries(features.map((feature) => [feature.name, feature]));
@@ -167,7 +207,7 @@ export class FlagStore {
       url: remote.url,
       token: remote.token || BUILD.flagsToken,
       appName: 'mjolnir',
-      environment: remote.environment,
+      environment: FLAG_ENVIRONMENT,
       instanceId: this.#settings.installId(),
     };
   }

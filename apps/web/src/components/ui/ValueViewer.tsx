@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Copy, Download } from 'lucide-react';
+import { Copy, Download, Maximize2, Minimize2 } from 'lucide-react';
 import { parse as parseYaml } from 'yaml';
 import { Modal } from './Modal.tsx';
 import { Button } from './Button.tsx';
 import { copyText } from './ContextMenu.tsx';
 import { DataTree } from '../storage/DataTree.tsx';
-import { YamlEditor } from '../YamlEditor.tsx';
+import { YamlEditor, languageFor, type EditorLanguage } from '../YamlEditor.tsx';
 import { formatBytes } from '../columns.tsx';
 
 /**
@@ -29,15 +29,21 @@ export function ValueViewer({
   title,
   subtitle,
   value,
+  language: forced,
   onClose,
 }: {
   open: boolean;
   title: string;
   subtitle?: string | undefined;
   value: string;
+  /** When the caller knows: a ConfigMap key ending .sh is shell, not JSON. */
+  language?: EditorLanguage | undefined;
   onClose: () => void;
 }) {
   const [view, setView] = useState<'tree' | 'source'>('tree');
+  // Some values are a whole script or a whole manifest, and a modal two
+  // thirds the height of the window is not where you read one.
+  const [full, setFull] = useState(false);
 
   /**
    * JSON first, then YAML, then neither.
@@ -67,7 +73,9 @@ export function ValueViewer({
     return null;
   }, [value]);
 
-  const language = structure ? (value.trim().startsWith('{') || value.trim().startsWith('[') ? 'json' : 'yaml') : 'plain';
+  const language: EditorLanguage =
+    forced ??
+    (structure ? (value.trim().startsWith('{') || value.trim().startsWith('[') ? 'json' : 'yaml') : languageFor(title));
   const showing = structure ? view : 'source';
 
   return (
@@ -82,7 +90,7 @@ export function ValueViewer({
           {structure ? ` · ${language}` : ''}
         </span>
       }
-      width={980}
+      width={full ? 2400 : 980}
       testId="value-viewer"
       footer={
         <>
@@ -105,6 +113,15 @@ export function ValueViewer({
               ))}
             </span>
           ) : null}
+          <Button
+            variant="ghost"
+            data-testid="value-fullscreen"
+            onClick={() => setFull((current) => !current)}
+            icon={full ? <Minimize2 size={12} strokeWidth={1.9} /> : <Maximize2 size={12} strokeWidth={1.9} />}
+            hint={full ? 'Back to a window' : 'Use the whole window'}
+          >
+            {full ? 'Restore' : 'Full screen'}
+          </Button>
           <Button variant="ghost" onClick={() => copyText(value, 'Value copied')} icon={<Copy size={12} strokeWidth={1.9} />}>
             Copy
           </Button>
@@ -125,7 +142,7 @@ export function ValueViewer({
         </>
       }
     >
-      <div className="mb-4 flex h-[62vh] min-h-[300px] flex-col overflow-hidden rounded-lg border border-line bg-sunken">
+      <div className={`mb-4 flex flex-col overflow-hidden rounded-lg border border-line bg-sunken ${full ? 'h-[82vh]' : 'h-[62vh] min-h-[300px]'}`}>
         {showing === 'tree' && structure ? (
           <DataTree value={structure.value} testId="value-tree" />
         ) : (

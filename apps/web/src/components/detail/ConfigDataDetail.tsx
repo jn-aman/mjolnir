@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Copy, Eye, EyeOff } from 'lucide-react';
+import { Copy, Eye, EyeOff, Maximize2 } from 'lucide-react';
 import { Button } from '../ui/Button.tsx';
 import { copyEntry, copyText, Menu, type MenuEntry } from '../ui/ContextMenu.tsx';
 import { EditableKeyValues } from './EditableKeyValues.tsx';
 import { annotationValue, labelKey, labelValue } from '../../lib/validate.ts';
+import { BIG_VALUE, ValueViewer } from '../ui/ValueViewer.tsx';
 
 /**
  * A ConfigMap or a Secret, key by key.
@@ -29,12 +30,21 @@ function decode(value: string): string {
 
 export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDetailProps) {
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [opened, setOpened] = useState<{ key: string; value: string } | null>(null);
   const secret = kind === 'Secret';
   const entries = Object.entries(object.data ?? {}).sort(([a], [b]) => a.localeCompare(b));
   const binary = Object.keys(object.binaryData ?? {});
   const show = (key: string) => revealed.has(key);
 
   return (
+    <>
+      <ValueViewer
+        open={opened !== null}
+        title={opened?.key ?? ''}
+        subtitle={object.metadata?.name}
+        value={opened?.value ?? ''}
+        onClose={() => setOpened(null)}
+      />
     <div className="space-y-5" data-testid="config-data">
       <div className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12px]">
         <span className="text-secondary">Kind</span><span className="font-mono text-primary">{kind}{object.type ? ` · ${object.type}` : ''}</span>
@@ -58,6 +68,7 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
             const visible = !secret || show(key);
             const multiline = value.includes('\n');
             const menu: MenuEntry[] = [
+              ...(value.length > BIG_VALUE ? [{ id: 'open', label: 'Open in a viewer', onSelect: () => setOpened({ key, value }) }] : []),
               ...copyEntry('copy-value', secret ? 'Copy decoded value' : 'Copy value', value),
               ...copyEntry('copy-key', 'Copy key', key),
               ...(secret ? [{ id: 'reveal', label: visible ? 'Hide' : 'Reveal', onSelect: () => setRevealed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }) }] : []),
@@ -73,6 +84,15 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
                       <Button variant="ghost" data-testid={`reveal-${key}`} aria-label={visible ? `Hide ${key}` : `Reveal ${key}`} onClick={() => setRevealed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} icon={visible ? <EyeOff size={12} strokeWidth={1.9} /> : <Eye size={12} strokeWidth={1.9} />}>
                         {visible ? 'Hide' : 'Reveal'}
                       </Button>
+                    ) : null}
+                    {/*
+                      A ConfigMap key is regularly a whole script. Reading one
+                      through a 260px window with the scrollbar at the far
+                      right is not reading it, so anything of any size gets the
+                      same viewer a file does, full screen if it wants it.
+                    */}
+                    {value.length > BIG_VALUE && visible ? (
+                      <Button variant="ghost" data-testid={`open-${key}`} aria-label={`Open ${key}`} onClick={() => setOpened({ key, value })} icon={<Maximize2 size={12} strokeWidth={1.9} />}>Open</Button>
                     ) : null}
                     <Button variant="ghost" aria-label={`Copy ${key}`} onClick={() => copyText(value, `${key} copied`)} icon={<Copy size={12} strokeWidth={1.9} />}>Copy</Button>
                   </div>
@@ -105,5 +125,6 @@ export function ConfigDataDetail({ kind, object, onPatchMetadata }: ConfigDataDe
         </>
       ) : null}
     </div>
+    </>
   );
 }

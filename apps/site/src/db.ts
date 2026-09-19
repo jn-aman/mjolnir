@@ -64,6 +64,15 @@ export interface Organisation {
   readonly enforceSso: boolean;
 }
 
+export interface Identity {
+  readonly provider: string;
+  /** The provider's stable id for this person. Never their email. */
+  readonly subject: string;
+  readonly accountId: string;
+  readonly email: string;
+  readonly linkedAt: string;
+}
+
 export interface PendingGrant {
   readonly deviceCode: string;
   readonly userCode: string;
@@ -120,6 +129,27 @@ const SCHEMA = `
     verified_at text,
     verification_token text not null
   );
+
+  -- One human, many ways in.
+  --
+  -- The same person will sign in with an email code today, GitHub tomorrow
+  -- and their company's Okta next month, and all three have to land on one
+  -- account. Without this table they get three, three seats and three
+  -- subscriptions, and the support ticket says "I paid and it says I have not".
+  --
+  -- The subject is the provider's own stable id, never the email: GitHub
+  -- usernames and work email addresses both change, and an account that
+  -- follows a changed email is an account that can be taken over by whoever
+  -- gets given the old one.
+  create table if not exists identities (
+    provider text not null,
+    subject text not null,
+    account_id text not null references accounts(id),
+    email text not null,
+    linked_at text not null,
+    primary key (provider, subject)
+  );
+  create index if not exists identities_account on identities(account_id);
 
   create table if not exists subscriptions (
     id text primary key,
@@ -249,6 +279,40 @@ export class Store {
 
   setCustomerId(accountId: string, customerId: string): void {
     this.#db.prepare('update accounts set customer_id = ? where id = ?').run(customerId, accountId);
+  }
+
+  // ---- identities -----------------------------------------------------
+
+  identityFor(provider: string, subject: string): Identity | null {
+    const row = this.#db.prepare('select * from identities where provider = ? and subject = ?').get(provider, subject) as Row | undefined;
+    return row
+      ? {
+          provider: String(row['provider']),
+          subject: String(row['subject']),
+          accountId: String(row['account_id']),
+          email: String(row['email']),
+          linkedAt: String(row['linked_at']),
+        }
+      : null;
+  }
+
+  identitiesFor(accountId: string): Identity[] {
+    return (this.#db.prepare('select * from identities where account_id = ? order by linked_at').all(accountId) as Row[]).map((row) => ({
+      provider: String(row['provider']),
+      subject: String(row['subject']),
+      accountId: String(row['account_id']),
+      email: String(row['email']),
+      linkedAt: String(row['linked_at']),
+    }));
+  }
+
+  linkIdentity(identity: Omit<Identity, 'linkedAt'>): void {
+    this.#db
+      .prepare(
+        `insert into identities (provider, subject, account_id, email, linked_at) values (?, ?, ?, ?, ?)
+         on conflict(provider, subject) do update set email = excluded.email`,
+      )
+      .run(identity.provider, identity.subject, identity.accountId, normaliseEmail(identity.email), new Date().toISOString());
   }
 
   // ---- organisations --------------------------------------------------

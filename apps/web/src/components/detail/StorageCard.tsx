@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Archive, Copy, Eye, ExternalLink } from 'lucide-react';
 import { Button } from '../ui/Button.tsx';
+import { Field } from '../ui/Field.tsx';
 import { copyText, copyEntry, Menu, SEPARATOR, type MenuEntry } from '../ui/ContextMenu.tsx';
 
 /**
@@ -121,6 +122,20 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
           if (accessKey && secretKey) break;
         }
       }
+      // Whatever was typed on this card wins, because someone typing a key
+      // into a box has more information than any amount of guessing.
+      accessKey = typedAccess.trim() || accessKey;
+      secretKey = typedSecret.trim() || secretKey;
+
+      // Nothing found and nothing typed: ask, right here. Sending someone to
+      // another screen to enter two strings, having just told them which two
+      // strings are missing, is a worse answer than a pair of fields.
+      if (!accessKey || !secretKey) {
+        setAsking(true);
+        setError(null);
+        return;
+      }
+      setAsking(false);
       setError(null);
       // The server looks again on its side, so an empty pair here is not
       // fatal; it only becomes an error once it has failed there too.
@@ -144,6 +159,10 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
   };
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // Typed here, used once, never stored. See `typed` below.
+  const [typedAccess, setTypedAccess] = useState('');
+  const [typedSecret, setTypedSecret] = useState('');
+  const [asking, setAsking] = useState(false);
   const endpoint = podIP ? `http://${podIP}:${detection.port}` : `http://${pod}.${namespace}:${detection.port}`;
   const forward = `kubectl -n ${namespace} port-forward pod/${pod} ${detection.port}:${detection.port}${detection.consolePort ? ` ${detection.consolePort}:${detection.consolePort}` : ''}`;
 
@@ -206,7 +225,16 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
         />
       );
     }
-    if (!entry) return <Row label={label} value="not set in env" muted />;
+    if (!entry) {
+      return (
+        <Row
+          label={label}
+          value={(label === 'Access key' ? typedAccess : typedSecret) ? 'entered above' : 'not named in the pod'}
+          hint={(label === 'Access key' ? typedAccess : typedSecret) ? undefined : 'Open the browser and Mjolnir will ask for it'}
+          muted
+        />
+      );
+    }
     const ref = entry.valueFrom?.secretKeyRef;
     const shown = entry.value ?? revealed[entry.name ?? ''];
     if (shown !== undefined) {
@@ -279,6 +307,46 @@ export function StorageCard({ detection, pod, namespace, podIP, onRevealSecret, 
           {credential('Access key', detection.access, ACCESS_KEYS)}
           {credential('Secret key', detection.secret, SECRET_KEYS)}
         </div>
+        {asking ? (
+          <form
+            className="mt-3 space-y-2 rounded-md border border-line bg-sunken p-2.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void openBrowser();
+            }}
+          >
+            <p className="text-[11.5px] leading-[1.5] text-tertiary">
+              This pod does not name its keys in the environment, so Mjolnir cannot read them. Enter them and it will connect.
+              They are used to make the connection and are not written anywhere else.
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <Field
+                id="storage-access-key"
+                label="Access key"
+                value={typedAccess}
+                onChange={(event) => setTypedAccess(event.target.value)}
+                mono
+                className="w-[200px]"
+                autoFocus
+              />
+              <Field
+                id="storage-secret-key"
+                label="Secret key"
+                type="password"
+                value={typedSecret}
+                onChange={(event) => setTypedSecret(event.target.value)}
+                mono
+                className="w-[200px]"
+              />
+              <Button type="submit" variant="primary" disabled={!typedAccess.trim() || !typedSecret.trim()}>
+                Connect
+              </Button>
+              <Button variant="ghost" onClick={() => setAsking(false)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        ) : null}
         {error ? <p className="mt-2 text-[11.5px] text-error">{error}</p> : null}
       </div>
     </Menu>

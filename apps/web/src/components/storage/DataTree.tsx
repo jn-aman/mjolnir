@@ -52,7 +52,15 @@ function flatten(value: unknown, expanded: Set<string>, matches: Set<string> | n
     if (!expanded.has(path)) return;
     for (const [key, child] of children) walk(child, childPath(path, key, kind), key, depth + 1);
   };
-  walk(value, '$', '$', 0);
+  // No root row. `$` is jargon from a query language nobody asked to see, and
+  // the thing it names is already the title of the window. The top level of
+  // the document is the top level of the list.
+  const kind = kindOf(value);
+  if (kind === 'leaf') {
+    walk(value, '$', '$', 0);
+  } else {
+    for (const [key, child] of entriesOf(value)) walk(child, childPath('', key, kind), key, 0);
+  }
   return out;
 }
 
@@ -107,9 +115,9 @@ export function DataTree({ value, testId = 'data-tree' }: { value: unknown; test
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     // Open the root and its immediate children: enough to see the shape
     // without paying for the whole document.
-    const start = new Set<string>(['$']);
+    const start = new Set<string>(['']);
     const kind = kindOf(value);
-    if (kind !== 'leaf') for (const [key] of entriesOf(value).slice(0, 200)) start.add(childPath('$', key, kind));
+    if (kind !== 'leaf') for (const [key] of entriesOf(value).slice(0, 200)) start.add(childPath('', key, kind));
     return start;
   });
   const [needle, setNeedle] = useState('');
@@ -170,7 +178,7 @@ export function DataTree({ value, testId = 'data-tree' }: { value: unknown; test
             type="button"
             aria-label="Collapse everything"
             data-testid="tree-collapse"
-            onClick={() => setExpanded(new Set(['$']))}
+            onClick={() => setExpanded(new Set([''])) }
             className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
           >
             <Minimize2 size={12} strokeWidth={2} />
@@ -293,20 +301,16 @@ function Row({
 }
 
 /**
- * How many are inside, as a chip rather than punctuation.
+ * How many are inside, said quietly.
  *
- * `{ 4 }` and `[ 2 ]` read as syntax, which is exactly what a tree view is
- * for getting away from. A chip says "four things in here" at a glance and
- * distinguishes a list from a record by colour rather than by bracket shape.
+ * It was a coloured pill and that was too loud: a document with thirty
+ * containers in it became thirty orange badges, and the thing you were
+ * reading was the values. Dim text carries the same fact and stays out of the
+ * way, which is what a count is for.
  */
 function Count({ kind, count }: { kind: NodeKind; count: number }) {
-  const tint = kind === 'array' ? 'var(--series-4)' : 'var(--series-2)';
   return (
-    <span
-      className="shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold tabular-nums"
-      style={{ color: tint, background: `color-mix(in oklab, ${tint} 14%, transparent)` }}
-      title={kind === 'array' ? `${count} items` : `${count} keys`}
-    >
+    <span className="shrink-0 text-tertiary">
       {count} {kind === 'array' ? (count === 1 ? 'item' : 'items') : count === 1 ? 'key' : 'keys'}
     </span>
   );
@@ -342,15 +346,11 @@ function short(value: unknown): string {
  */
 function Leaf({ value, needle }: { value: unknown; needle: string }) {
   if (value === null || value === undefined) {
-    return <span className="shrink-0 rounded-xs border border-line px-1 text-[10.5px] uppercase tracking-[0.04em] text-tertiary">null</span>;
+    return <span className="shrink-0 italic text-tertiary">null</span>;
   }
   if (typeof value === 'boolean') {
-    const tint = value ? 'var(--status-ok)' : 'var(--text-tertiary)';
-    return (
-      <span className="shrink-0 rounded-xs px-1 text-[10.5px] font-semibold uppercase tracking-[0.04em]" style={{ color: tint, background: `color-mix(in oklab, ${tint} 14%, transparent)` }}>
-        {String(value)}
-      </span>
-    );
+    // A word, coloured. The badge version shouted, and true is not an alert.
+    return <span className={`shrink-0 ${value ? 'text-ok' : 'text-tertiary'}`}>{String(value)}</span>;
   }
   if (typeof value === 'number') {
     return (

@@ -249,7 +249,12 @@ export function FlagsSection({ settings, onSave }: { settings: AppSettings | nul
                 placeholder={settings?.flags.remote.token ? 'set' : 'paste a client token'}
                 onChange={(event) => setToken(event.target.value)}
               />
-              <Field id="flag-env" label="Environment" value={environment} onChange={(event) => setEnvironment(event.target.value)} placeholder="production" />
+              {/*
+                Not editable. One build ships to everyone, so a second flag
+                environment is only a second place for a toggle's state to
+                live and a second place to forget to change it.
+              */}
+              <Field id="flag-env" label="Environment" value="production" readOnly disabled />
               <div>
                 <label htmlFor="flag-interval" className="mb-1 block text-[11.5px] font-medium text-secondary">
                   Refresh every

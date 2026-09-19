@@ -143,14 +143,13 @@ export function EditableKeyValues({ values, onPatch, testId, validateKey, valida
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.85 }}
             transition={{ type: 'spring', stiffness: 520, damping: 32 }}
-            title={`${key}=${value}`}
             data-testid="kv-chip"
-            className={`group inline-flex items-center gap-1 rounded-md border bg-overlay py-[3px] pl-2 pr-1 font-mono text-[11px] transition-colors duration-100 ${
+            className={`group inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border bg-overlay py-[3px] pl-2 pr-1 font-mono text-[11px] transition-colors duration-100 ${
               isEditing ? 'border-focus' : 'border-[var(--border-strong)] hover:border-focus'
             } ${isBusy ? 'opacity-50' : ''}`}
           >
-            <span className="text-secondary">{key}</span>
-            <span className="text-tertiary">=</span>
+            <span className="max-w-[280px] shrink-0 truncate text-secondary">{key}</span>
+            <span className="shrink-0 text-tertiary">=</span>
             {isEditing ? (
               <span ref={editBox} className="relative inline-flex">
               <input
@@ -190,7 +189,7 @@ export function EditableKeyValues({ values, onPatch, testId, validateKey, valida
                 data-testid="kv-open"
                 onClick={() => setOpened({ key, value })}
                 aria-label={`Open ${key}`}
-                className="max-w-[420px] truncate border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent hover:text-accent"
+                className="min-w-0 max-w-[360px] truncate border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent hover:text-accent"
               >
                 {value}
               </button>
@@ -202,8 +201,7 @@ export function EditableKeyValues({ values, onPatch, testId, validateKey, valida
                   setDraft(value);
                 }}
                 aria-label={`Edit ${key}`}
-                title="Click to edit"
-                className={`border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent `}
+                className="max-w-[360px] truncate border-b border-dashed border-[var(--border-strong)] text-left text-primary transition-colors duration-100 hover:border-accent"
               >
                 {value || <span className="text-tertiary">(empty)</span>}
               </button>

@@ -360,6 +360,25 @@ export class AccountStore {
     return this.status();
   }
 
+  /**
+   * The bits of the account a flag rule may match on.
+   *
+   * Read from the lease, not from the network, so it is available offline and
+   * costs nothing to ask for. Never the refresh token, and never anything
+   * about a cluster.
+   */
+  identityForFlags(): { tier: string; email?: string; accountId?: string; plan?: string } | undefined {
+    const lease = this.leaseStatus();
+    if (!('lease' in lease)) return { tier: 'free' };
+    const claims = lease.lease.claims;
+    return {
+      tier: lease.tier,
+      email: claims.email,
+      accountId: claims.customerId,
+      plan: claims.plan,
+    };
+  }
+
   start(): void {
     this.stop();
     void this.renew();

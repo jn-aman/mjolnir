@@ -48,8 +48,18 @@ export const FlagSettings = z.object({
       token: z.string().default(''),
       environment: z.string().default('production'),
       refreshSeconds: z.number().int().min(15).max(86_400).default(30),
+      /**
+       * Tell the flag server who is signed in.
+       *
+       * On, this sends the account's email, id and plan alongside the flag
+       * request, which is what lets a feature be enabled for one customer or
+       * for a paid plan without a release. Off, the flag server sees an
+       * anonymous install id and nothing else, and plan-gated flags simply
+       * stay off. Signed out it makes no difference either way.
+       */
+      identify: z.boolean().default(true),
     })
-    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 30 }),
+    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 30, identify: true }),
 });
 
 /**

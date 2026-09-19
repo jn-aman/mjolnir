@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { findTool, toolEnv } from '../shell-path.ts';
 import { existsSync } from 'node:fs';
 import { Router } from 'express';
 import { HttpError, handle } from '../http.ts';
@@ -9,13 +10,10 @@ import { HttpError, handle } from '../http.ts';
  * vulnerability with its fixed version. No Trivy: the answer says how to
  * get it, not a fake empty result.
  */
-const CANDIDATES = ['/opt/homebrew/bin/trivy', '/usr/local/bin/trivy', '/usr/bin/trivy'];
-
-function trivyPath(): string | null {
+async function trivyPath(): Promise<string | null> {
   const configured = process.env['MJOLNIR_TRIVY'];
   if (configured && existsSync(configured)) return configured;
-  for (const candidate of CANDIDATES) if (existsSync(candidate)) return candidate;
-  return null;
+  return findTool('trivy');
 }
 
 interface TrivyResult {
@@ -31,7 +29,7 @@ export function scanRoutes(): Router {
   router.get(
     '/',
     handle(async (_req, res) => {
-      const path = trivyPath();
+      const path = await trivyPath();
       res.json({ available: path !== null, path, install: 'brew install trivy (macOS), or https://trivy.dev/latest/getting-started/installation/' });
     }),
   );
@@ -42,15 +40,16 @@ export function scanRoutes(): Router {
       const body = req.body as { image?: unknown; force?: boolean };
       const image = String(body?.image ?? '').trim();
       if (!image) throw HttpError.badRequest('image is required');
-      const path = trivyPath();
+      const path = await trivyPath();
       if (!path) throw new HttpError(503, 'upstream', 'Trivy is not installed. brew install trivy, then scan again.');
       const cached = cache.get(image);
       if (cached && Date.now() - cached.at < 10 * 60_000 && !body.force) {
         res.json({ cached: true, ...cached.report });
         return;
       }
+      const env = await toolEnv({ NO_COLOR: '1' });
       const output = await new Promise<string>((resolve, reject) => {
-        execFile(path, ['image', '--quiet', '--format', 'json', '--scanners', 'vuln', image], { maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000 }, (error, stdout, stderr) => {
+        execFile(path, ['image', '--quiet', '--format', 'json', '--scanners', 'vuln', image], { maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000, env }, (error, stdout, stderr) => {
           if (error) reject(new Error(stderr.trim().split('\n').pop() || error.message));
           else resolve(stdout);
         });
@@ -78,7 +77,7 @@ export function scanRoutes(): Router {
       const image = String(req.query['image'] ?? '').trim();
       if (!image) throw HttpError.badRequest('image is required');
       const force = req.query['force'] === 'true';
-      const path = trivyPath();
+      const path = await trivyPath();
 
       res.writeHead(200, {
         'content-type': 'text/event-stream',
@@ -107,7 +106,11 @@ export function scanRoutes(): Router {
       }
 
       send('log', { line: `trivy image ${image}` });
-      const child = spawn(path, ['image', '--format', 'json', '--scanners', 'vuln', image], { env: { ...process.env, NO_COLOR: '1' } });
+      // Trivy shells out further, to a credential helper for the registry it
+      // pulls the vulnerability database from. Without the real PATH that
+      // fails deep inside Trivy with a message about a binary nobody asked
+      // for, and from the outside the scanner simply looks broken.
+      const child = spawn(path, ['image', '--format', 'json', '--scanners', 'vuln', image], { env: await toolEnv({ NO_COLOR: '1' }) });
 
       let out = '';
       let rest = '';

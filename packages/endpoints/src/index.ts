@@ -36,6 +36,17 @@ export const ENDPOINTS = {
 export type EndpointName = keyof typeof ENDPOINTS;
 
 /**
+ * The only flag environment there is.
+ *
+ * A desktop app ships one build to everyone. There is no staging fleet
+ * pointed at a different set of toggles, so a second environment is only ever
+ * a second place for a flag's state to live and a second place to forget to
+ * change it. Unleash starts projects with a `development` environment; it is
+ * disabled on ours and this is the app's half of the same decision.
+ */
+export const FLAG_ENVIRONMENT = 'production';
+
+/**
  * True when a URL points at the apex or one of its subdomains, over HTTPS.
  *
  * Checked with the URL parser rather than a string match, because

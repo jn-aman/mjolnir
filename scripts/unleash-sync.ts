@@ -25,6 +25,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const outFile = join(here, 'unleash-import.json');
 
 const PROJECT = process.env['UNLEASH_PROJECT'] ?? 'default';
+/**
+ * One environment.
+ *
+ * A desktop app ships one build to everyone; there is no staging fleet to
+ * point at a different set of toggles. A second environment would be a second
+ * place for a flag's state to live and a second place to forget to change it.
+ */
 const ENVIRONMENT = process.env['UNLEASH_ENVIRONMENT'] ?? 'production';
 
 /** The shape Unleash's import endpoint takes. */
@@ -139,7 +146,12 @@ async function push(): Promise<void> {
 
     for (const environment of environments) {
       const base = `${url}/api/admin/projects/${PROJECT}/features/${encodeURIComponent(flag.id)}/environments/${encodeURIComponent(environment)}`;
-      const rollout = flag.fallback ? '100' : '0';
+      // Always 100. The toggle is the on/off switch, and a strategy pinned at
+      // 0% makes it a switch that does nothing: flipping a flag on in the
+      // Unleash UI left it off in every client, with no indication why. If a
+      // gradual rollout is wanted, that is a deliberate edit to the strategy
+      // afterwards, not the state every flag starts in.
+      const rollout = '100';
 
       // Adopting means replacing whatever strategies are there, so the result
       // is the build default and not the build default plus someone's old 40%.
@@ -154,9 +166,10 @@ async function push(): Promise<void> {
 
       const strategy = await call(`${base}/strategies`, token, {
         name: 'flexibleRollout',
-        // Stuck to the installation id, so a machine inside a rollout stays
-        // inside it between restarts and across releases.
-        parameters: { rollout, stickiness: 'userId', groupId: flag.id },
+        // `default` stickiness follows userId then sessionId, which is what
+        // the app sends, so a machine inside a partial rollout stays inside it
+        // between restarts.
+        parameters: { rollout, stickiness: 'default', groupId: flag.id },
         constraints: [],
       });
       steps.push({ flag: flag.id, what: `strategy in ${environment}`, status: strategy.status, ...(strategy.status >= 400 ? { note: strategy.text.slice(0, 160) } : {}) });
@@ -174,9 +187,9 @@ async function push(): Promise<void> {
   for (const step of failed) process.stdout.write(`  FAILED ${step.flag} ${step.what}: ${step.status} ${step.note ?? ''}\n`);
   const on = FLAGS.filter((flag) => flag.fallback).length;
   process.stdout.write(
-    `\n  ${on} on at 100%, ${FLAGS.length - on} off at 0%, which is exactly what this\n` +
-      `  build already does. Change one and every install follows; a machine's\n` +
-      `  answer is stable once you do.\n\n`,
+    `\n  ${on} toggles on, ${FLAGS.length - on} off, which is exactly what this build\n` +
+      `  already does. Every strategy is at 100%, so the toggle is the switch:\n` +
+      `  turn one on and every install has it within 30 seconds.\n\n`,
   );
   if (failed.length > 0) process.exit(1);
 }

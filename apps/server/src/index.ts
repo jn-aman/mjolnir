@@ -26,6 +26,7 @@ import { helmRoutes } from './routes/helm.ts';
 import { storageRoutes } from './routes/storage.ts';
 import { accountRoutes } from './routes/account.ts';
 import { AccountStore } from './account.ts';
+import { MetricsCollector } from './metrics.ts';
 import { flagRoutes } from './routes/flags.ts';
 import { updateRoutes } from './routes/updates.ts';
 import { telemetryRoutes } from './routes/telemetry.ts';
@@ -65,6 +66,9 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
 
   const crds = new CrdCatalogue(registry);
 
+  // Kubernetes keeps no usage history, so something has to accumulate it.
+  const metrics = new MetricsCollector(registry);
+
   const flags = new FlagStore(settings, APP_VERSION);
   flags.start();
 
@@ -73,6 +77,10 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   // opens, still connects, and still honours the lease it already has.
   const account = new AccountStore(APP_VERSION);
   account.start();
+
+  // Flags can then be aimed at a customer or at a paid plan, decided on the
+  // server rather than compiled in.
+  flags.setAccountSource(() => account.identityForFlags());
 
   const telemetry = new Telemetry(settings, APP_VERSION);
   telemetry.start();
@@ -104,7 +112,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/resources', resourceRoutes(registry, crds));
   app.use('/api/forwards', forwardRoutes(forwards));
   app.use('/api/logs', logRoutes(registry));
-  app.use('/api/metrics', metricRoutes(registry));
+  app.use('/api/metrics', metricRoutes(metrics));
   app.use(errorHandler);
 
   /**
@@ -164,6 +172,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
       telemetry.stop();
       await telemetry.flush();
       account.stop();
+      metrics.stop();
       await registry.shutdown();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
