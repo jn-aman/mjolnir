@@ -4,6 +4,7 @@
   "include": ["src/**/*"],
   "references": [
     { "path": "../../packages/logger" },
+    { "path": "../../packages/brand" },
     { "path": "../../packages/licensing" },
     { "path": "../../packages/account" },
     { "path": "../../packages/endpoints" },

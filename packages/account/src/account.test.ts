@@ -8,7 +8,7 @@ import { enforcementNote, offeredProviders } from './providers.ts';
 const keys = generateKeyPairSync('ed25519');
 const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString();
 const DEVICE = 'device-aaaaaaaa';
-const OFFER = { available: ['email' as const], enforced: null, enforcedBy: null };
+const OFFER = { available: ['email' as const], enforced: null, enforcedBy: null, startUri: null };
 const DAY = 86_400;
 
 function issue(overrides: Partial<Lease> = {}, key = keys.privateKey): string {
@@ -283,25 +283,25 @@ describe('device grant', () => {
 
 describe('providers', () => {
   it('puts the everyday ways in first and the enterprise one last', () => {
-    const offered = offeredProviders({ available: ['okta', 'email', 'github'], enforced: null, enforcedBy: null });
+    const offered = offeredProviders({ available: ['okta', 'email', 'github'], enforced: null, enforcedBy: null, startUri: null });
     expect(offered.map((p) => p.id)).toEqual(['email', 'github', 'okta']);
   });
 
   it('offers only the enforced provider, so nobody makes a second identity by accident', () => {
-    const offered = offeredProviders({ available: ['email', 'github', 'okta'], enforced: 'okta', enforcedBy: 'Acme' });
+    const offered = offeredProviders({ available: ['email', 'github', 'okta'], enforced: 'okta', enforcedBy: 'Acme', startUri: null });
     expect(offered.map((p) => p.id)).toEqual(['okta']);
   });
 
   it('says whose policy it is rather than just refusing', () => {
-    expect(enforcementNote({ available: [], enforced: 'okta', enforcedBy: 'Acme' })).toBe(
+    expect(enforcementNote({ available: [], enforced: 'okta', enforcedBy: 'Acme', startUri: null })).toBe(
       'Acme requires everyone to sign in through Okta.',
     );
-    expect(enforcementNote({ available: [], enforced: 'okta', enforcedBy: null })).toMatch(/Your organisation requires/);
-    expect(enforcementNote({ available: ['email'], enforced: null, enforcedBy: null })).toBeNull();
+    expect(enforcementNote({ available: [], enforced: 'okta', enforcedBy: null, startUri: null })).toMatch(/Your organisation requires/);
+    expect(enforcementNote({ available: ['email'], enforced: null, enforcedBy: null, startUri: null })).toBeNull();
   });
 
   it('always offers something, even from an empty answer', () => {
-    expect(offeredProviders({ available: [], enforced: null, enforcedBy: null }).map((p) => p.id)).toEqual(['email']);
+    expect(offeredProviders({ available: [], enforced: null, enforcedBy: null, startUri: null }).map((p) => p.id)).toEqual(['email']);
   });
 
   it('asks for a provider and a login hint when it has them', async () => {

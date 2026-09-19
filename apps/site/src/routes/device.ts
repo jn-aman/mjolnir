@@ -16,7 +16,10 @@ const POLL_INTERVAL_SECONDS = 5;
  * has approved in a browser. Everything before that point is a pending row
  * with no account attached.
  */
-export function deviceRoutes(store: Store, options: { verificationUri: string }): Router {
+export function deviceRoutes(
+  store: Store,
+  options: { verificationUri: string; apiUrl?: string; oauthProviders?: readonly string[] },
+): Router {
   const router = Router();
 
   router.post('/code', (req, res) => {
@@ -50,8 +53,14 @@ export function deviceRoutes(store: Store, options: { verificationUri: string })
     // What this person may use. An organisation that enforces Okta gets one
     // button, because showing a GitHub button to someone who must not use it
     // produces a second identity for the same human and a support ticket.
+    //
+    // The browser providers are the ones this deployment actually has apps
+    // for. A GitHub button on a server with no GitHub app is a button that
+    // opens a browser and dead-ends there, which is the one failure people
+    // never report and always remember.
     const enforced = organisation?.enforceSso ? 'okta' : null;
-    const available = enforced ? ['okta'] : ['email', 'github', 'google', ...(organisation ? ['okta'] : [])];
+    const browser = options.oauthProviders ?? ['github', 'google'];
+    const available = enforced ? ['okta'] : ['email', ...browser, ...(organisation ? ['okta'] : [])];
 
     res.json({
       device_code: grant.deviceCode,
@@ -60,7 +69,15 @@ export function deviceRoutes(store: Store, options: { verificationUri: string })
       verification_uri_complete: `${options.verificationUri}?code=${encodeURIComponent(grant.userCode)}`,
       expires_in: CODE_LIFETIME_SECONDS,
       interval: POLL_INTERVAL_SECONDS,
-      providers: { available, enforced, enforcedBy: enforced ? (organisation?.name ?? null) : null },
+      providers: {
+        available,
+        enforced,
+        enforcedBy: enforced ? (organisation?.name ?? null) : null,
+        // Where a browser button goes. Built here because the app should not
+        // be assembling our URLs, and because it carries the user code that
+        // binds the browser trip to this grant.
+        startUri: `${(options.apiUrl ?? '').replace(/\/+$/, '')}/api/auth/oauth/{provider}/start?user_code=${encodeURIComponent(grant.userCode)}`,
+      },
     });
   });
 

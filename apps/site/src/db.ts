@@ -73,6 +73,19 @@ export interface Identity {
   readonly linkedAt: string;
 }
 
+export interface OAuthState {
+  /** The opaque value the provider hands back, our only link to this attempt. */
+  readonly state: string;
+  readonly provider: string;
+  /** The device grant this browser trip is approving. */
+  readonly userCode: string;
+  /** The PKCE secret. Never leaves this table until the code is redeemed. */
+  readonly verifier: string;
+  /** For Okta: whose tenant we sent them to, so only that tenant can vouch. */
+  readonly organisationId: string | null;
+  readonly expiresAt: number;
+}
+
 export interface PendingGrant {
   readonly deviceCode: string;
   readonly userCode: string;
@@ -207,6 +220,23 @@ const SCHEMA = `
     primary key (email, code_hash)
   );
 
+  -- One row per browser trip to a provider and back.
+  --
+  -- It holds the PKCE verifier, which is the half of the exchange that never
+  -- travels through the browser, and the user code, which is what stops a
+  -- callback approving a grant other than the one it was started for. Rows are
+  -- spent on first use and swept on expiry, so a replayed callback finds
+  -- nothing.
+  create table if not exists oauth_states (
+    state text primary key,
+    provider text not null,
+    user_code text not null,
+    verifier text not null,
+    organisation_id text,
+    expires_at integer not null
+  );
+  create index if not exists oauth_states_expiry on oauth_states(expires_at);
+
   -- Every lease ever issued, so a support question has an answer and a
   -- revoked device can be told apart from one that never asked.
   create table if not exists leases (
@@ -329,6 +359,18 @@ export class Store {
       )
       .get(domain) as Row | undefined;
     return row ? toOrganisation(row) : null;
+  }
+
+  organisationById(id: string): Organisation | null {
+    const row = this.#db.prepare('select * from organisations where id = ?').get(id) as Row | undefined;
+    return row ? toOrganisation(row) : null;
+  }
+
+  /** The domains an organisation has proved it owns. */
+  verifiedDomains(organisationId: string): string[] {
+    return (
+      this.#db.prepare('select domain from domains where organisation_id = ? and verified_at is not null').all(organisationId) as Row[]
+    ).map((row) => String(row['domain']));
   }
 
   // ---- subscriptions --------------------------------------------------
@@ -481,7 +523,11 @@ export class Store {
                              expires_at, interval_seconds, account_id, status, last_polled_at)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict(device_code) do update set
-           account_id = excluded.account_id, status = excluded.status, last_polled_at = excluded.last_polled_at`,
+           account_id = excluded.account_id, status = excluded.status, last_polled_at = excluded.last_polled_at,
+           -- The provider is written back too, because the app only ever sent
+           -- a preference and the browser decides what actually happened. Left
+           -- out, an Okta sign-in reports itself as email on the settings page.
+           provider = excluded.provider`,
       )
       .run(
         grant.deviceCode,
@@ -515,10 +561,11 @@ export class Store {
   }
 
   /** Housekeeping: abandoned sign-ins and spent codes do not accumulate. */
-  sweep(now = Math.floor(Date.now() / 1000)): { grants: number; codes: number } {
+  sweep(now = Math.floor(Date.now() / 1000)): { grants: number; codes: number; states: number } {
     const grants = this.#db.prepare('delete from grants where expires_at < ?').run(now);
     const codes = this.#db.prepare('delete from email_codes where expires_at < ?').run(now);
-    return { grants: Number(grants.changes), codes: Number(codes.changes) };
+    const states = this.#db.prepare('delete from oauth_states where expires_at < ?').run(now);
+    return { grants: Number(grants.changes), codes: Number(codes.changes), states: Number(states.changes) };
   }
 
   // ---- email codes ----------------------------------------------------
@@ -551,6 +598,36 @@ export class Store {
     if (Number(row['attempts']) >= 5) return 'too-many';
     this.#db.prepare('delete from email_codes where email = ?').run(address);
     return 'ok';
+  }
+
+  // ---- oauth states ---------------------------------------------------
+
+  saveOAuthState(state: OAuthState): void {
+    this.#db
+      .prepare('insert into oauth_states (state, provider, user_code, verifier, organisation_id, expires_at) values (?, ?, ?, ?, ?, ?)')
+      .run(state.state, state.provider, state.userCode, state.verifier, state.organisationId, state.expiresAt);
+  }
+
+  /**
+   * Reads a state and spends it, in that order and only once.
+   *
+   * The delete is unconditional, including when the row has expired. A state
+   * that can be presented twice is a state that can be replayed, and an
+   * expired one is no more worth keeping than a used one.
+   */
+  claimOAuthState(state: string, now = Math.floor(Date.now() / 1000)): OAuthState | null {
+    const row = this.#db.prepare('select * from oauth_states where state = ?').get(state) as Row | undefined;
+    if (!row) return null;
+    this.#db.prepare('delete from oauth_states where state = ?').run(state);
+    if (Number(row['expires_at']) < now) return null;
+    return {
+      state: String(row['state']),
+      provider: String(row['provider']),
+      userCode: String(row['user_code']),
+      verifier: String(row['verifier']),
+      organisationId: row['organisation_id'] === null ? null : String(row['organisation_id']),
+      expiresAt: Number(row['expires_at']),
+    };
   }
 
   // ---- leases ---------------------------------------------------------

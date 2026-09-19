@@ -31,6 +31,7 @@ export {
   describeProvider,
   enforcementNote,
   offeredProviders,
+  providerStartUrl,
   IdentitySchema,
   ProviderOfferSchema,
   type Identity,

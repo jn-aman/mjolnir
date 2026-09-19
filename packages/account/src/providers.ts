@@ -70,6 +70,16 @@ export const ProviderOfferSchema = z.object({
   enforced: z.enum(PROVIDERS).nullable().default(null),
   /** For an enforced provider: whose policy it is, for the sentence on screen. */
   enforcedBy: z.string().nullable().default(null),
+  /**
+   * Where a browser button goes, with `{provider}` still in it.
+   *
+   * The site builds this, not the app. It already carries the user code that
+   * binds the browser trip to this grant, and it means a change to our URL
+   * layout is a deploy rather than a release. Null when the server is old
+   * enough not to send one, in which case the app falls back to the page with
+   * the code on it, which always works.
+   */
+  startUri: z.string().nullable().default(null),
 });
 export type ProviderOffer = z.infer<typeof ProviderOfferSchema>;
 
@@ -83,6 +93,17 @@ export const IdentitySchema = z.object({
   organisation: z.string().optional(),
 });
 export type Identity = z.infer<typeof IdentitySchema>;
+
+/**
+ * The URL that takes someone straight to a provider.
+ *
+ * Email has none: there is nowhere to send a browser that is not the page with
+ * the code on it. Everything else substitutes into the template the site sent.
+ */
+export function providerStartUrl(offer: ProviderOffer, id: ProviderId): string | null {
+  if (id === 'email' || !offer.startUri) return null;
+  return offer.startUri.replace('{provider}', id);
+}
 
 export function describeProvider(id: ProviderId): ProviderDescription {
   return PROVIDER_CATALOGUE[id];

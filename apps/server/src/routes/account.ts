@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PROVIDERS, enforcementNote, offeredProviders, type ProviderId } from '@mjolnir/account';
+import { PROVIDERS, enforcementNote, offeredProviders, providerStartUrl, type ProviderId } from '@mjolnir/account';
 import { ENDPOINTS } from '@mjolnir/endpoints';
 import type { AccountStore } from '../account.ts';
 import { handle, HttpError } from '../http.ts';
@@ -36,7 +36,15 @@ export function accountRoutes(account: AccountStore): Router {
           verificationUriComplete: code.verification_uri_complete ?? `${code.verification_uri}?code=${encodeURIComponent(code.user_code)}`,
           expiresIn: code.expires_in,
           interval: code.interval,
-          providers: offeredProviders(code.providers).map((entry) => ({ id: entry.id, label: entry.label, detail: entry.detail, enterprise: entry.enterprise })),
+          providers: offeredProviders(code.providers).map((entry) => ({
+            id: entry.id,
+            label: entry.label,
+            detail: entry.detail,
+            enterprise: entry.enterprise,
+            // Where the button goes. Present for everything but email, which
+            // has nowhere to send a browser other than the code page.
+            startUri: providerStartUrl(code.providers, entry.id),
+          })),
           enforcement: enforcementNote(code.providers),
         });
       } catch (error) {

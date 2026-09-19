@@ -235,8 +235,14 @@ export function AccountSection() {
                     key={provider.id}
                     variant="secondary"
                     data-testid={`sign-in-${provider.id}`}
-                    onClick={() => void signIn(provider.id)}
-                    disabled={busy !== null}
+                    /*
+                     * Opens the browser at that provider, carrying this code.
+                     * It does not start a second sign-in: the poll running
+                     * behind this card is already waiting on this grant, and
+                     * asking for a fresh code would strand it and put a
+                     * different number on screen from the one just clicked.
+                     */
+                    onClick={() => (provider.startUri ? window.open(provider.startUri, '_blank') : window.open(prompt.verificationUriComplete, '_blank'))}
                     icon={<ProviderIcon id={provider.id} />}
                     hint={provider.detail}
                   >

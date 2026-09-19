@@ -184,6 +184,13 @@ export interface SignInProvider {
   label: string;
   detail: string;
   enterprise: boolean;
+  /**
+   * Where the button opens, carrying the code this sign-in already has.
+   *
+   * Null for email, which has nowhere to send a browser except the page with
+   * the code on it, and null from a server too old to build one.
+   */
+  startUri: string | null;
 }
 
 export interface SignInPrompt {

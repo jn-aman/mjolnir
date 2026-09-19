@@ -241,11 +241,24 @@ describe('enterprise sign-in', () => {
     expect(providers.enforcedBy).toBe('Acme');
   });
 
-  it('leaves everyone else with the full set', async () => {
+  it('leaves everyone else unconstrained', async () => {
     const code = await post('/api/device/code', { device_id: 'dev-open-1', login_hint: 'someone@gmail.test' });
     const providers = code.body['providers'] as unknown as { available: string[]; enforced: string | null };
     expect(providers.available).toContain('email');
-    expect(providers.available).toContain('github');
     expect(providers.enforced).toBeNull();
+  });
+
+  /*
+   * This deployment has no GitHub or Google app, and says so.
+   *
+   * A button for a provider the server cannot complete opens a browser and
+   * dead-ends on an error page, which is the failure nobody reports and
+   * everybody remembers. `oauth.test.ts` runs the same assertion against a
+   * deployment that does have them and gets the full list back.
+   */
+  it('does not offer a browser provider it has no app for', async () => {
+    const code = await post('/api/device/code', { device_id: 'dev-open-2' });
+    const providers = code.body['providers'] as unknown as { available: string[] };
+    expect(providers.available).toEqual(['email']);
   });
 });

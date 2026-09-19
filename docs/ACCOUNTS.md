@@ -238,9 +238,9 @@ POST /api/licence/perpetual     mint a lifetime key (lifetime plans only)
 
 POST /api/webhooks/paddle       subscription and transaction events
 
-GET  /oauth/github/callback     provider callbacks, browser side
-GET  /oauth/google/callback
-GET  /oauth/okta/callback
+GET  /api/auth/providers                     what this deployment can offer
+GET  /api/auth/oauth/:provider/start         browser leaves for the provider
+GET  /api/auth/oauth/:provider/callback      and comes back here
 
 GET  /api/org/:id/sso           an organisation's Okta settings
 POST /api/org/:id/sso/verify    prove a domain with a DNS TXT record
@@ -280,9 +280,61 @@ will want.
 | Settings → Account: sign in, plan, machines, billing | done, behind `account.sign-in` |
 | `apps/site`: the service itself | done, 19 tests through HTTP |
 | Paddle webhook: payment becomes a subscription | done, not yet run against Paddle |
-| GitHub, Google and Okta callbacks | not started; email works |
+| GitHub, Google and Okta callbacks | done, 18 tests through HTTP |
 | SCIM deprovisioning | not started |
 | Deployment of api.mjolnir.sh | not started |
+
+### Configuring the browser providers
+
+Each provider needs an app, and each app needs exactly one redirect URI:
+
+```
+https://api.mjolnir.sh/api/auth/oauth/github/callback
+https://api.mjolnir.sh/api/auth/oauth/google/callback
+https://api.mjolnir.sh/api/auth/oauth/okta/callback
+```
+
+GitHub and Google are configured once, for the whole deployment:
+
+```
+MJOLNIR_PUBLIC_URL=https://api.mjolnir.sh
+GITHUB_CLIENT_ID=...      GITHUB_CLIENT_SECRET=...
+GOOGLE_CLIENT_ID=...      GOOGLE_CLIENT_SECRET=...
+```
+
+Half-configured counts as off. A client id with no secret would produce a
+button that opens a browser and fails at the exchange, so `/api/device/code`
+only offers the providers whose apps are complete, and the app renders the
+buttons it is told about rather than a fixed list.
+
+Okta is per organisation and lives in the `organisations` row: `sso_issuer`,
+`sso_client_id`, `sso_client_secret`. The issuer is the authorisation server,
+usually `https://tenant.okta.com/oauth2/default`, and its endpoints are read
+from `/.well-known/openid-configuration` rather than assembled by hand, because
+tenants using a custom authorisation server do not put them where the
+conventional layout says.
+
+Scopes: `read:user user:email` on GitHub, `openid email profile` elsewhere.
+Nothing on GitHub touches a repository, and nothing here should ever need to.
+
+### What makes it safe
+
+Five properties, each with a test that fails if it is removed:
+
+- **PKCE on every provider**, confidential client or not. The secret already
+  protects the exchange; this closes the case where a code leaks through a
+  redirect, a proxy log or an extension before we redeem it.
+- **State is single use and bound to the grant**, so a callback cannot approve
+  a device other than the one it was started for, and a replayed callback
+  finds nothing.
+- **Identity comes from the token endpoint, server to server, over TLS.**
+  Nothing the browser hands us decides who anyone is.
+- **An unverified address never reaches an existing account.** GitHub will
+  return an address the user typed into their profile and never confirmed;
+  `/user/emails` is the only trustworthy answer, and absent means no.
+- **A tenant may only vouch for domains its organisation has verified.**
+  Without that check, anyone able to configure an Okta tenant could have it
+  assert a stranger's address.
 
 ### Running it
 

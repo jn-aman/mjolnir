@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mjolnir/account": "*",
+    "@mjolnir/brand": "*",
     "@mjolnir/endpoints": "*",
     "@mjolnir/licensing": "*",
     "@mjolnir/logger": "*",

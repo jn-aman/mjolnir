@@ -40,7 +40,7 @@ export const DeviceCodeSchema = z.object({
    * the app, so adding a provider, or an organisation turning one off, does
    * not need a release.
    */
-  providers: ProviderOfferSchema.default({ available: ['email'], enforced: null, enforcedBy: null }),
+  providers: ProviderOfferSchema.default({ available: ['email'], enforced: null, enforcedBy: null, startUri: null }),
 });
 export type DeviceCode = z.infer<typeof DeviceCodeSchema>;
 

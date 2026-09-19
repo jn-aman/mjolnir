@@ -11,6 +11,7 @@ import { deviceRoutes } from './routes/device.ts';
 import { accountRoutes } from './routes/account.ts';
 import { paddleRoutes } from './routes/paddle.ts';
 import { authRoutes } from './routes/auth.ts';
+import { OAuth, type OAuthConfig } from './auth/oauth.ts';
 
 const log = logger.child('site');
 
@@ -37,6 +38,8 @@ export interface SiteOptions {
   /** Sends a code. Absent in development, where codes go to the log. */
   readonly sendEmail?: (to: string, code: string) => Promise<void>;
   readonly customerEmail?: (customerId: string) => Promise<string | null>;
+  /** GitHub and Google apps, and where we are. From the environment otherwise. */
+  readonly oauth?: Partial<OAuthConfig>;
 }
 
 export async function startSite(options: SiteOptions = {}): Promise<{ port: number; store: Store; close: () => void }> {
@@ -44,6 +47,16 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
   const signer = createSigner(options.signingKeyPem ?? signingKey());
   const secret = options.paddleSecret ?? process.env['PADDLE_WEBHOOK_SECRET'] ?? '';
   const verificationUri = options.verificationUri ?? process.env['MJOLNIR_VERIFY_URI'] ?? 'https://mjolnir.sh/device';
+  const publicUrl = options.oauth?.publicUrl ?? process.env['MJOLNIR_PUBLIC_URL'] ?? 'https://api.mjolnir.sh';
+  const oauth = new OAuth({
+    publicUrl,
+    ...(options.oauth?.github ?? oauthApp('GITHUB') ? { github: options.oauth?.github ?? oauthApp('GITHUB') } : {}),
+    ...(options.oauth?.google ?? oauthApp('GOOGLE') ? { google: options.oauth?.google ?? oauthApp('GOOGLE') } : {}),
+    ...(options.oauth?.fetch ? { fetch: options.oauth.fetch } : {}),
+  });
+  // Okta is per organisation, so it is always on offer and only appears to
+  // people whose domain has a tenant configured.
+  log.info('sign-in providers', { available: ['email', ...oauth.available(), 'okta'] });
 
   const app = express();
   app.disable('x-powered-by');
@@ -67,14 +80,14 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
   app.use(express.json({ limit: '1mb' }));
   app.get('/health', (_req, res) => res.json({ ok: true }));
 
-  app.use('/api/device', deviceRoutes(store, { verificationUri }));
+  app.use('/api/device', deviceRoutes(store, { verificationUri, apiUrl: publicUrl, oauthProviders: oauth.available() }));
   app.use('/api', accountRoutes(store, signer));
-  app.use('/api/auth', authRoutes(store, options.sendEmail));
+  app.use('/api/auth', authRoutes(store, options.sendEmail, oauth));
 
   // Abandoned sign-ins and spent codes do not accumulate.
   const sweeper = setInterval(() => {
     const swept = store.sweep();
-    if (swept.grants + swept.codes > 0) log.debug('swept', swept);
+    if (swept.grants + swept.codes + swept.states > 0) log.debug('swept', swept);
   }, 60_000);
   sweeper.unref();
 
@@ -93,6 +106,19 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
       store.close();
     },
   };
+}
+
+/**
+ * A provider's app, when both halves are present.
+ *
+ * Half-configured is the same as not configured: a client id with no secret
+ * produces a button that fails at the exchange, which is worse than a button
+ * that is not there.
+ */
+function oauthApp(prefix: string): { clientId: string; clientSecret: string } | undefined {
+  const clientId = process.env[`${prefix}_CLIENT_ID`] ?? '';
+  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`] ?? '';
+  return clientId && clientSecret ? { clientId, clientSecret } : undefined;
 }
 
 /**
