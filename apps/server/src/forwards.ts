@@ -15,6 +15,9 @@ const log = logger.child('forwards');
  * until it is back, and the forward stays listed so it can be retried.
  */
 
+/** The live record is written to; what leaves this module is read-only. */
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
 export interface ForwardRecord {
   readonly id: string;
   readonly context: string;
@@ -53,7 +56,16 @@ export class ForwardManager {
     if (existing) return existing.record;
 
     const connection = this.#registry.connect(request.context);
-    const record: ForwardRecord = {
+    /*
+     * One object, mutated in place, and it is the one the map holds.
+     *
+     * This was a `ForwardRecord` that got spread into a second object once the
+     * local port was known, and the connection handler kept incrementing the
+     * first one. The result: `connections` was always 0 and `lastError` was
+     * always null, so a forward whose pod had gone away looked perfectly
+     * healthy in the list. Nothing below may copy this.
+     */
+    const record: Mutable<ForwardRecord> = {
       id,
       context: request.context,
       namespace: request.namespace,
@@ -88,11 +100,10 @@ export class ForwardManager {
       });
     });
     const address = server.address();
-    const localPort = typeof address === 'object' && address ? address.port : (request.localPort ?? 0);
-    const started: ForwardRecord = { ...record, localPort };
-    this.#forwards.set(id, { record: started, server });
-    log.info('port forward started', { id, localPort });
-    return started;
+    record.localPort = typeof address === 'object' && address ? address.port : (request.localPort ?? 0);
+    this.#forwards.set(id, { record, server });
+    log.info('port forward started', { id, localPort: record.localPort });
+    return record;
   }
 
   async stop(id: string): Promise<boolean> {

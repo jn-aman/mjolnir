@@ -112,7 +112,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/ai', aiRoutes(toolContext, flags));
   app.use('/mcp', mcpRoutes(toolContext, flags));
   app.use('/api/resources', resourceRoutes(registry, crds));
-  app.use('/api/forwards', forwardRoutes(forwards));
+  app.use('/api/forwards', forwardRoutes(forwards, registry));
   app.use('/api/logs', logRoutes(registry));
   app.use('/api/metrics', metricRoutes(metrics));
   app.use('/api/diagnose', diagnoseRoutes(registry, flags));

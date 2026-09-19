@@ -441,6 +441,18 @@ export interface ForwardRecord {
   readonly lastError: string | null;
 }
 
+export interface ForwardTarget {
+  kind: 'Pod' | 'Service';
+  name: string;
+  namespace: string;
+  /** The pod the connection lands on, which for a Service is one behind it. */
+  pod: string;
+  ports: Array<{ port: number; name?: string | null; protocol: string }>;
+  workload?: string | null;
+  /** A guess from the port number. Only ever a hint. */
+  hint?: string | null;
+}
+
 export const api = {
   clusters: () => request<ClustersResponse>('/api/clusters'),
 
@@ -631,6 +643,11 @@ export const api = {
     start: (body: { context: string; namespace: string; pod: string; port: number; localPort?: number }) =>
       request<ForwardRecord>('/api/forwards', { method: 'POST', body: JSON.stringify(body) }),
     stop: (id: string) => request<{ ok: boolean }>(`/api/forwards/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    /** Everything in the cluster with a port, so the panel can offer it. */
+    targets: (context: string, namespace?: string) =>
+      request<{ targets: ForwardTarget[] }>(
+        `/api/forwards/targets/${encodeURIComponent(context)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`,
+      ),
   },
 
   /** Creates an object from YAML, `kubectl create -f`. */
