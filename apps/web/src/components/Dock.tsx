@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronDown, ChevronUp, Maximize2, Minimize2, Plus, ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Maximize2, Minimize2, Pin, Plus, ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Assistant } from './Assistant.tsx';
 import { Terminal } from './Terminal.tsx';
 import { LogViewer } from './LogViewer.tsx';
@@ -53,6 +53,13 @@ export interface DockTab {
   /** For resource tabs: the object pinned here. */
   readonly resourceKind?: string | undefined;
   readonly name?: string | undefined;
+  /**
+   * Kept, rather than reused.
+   *
+   * An unpinned tab is the slot for its kind: opening logs for a second pod
+   * takes it over. Pinning says this one stays and the next opens beside it.
+   */
+  readonly pinned?: boolean | undefined;
 }
 
 interface DockProps {
@@ -67,6 +74,8 @@ interface DockProps {
   readonly onClose: (id: string) => void;
   readonly onCloseAll: () => void;
   readonly onReorder: (from: string, to: string) => void;
+  /** Keeps a tab, so the next one of its kind opens beside it instead of over it. */
+  readonly onTogglePin: (id: string) => void;
   /** Opens the tab's subject in the details panel, full size. */
   readonly onExpand: (tab: DockTab) => void;
   /** Lets a pinned object's reference chips open other objects. */
@@ -91,6 +100,7 @@ export function Dock({
   onClose,
   onCloseAll,
   onReorder,
+  onTogglePin,
   onExpand,
   onNavigate,
   newTabs,
@@ -126,6 +136,13 @@ export function Dock({
           {tabs.map((tab) => {
             const isActive = tab.id === active?.id;
             const entries: MenuEntry[] = [
+              {
+                id: 'pin',
+                label: tab.pinned ? 'Let this tab be reused' : 'Keep this tab',
+                icon: <Pin size={13} strokeWidth={1.9} />,
+                onSelect: () => onTogglePin(tab.id),
+              },
+              SEPARATOR,
               { id: 'close', label: 'Close', onSelect: () => onClose(tab.id) },
               {
                 id: 'close-others',
@@ -159,6 +176,12 @@ export function Dock({
                   // and keeps the stream running, which is the whole point of
                   // a dock rather than a drawer.
                   onClick={() => (isActive ? onToggleCollapsed() : activateAndOpen(tab.id))}
+                  // Double-click pins, which is the gesture that makes a
+                  // preview tab permanent in every editor people already use.
+                  onDoubleClick={(event) => {
+                    event.preventDefault();
+                    onTogglePin(tab.id);
+                  }}
                   className={`group relative flex shrink-0 items-center gap-2 px-3 text-[12px] transition-colors duration-100 ${
                     isActive ? 'text-primary' : 'text-tertiary hover:text-secondary'
                   } ${dragTab === tab.id ? 'opacity-40' : ''}`}
@@ -172,8 +195,16 @@ export function Dock({
                     />
                   ) : null}
                   <TabIcon tab={tab} active={isActive} />
-                  <span className="max-w-[210px] truncate font-mono">{tab.title}</span>
+                  <span className={`max-w-[210px] truncate font-mono ${tab.pinned ? '' : 'italic'}`}>{tab.title}</span>
                   {tab.subtitle ? <span className="max-w-[120px] truncate text-[11px] text-tertiary">{tab.subtitle}</span> : null}
+                  {/*
+                    Italic means "this slot will be reused"; the pin means it
+                    will not. Shown rather than explained, because the rule is
+                    learned by watching a tab get replaced once.
+                  */}
+                  {tab.pinned ? (
+                    <Pin size={10} strokeWidth={2.4} aria-hidden className={isActive ? 'text-accent' : 'text-tertiary'} />
+                  ) : null}
                   <span
                     role="button"
                     aria-label={`Close ${tab.title}`}

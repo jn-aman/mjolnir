@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
-import { FileText, ScrollText, Trash2, X } from 'lucide-react';
+import { FileText, Pin, ScrollText, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api.ts';
 import { LogViewer } from './LogViewer.tsx';
@@ -44,6 +44,10 @@ interface DrawerProps {
   readonly onDeleted?: () => void;
   readonly onForward?: ((item: KubeItem, port?: number) => void) | undefined;
   readonly onShell?: ((item: KubeItem, container?: string) => void) | undefined;
+  /** Tails this pod in the dock, so it keeps running when the panel closes. */
+  readonly onLogsInDock?: ((item: KubeItem) => void) | undefined;
+  /** Keeps this object in the dock while you go and look at something else. */
+  readonly onPin?: ((item: KubeItem) => void) | undefined;
 }
 
 interface PodShape extends KubeItem {
@@ -71,6 +75,8 @@ export function ResourceDrawer({
   onDeleted,
   onForward,
   onShell,
+  onLogsInDock,
+  onPin,
 }: DrawerProps) {
   const [yaml, setYaml] = useState<string | null>(null);
   const [tab, setTab] = useState(initialTab ?? 'overview');
@@ -260,7 +266,9 @@ export function ResourceDrawer({
 
   const headerMenu: MenuEntry[] = [
     askEntry('Ask the assistant about this', `Look at ${kind} ${name}${namespace ? ` in namespace ${namespace}` : ''}: describe it, check logs and events, and tell me anything that needs attention.`),
-    ...(isPod ? [{ id: 'logs', label: 'Logs', onSelect: () => openLogs(containers[0] ?? '', false) }] : []),
+    ...(isPod ? [{ id: 'logs', label: 'Logs in the dock', onSelect: () => (onLogsInDock ? onLogsInDock(item) : openLogs(containers[0] ?? '', false)) }] : []),
+    ...(isPod ? [{ id: 'logs-here', label: 'Logs in this panel', onSelect: () => openLogs(containers[0] ?? '', false) }] : []),
+    ...(onPin ? [{ id: 'pin', label: 'Keep open in the dock', onSelect: () => onPin(item) }] : []),
     ...(isPod && onShell ? [{ id: 'shell', label: 'Shell', onSelect: () => onShell(item, containers[0]) }] : []),
     ...(isPod && onForward ? [{ id: 'forward', label: 'Port forward…', onSelect: () => onForward(item) }] : []),
     { id: 'yaml', label: 'Edit YAML', onSelect: () => setTab('yaml') },
@@ -333,8 +341,13 @@ export function ResourceDrawer({
           ) : null}
           {isPod ? (
             <Button
-              onClick={() => openLogs(containers[0] ?? '', false)}
+              data-testid="drawer-logs"
+              // The dock, not a tab in this panel. A log you are watching has
+              // to survive closing the thing you opened it from, which is the
+              // entire reason the dock exists.
+              onClick={() => (onLogsInDock ? onLogsInDock(item) : openLogs(containers[0] ?? '', false))}
               icon={<ScrollText size={13} strokeWidth={1.9} />}
+              hint="Tails it in the dock, where it keeps running"
             >
               Logs
             </Button>
@@ -342,6 +355,16 @@ export function ResourceDrawer({
           <Button onClick={() => setTab('yaml')} icon={<FileText size={13} strokeWidth={1.9} />}>
             Edit YAML
           </Button>
+          {onPin ? (
+            <Button
+              data-testid="drawer-pin"
+              onClick={() => onPin(item)}
+              icon={<Pin size={13} strokeWidth={1.9} />}
+              hint="Keeps it in the dock, live, while you look at other things"
+            >
+              Keep open
+            </Button>
+          ) : null}
           <div className="flex-1" />
           <Button
             variant="danger"

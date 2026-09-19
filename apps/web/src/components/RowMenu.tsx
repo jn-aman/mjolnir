@@ -39,6 +39,7 @@ export type RowActionId =
   | 'open'
   | 'pin'
   | 'logs'
+  | 'logs-here'
   | 'dock-logs'
   | 'forward'
   | 'shell'
@@ -115,10 +116,10 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
       ? [
           ...(on(flags, 'kubernetes.logs')
             ? [
+                // Logs mean the dock. The panel is still available, second,
+                // for when someone wants them beside the object's details.
                 { id: 'logs', label: 'Logs', icon: icon(ScrollText), onSelect: () => act('logs') },
-                ...(on(flags, 'ui.dock')
-                  ? [{ id: 'dock-logs', label: 'Open logs in dock', icon: icon(ArrowDownToLine), onSelect: () => act('dock-logs') }]
-                  : []),
+                { id: 'logs-here', label: 'Logs in the details panel', icon: icon(ArrowDownToLine), onSelect: () => act('logs-here') },
               ]
             : []),
           ...(on(flags, 'kubernetes.exec') ? [{ id: 'shell', label: 'Shell', icon: icon(Terminal), onSelect: () => act('shell') }] : []),

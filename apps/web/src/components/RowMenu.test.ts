@@ -58,17 +58,21 @@ describe('rowMenuEntries', () => {
     for (const verb of ['cordon', 'drain', 'taint']) expect(off).not.toContain(verb);
   });
 
-  it('takes the dock entries away with the dock', () => {
+  it('takes the pin away with the dock, but keeps logs, which are still readable', () => {
     const found = ids(pod(), 'Pod', { 'ui.dock': false });
     expect(found).not.toContain('pin');
-    expect(found).not.toContain('dock-logs');
     expect(found).toContain('logs');
   });
 
-  it('takes dock-logs with the logs, not only with the dock', () => {
+  it('takes both log entries when logs are off', () => {
     const found = ids(pod(), 'Pod', { 'kubernetes.logs': false });
     expect(found).not.toContain('logs');
-    expect(found).not.toContain('dock-logs');
+    expect(found).not.toContain('logs-here');
+  });
+
+  it('offers the dock first and the panel second', () => {
+    const found = ids(pod(), 'Pod');
+    expect(found.indexOf('logs')).toBeLessThan(found.indexOf('logs-here'));
   });
 
   it('drops the scan when image scanning is off', () => {
@@ -101,7 +105,7 @@ describe('RowActionId', () => {
   it('covers every id the menu emits', () => {
     const emitted = new Set(ids(pod(), 'Pod').concat(ids({ metadata: { name: 'n' }, spec: {}, status: {} } as unknown as KubeItem, 'Node')));
     const handled: RowActionId[] = [
-      'open', 'pin', 'logs', 'dock-logs', 'forward', 'shell', 'yaml', 'restart', 'scale',
+      'open', 'pin', 'logs', 'logs-here', 'dock-logs', 'forward', 'shell', 'yaml', 'restart', 'scale',
       'filter-namespace', 'filter-node', 'cordon', 'uncordon', 'drain', 'taint', 'pause', 'resume', 'undo', 'delete',
     ];
     const extras = [...emitted].filter((id) => !handled.includes(id as RowActionId) && !id.startsWith('copy-') && id !== 'ask' && id !== 'scan');

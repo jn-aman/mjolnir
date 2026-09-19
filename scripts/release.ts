@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,6 +146,21 @@ function verify(appPath: string): Check[] {
     rmSync(scratch, { recursive: true, force: true });
   }
 
+  // The icon is the one thing nobody checks until a screenshot shows the
+  // wrong one on someone else's machine.
+  const icns = join(appPath, 'Contents/Resources/icon.icns');
+  if (existsSync(icns)) {
+    const source = statSync(join(root, 'apps/desktop/build/icon.png')).mtimeMs;
+    const packaged = statSync(icns).mtimeMs;
+    checks.push({
+      name: 'icon',
+      ok: packaged >= source,
+      detail: packaged >= source ? 'newer than build/icon.png' : 'STALE: older than build/icon.png, so it is a previous icon',
+    });
+  } else {
+    checks.push({ name: 'icon', ok: false, detail: 'no icon.icns in the bundle' });
+  }
+
   // A signed build is the difference between "open it" and "right click,
   // open, are you sure". Unsigned is allowed; being told is not optional.
   try {
@@ -201,8 +216,20 @@ async function main(): Promise<void> {
     if (!args.includes('--allow-no-token')) process.exit(1);
   }
 
+  // electron-builder converts icon.png to an .icns once and caches it in the
+  // output directory, then reuses that file forever. A build made after the
+  // artwork changed therefore ships the previous icon, silently: the Dock
+  // showed a bolt from an icon two revisions old while build/icon.png was the
+  // hammer. The cache is cheap to rebuild and expensive to be wrong about.
+  const iconCache = join(root, 'apps/desktop/release/.icon-icns');
+  if (existsSync(iconCache)) {
+    rmSync(iconCache, { recursive: true, force: true });
+    process.stdout.write('\n  Cleared the icon cache, so the icon comes from build/icon.png\n');
+  }
+
   const before = readFileSync(buildFile, 'utf8');
   try {
+    run('npm', ['run', 'icons']);
     run('npm', ['run', 'build:secrets']);
     run('npm', ['run', 'build', '--workspaces', '--if-present']);
     const builderArgs = ['electron-builder', '--mac'];

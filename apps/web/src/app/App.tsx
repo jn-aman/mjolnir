@@ -24,6 +24,7 @@ import { Select } from '../components/ui/Select.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import type { MetricsResponse } from '../lib/metrics.ts';
 import { Dock, type DockTab } from '../components/Dock.tsx';
+import { openPinned, openTab, togglePinned } from '../lib/dockTabs.ts';
 import { CommandPalette } from '../components/CommandPalette.tsx';
 import { useFlags } from '../lib/flags.tsx';
 import { ToolPanel } from '../components/ToolPanel.tsx';
@@ -494,22 +495,32 @@ export function App() {
     );
   }, [items, selected]);
 
+  /**
+   * Puts a tab in the dock, taking over the unpinned one of its kind.
+   *
+   * The slot rule lives in `openTab`: look at logs for one pod, then another,
+   * and the second replaces the first, because you were looking at logs and
+   * you still are. Pin one and it stays put while the next opens beside it.
+   */
+  const addTab = useCallback((tab: DockTab, pin = false) => {
+    setDockTabs((current) => {
+      const result = pin ? openPinned(current, tab) : openTab(current, tab);
+      setDockActive(result.activeId);
+      return result.tabs;
+    });
+    setDockCollapsed(false);
+  }, []);
+
   const openInDock = useCallback(
-    (item: KubeItem) => {
+    (item: KubeItem, pin = false) => {
       if (!context) return;
       const name = item.metadata?.name ?? '';
       const ns = item.metadata?.namespace ?? '';
-      const id = `logs:${context}:${ns}:${name}`;
       const spec = item.spec as { containers?: Array<{ name?: string }> } | undefined;
       const containers = (spec?.containers ?? []).map((c) => c.name ?? '').filter(Boolean);
-      setDockTabs((current) =>
-        current.some((tab) => tab.id === id)
-          ? current
-          : [...current, { id, kind: 'logs', title: name, subtitle: ns, context, namespace: ns, pod: name, containers }],
-      );
-      setDockActive(id);
+      addTab({ id: `logs:${context}:${ns}:${name}`, kind: 'logs', title: name, subtitle: ns, context, namespace: ns, pod: name, containers }, pin);
     },
-    [context],
+    [context, addTab],
   );
 
   /**
@@ -525,15 +536,10 @@ export function App() {
       if (!context) return;
       const name = item.metadata?.name ?? '';
       const ns = item.metadata?.namespace ?? '';
-      const id = `resource:${context}:${itemKind}:${ns}:${name}`;
-      setDockTabs((current) =>
-        current.some((tab) => tab.id === id)
-          ? current
-          : [...current, { id, kind: 'resource', title: name, subtitle: itemKind, context, namespace: ns, resourceKind: itemKind, name }],
-      );
-      setDockActive(id);
+      // Pinned on purpose: "keep this open" is the whole verb.
+      addTab({ id: `resource:${context}:${itemKind}:${ns}:${name}`, kind: 'resource', title: name, subtitle: itemKind, context, namespace: ns, resourceKind: itemKind, name }, true);
     },
-    [context],
+    [context, addTab],
   );
 
   /**
@@ -583,15 +589,9 @@ export function App() {
       const ns = item.metadata?.namespace ?? '';
       const spec = item.spec as { containers?: Array<{ name?: string }> } | undefined;
       const chosen = container ?? spec?.containers?.[0]?.name ?? '';
-      const id = `shell:${context}:${ns}:${name}:${chosen}`;
-      setDockTabs((current) =>
-        current.some((tab) => tab.id === id)
-          ? current
-          : [...current, { id, kind: 'terminal', title: name, subtitle: chosen, context, namespace: ns, pod: name, container: chosen }],
-      );
-      setDockActive(id);
+      addTab({ id: `shell:${context}:${ns}:${name}:${chosen}`, kind: 'terminal', title: name, subtitle: chosen, context, namespace: ns, pod: name, container: chosen });
     },
-    [context],
+    [context, addTab],
   );
 
   const restart = useCallback(
@@ -673,7 +673,12 @@ export function App() {
         case 'filter-node':
           setFilter(typeof item.spec?.['nodeName'] === 'string' ? (item.spec['nodeName'] as string) : '');
           return;
+        case 'logs':
         case 'dock-logs':
+          // Logs go to the dock, always. A log you are reading has to survive
+          // closing the thing you opened it from, and putting it in a panel
+          // that closes when you look at the next pod is why the dock was
+          // going unused: the obvious button did not lead there.
           openInDock(item);
           return;
         case 'pin':
@@ -693,7 +698,7 @@ export function App() {
       }
       setSelected(item);
       // Every remaining action lands in the panel on the tab that performs it.
-      if (action === 'logs') setDrawerTab('logs');
+      if (action === 'logs-here') setDrawerTab('logs');
       else if (action === 'yaml') setDrawerTab('yaml');
       else setDrawerTab('overview');
     },
@@ -982,6 +987,8 @@ export function App() {
                       onNavigate={navigate}
                       onForward={(item) => setForwarding(item)}
                       onShell={(item, container) => openShell(item, container)}
+                      onLogsInDock={(item) => openInDock(item)}
+                      onPin={(item) => pinToDock(item, kind)}
                       onDeleted={() => void load()}
                       onClose={() => setSelected(null)}
                     />
@@ -1012,6 +1019,7 @@ export function App() {
                 onResizeStart={dock.onPointerDown}
                 onActivate={setDockActive}
                 newTabs={dockNewTabs}
+                onTogglePin={(id) => setDockTabs((current) => togglePinned(current, id))}
                 onReorder={(from, to) =>
                   setDockTabs((current) => {
                     const next = [...current];
