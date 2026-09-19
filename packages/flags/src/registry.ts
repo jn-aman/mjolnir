@@ -282,6 +282,15 @@ export const FLAGS: readonly FlagDefinition[] = [
     module: 'kubernetes',
   },
   {
+    id: 'kubernetes.certificates',
+    label: 'Certificate expiry',
+    description: 'Finds every TLS secret, cert-manager certificate and webhook CA bundle, and says which of them nobody renews.',
+    fallback: true,
+    stage: 'beta',
+    module: 'kubernetes',
+    warning: 'Reading TLS secrets means their private keys pass through the local server. Nothing parses, stores or sends one.',
+  },
+  {
     id: 'scan.images',
     label: 'Image scanning',
     description: 'Scan a container image with Trivy and read the findings, with search, filters and CSV export.',

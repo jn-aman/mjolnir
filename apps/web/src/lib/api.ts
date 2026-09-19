@@ -179,6 +179,41 @@ export interface AccountDevice {
   active: boolean;
 }
 
+export interface CertificateSummary {
+  id: string;
+  source: 'secret' | 'cert-manager' | 'webhook' | 'api-service';
+  name: string;
+  namespace?: string | null;
+  subject: string;
+  issuer: string;
+  hosts: string[];
+  notBefore: string;
+  notAfter: string;
+  /** Negative once it has expired. */
+  daysLeft: number;
+  state: 'expired' | 'critical' | 'soon' | 'ok' | 'not-yet-valid';
+  selfSigned: boolean;
+  /** True when a controller renews this without anyone doing anything. */
+  managed: boolean;
+  issuerRef?: string | null;
+  renewAt?: string | null;
+  serial: string;
+  keyType: string;
+  chainLength: number;
+  usedBy: Array<{ kind: string; name: string; namespace?: string | null; hosts?: string[] | null }>;
+  detail: string;
+  fix?: string | null;
+  problems: Array<{ kind: string; detail: string; severity: 'critical' | 'warning' | 'info' }>;
+}
+
+export interface CertificateReport {
+  certificates: CertificateSummary[];
+  counts: { expired: number; critical: number; soon: number; ok: number };
+  summary: string;
+  nextUnmanaged?: { name: string; namespace?: string | null; daysLeft: number } | null;
+  scope: { namespace: string | null };
+}
+
 export type DiagnosisSeverity = 'critical' | 'warning' | 'info';
 
 export interface DiagnosisFinding {
@@ -532,6 +567,13 @@ export const api = {
     release: (context: string, namespace: string, name: string, revision?: number) =>
       request<{ release: HelmReleaseFull; history: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${revision ? `?revision=${revision}` : ''}`),
   },
+  certificates: {
+    list: (context: string, namespace?: string) =>
+      request<CertificateReport>(
+        `/api/certificates/${encodeURIComponent(context)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`,
+      ),
+  },
+
   diagnose: {
     /**
      * What broke, for the cluster, a namespace, or one workload.

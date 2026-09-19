@@ -127,10 +127,27 @@ Three things it does that a sorted event list cannot:
 Run against a live cluster it took 25ms warm, and it found a crash loop
 nobody had noticed.
 
-### 2. Certificate and secret expiry
-Scan TLS Secrets, cert-manager Certificates and Ingress certs; surface in the
-menu bar. **Cheapest item here and it prevents an outage.** A day's work for a
-feature people tell their colleagues about.
+### 2. Certificate and secret expiry — built
+
+Four sources: TLS secrets, cert-manager Certificates, **admission webhook CA
+bundles** and aggregated API services. The last two are the ones nobody looks
+at, and an expired admission webhook CA does not break a website, it breaks
+the cluster: every create is rejected by a webhook nobody can reach.
+
+The column that matters is not the date, it is **who renews it**. A
+cert-manager certificate eleven days out needs nothing; a hand-made one
+eleven days out is why the page exists, so the headline leads on the nearest
+expiry that nothing will renew rather than the nearest expiry.
+
+It also catches what a date cannot: an Ingress serving a hostname its
+certificate does not cover (with real wildcard rules, so `*.acme.test` does
+not cover `deep.api.acme.test`), a cert-manager renewal scheduled for after
+the expiry, and issuance that is failing while the old certificate still
+works.
+
+Reading TLS secrets means the private keys pass through the local server.
+Nothing parses, stores, logs or returns one, and there is a test asserting
+the answer cannot contain one.
 
 ### 3. Bucket store browser
 MinIO, RustFS, SeaweedFS, Ceph RGW. Detect, port-forward, browse, preview.

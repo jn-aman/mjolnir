@@ -14,6 +14,7 @@ import {
   Route,
   Ship,
   ShieldAlert,
+  ShieldCheck,
   Siren,
   Terminal,
   Waypoints,
@@ -166,6 +167,27 @@ export const TOOLS: readonly ToolDefinition[] = [
       'SBOM export, and a scan on the image of any pod from its menu',
     ],
     today: [{ label: 'Scan an image', command: 'trivy image <image>' }],
+  },
+  {
+    id: 'certificates',
+    label: 'Certificates',
+    icon: ShieldCheck,
+    tint: 'var(--status-ok)',
+    area: 'tools',
+    summary: 'Every certificate in the cluster by when it stops working, and which of them nobody is renewing.',
+    detail: [
+      'TLS secrets, cert-manager Certificates, admission webhook CA bundles and aggregated API services',
+      'Sorted by expiry, and leading on the ones no controller renews',
+      'Catches an Ingress serving a hostname its certificate does not cover, and a renewal scheduled after the expiry',
+    ],
+    today: [
+      {
+        label: 'Expiry of one secret',
+        command: "kubectl -n <namespace> get secret <name> -o jsonpath='{.data.tls\\.crt}' | base64 -d | openssl x509 -noout -enddate",
+      },
+    ],
+    built: true,
+    flag: 'kubernetes.certificates',
   },
   {
     id: 'whatbroke',
