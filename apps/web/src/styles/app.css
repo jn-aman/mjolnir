@@ -425,3 +425,44 @@
     animation: none !important;
   }
 }
+
+/*
+ * The edges of a table that scrolls sideways.
+ *
+ * A frozen actions column is an excellent way to hide the fact that a table
+ * scrolls at all: everything ends neatly before it, so the last thing you can
+ * see reads as the last thing there is. macOS hides the scrollbar until you
+ * touch the trackpad, so that is not the cue either.
+ *
+ * These sit above the rows and below the pinned column, take no pointer
+ * events, and disappear the moment there is genuinely nothing further that
+ * way. A cue that is always on is decoration.
+ */
+.table-edge {
+  position: absolute;
+  top: 36px;
+  bottom: 0;
+  width: 28px;
+  z-index: 2;
+  pointer-events: none;
+}
+.table-edge-left {
+  left: 0;
+  background: linear-gradient(to right, var(--surface-ground), transparent);
+}
+.table-edge-right {
+  /* Clear of the pinned actions, so it marks where the hidden columns go
+     rather than fading the buttons that sit on top of them. */
+  right: 176px;
+  background: linear-gradient(to left, var(--surface-ground), transparent);
+}
+
+/* The pinned column only casts a shadow while something is under it. */
+.cell-pinned,
+.cell-pinned-header {
+  box-shadow: none;
+}
+.cell-pinned.cell-covering,
+.cell-pinned-header.cell-covering {
+  box-shadow: -10px 0 12px -10px var(--shadow-colour, rgb(0 0 0 / 0.45));
+}

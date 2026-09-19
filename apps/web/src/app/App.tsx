@@ -1482,7 +1482,7 @@ function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistan
               type="button"
               data-testid="timezone-badge"
               aria-label={`Timezone ${timezone.zone}. Click to change`}
-              className="group flex h-[28px] items-center gap-1.5 rounded-md border border-transparent px-2 text-[11.5px] transition-colors duration-100 hover:border-line hover:bg-hover data-[state=open]:border-line data-[state=open]:bg-hover"
+              className="group flex h-[30px] items-center gap-1.5 rounded-full border border-transparent px-3 text-[11.5px] transition-colors duration-100 hover:border-line hover:bg-hover data-[state=open]:border-line data-[state=open]:bg-hover"
             >
               <Globe size={12} strokeWidth={1.9} aria-hidden className="text-tertiary" />
               <span className="font-mono text-secondary">{timezone.zone.split('/').pop()?.replace(/_/g, ' ')}</span>
@@ -1512,13 +1512,22 @@ function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistan
             <CommandIcon size={9} strokeWidth={2.2} aria-hidden />K
           </kbd>
         </button>
-        <Button
-          iconOnly
+        {/*
+          Not the shared Button, which is a rounded rectangle everywhere else
+          in the app and should stay one. This bar is a row of pills, and a
+          single square control in it reads as a mistake rather than as a
+          different kind of thing.
+        */}
+        <button
+          type="button"
           data-testid="theme-toggle"
           aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           onClick={onToggleTheme}
-          icon={theme === 'dark' ? <Sun size={14} strokeWidth={1.9} /> : <Moon size={14} strokeWidth={1.9} />}
-        />
+          className="btn-secondary flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-line text-tertiary transition-colors duration-100 hover:border-strong hover:text-primary"
+        >
+          {theme === 'dark' ? <Sun size={14} strokeWidth={1.9} /> : <Moon size={14} strokeWidth={1.9} />}
+        </button>
       </div>
     </header>
   );

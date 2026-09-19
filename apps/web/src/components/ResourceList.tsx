@@ -157,14 +157,37 @@ export function ResourceList({
    * for no gain, because nothing was out of reach in the first place.
    */
   const [overflowing, setOverflowing] = useState(false);
+  /**
+   * Whether there is anything left to scroll to, in each direction.
+   *
+   * Needed because a frozen column is an excellent way to hide the fact that
+   * a table scrolls at all. With the actions pinned flush right and every
+   * other column ending before them, the table looks finished: the last thing
+   * you can see is the last thing there is, except it is not. The edges say
+   * so, and stop saying so when it is true.
+   */
+  const [more, setMore] = useState({ left: false, right: false });
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
-    const check = () => setOverflowing(element.scrollWidth > element.clientWidth + 1);
+    const check = () => {
+      const scrollable = element.scrollWidth - element.clientWidth;
+      setOverflowing(scrollable > 1);
+      setMore({
+        left: element.scrollLeft > 1,
+        // One pixel of slack: sub-pixel column widths mean the maximum
+        // scrollLeft is rarely exactly the scrollable distance.
+        right: element.scrollLeft < scrollable - 1,
+      });
+    };
     check();
     const observer = new ResizeObserver(check);
     observer.observe(element);
-    return () => observer.disconnect();
+    element.addEventListener('scroll', check, { passive: true });
+    return () => {
+      observer.disconnect();
+      element.removeEventListener('scroll', check);
+    };
   });
   const [sort, setSort] = useState<SortState>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -324,12 +347,23 @@ export function ResourceList({
         other from `visible` to `auto` as well. It also clipped the rows to the
         viewport width while the header scrolled past them.
       */}
+      {/*
+        The edges of a table that scrolls.
+        
+        Purely a cue, so it takes no pointer events and sits above the rows
+        and below the pinned actions. Without it the only hint that a wide
+        table has more in it is a scrollbar that macOS hides until you touch
+        the trackpad, which is a hint nobody gets.
+      */}
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+      {more.left ? <span aria-hidden className="table-edge table-edge-left" /> : null}
+      {more.right ? <span aria-hidden className="table-edge table-edge-right" /> : null}
       <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto">
        <div className="flex min-h-full min-w-max flex-col">
         <div
           role="row"
           className="sticky top-0 z-10 grid h-[36px] shrink-0 items-center border-b border-line bg-raised text-[11px] font-semibold uppercase tracking-[0.06em] text-tertiary"
-          style={{ gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(176px, max-content)${overflowing ? ' 176px' : ''}` }}
+          style={{ gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(176px, max-content)` }}
         >
           {canBulk ? (
             <div className="flex h-full items-center justify-center">
@@ -405,7 +439,7 @@ export function ResourceList({
             </div>
           ))}
 
-          <div className={`flex h-full items-center justify-end pr-2 ${overflowing ? 'cell-pinned-header' : ''}`}>
+          <div className={`flex h-full items-center justify-end pr-2 ${overflowing ? 'cell-pinned-header' : ''} ${more.right ? 'cell-covering' : ''}`}>
             {canColumns ? (
             <ColumnMenu
               all={all}
@@ -494,7 +528,7 @@ export function ResourceList({
                         // A spacer as wide as the frozen cell, so scrolling
                         // right brings every column out from under it instead
                         // of leaving the last one permanently covered.
-                        gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(176px, max-content)${overflowing ? ' 176px' : ''}`,
+                        gridTemplateColumns: `${canBulk ? '38px ' : ''}${template} minmax(176px, max-content)`,
                         minHeight: ROW_HEIGHT,
                         transform: `translateY(${row.start - HEADER_HEIGHT}px)`,
                       }}
@@ -548,7 +582,7 @@ export function ResourceList({
                           {column.content(item)}
                         </OverflowTip>
                       ))}
-                      <div className={`flex h-full items-center justify-end px-2 ${overflowing ? 'cell-pinned' : ''}`} onClick={(event) => event.stopPropagation()}>
+                      <div className={`flex h-full items-center justify-end px-2 ${overflowing ? 'cell-pinned' : ''} ${more.right ? 'cell-covering' : ''}`} onClick={(event) => event.stopPropagation()}>
                         <RowActions entries={entries} name={item.metadata?.name ?? ''} />
                       </div>
                     </div>
@@ -558,6 +592,7 @@ export function ResourceList({
           </div>
         )}
        </div>
+      </div>
       </div>
 
       <div className="flex h-[26px] shrink-0 items-center gap-3 border-t border-line bg-raised px-4 font-mono text-[11px] text-tertiary">
