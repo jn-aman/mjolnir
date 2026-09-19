@@ -106,7 +106,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/licence', licenceRoutes(settings));
   app.use('/api/account', accountRoutes(account));
   app.use('/api/docker', dockerRoutes(flags));
-  app.use('/api/scan', scanRoutes());
+  app.use('/api/scan', scanRoutes(registry, flags));
   app.use('/api/helm', helmRoutes(registry));
   app.use('/api/storage', storageRoutes(settings, forwards, registry));
   app.use('/api/ai', aiRoutes(toolContext, flags));

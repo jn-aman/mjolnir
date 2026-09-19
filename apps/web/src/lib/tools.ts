@@ -167,6 +167,8 @@ export const TOOLS: readonly ToolDefinition[] = [
       'SBOM export, and a scan on the image of any pod from its menu',
     ],
     today: [{ label: 'Scan an image', command: 'trivy image <image>' }],
+    built: true,
+    flag: 'scan.images',
   },
   {
     id: 'certificates',

@@ -155,8 +155,26 @@ Builds the detection-and-forward machinery that every other data browser reuses,
 so its real cost is lower than it looks and its successors get cheaper.
 
 ### 4. Security Center
-Trivy CVE scanning, RBAC audit, exposed secrets, image provenance folded in.
-Pro. Substantial, and the second-most-asked-for thing after logs.
+RBAC audit, exposed secrets and image provenance folded in with the scanning
+below. Pro. Substantial, and the second-most-asked-for thing after logs.
+
+**Cluster-wide CVE scanning is built.** The unit is the image, not the pod:
+a hundred pods usually run fifteen distinct images, and every image carries
+the workloads that run it, ordered by how many pods that is, because a
+critical finding on an image thirty pods run is a different morning from the
+same finding on one.
+
+Identity is the digest from `imageID`, not the tag. Two pods on `:latest`
+scheduled a week apart are running different code, and a report that merged
+them would be quietly wrong about one of them. Where the spec names a tag
+that moves, the row says so, because a clean scan against a moving tag is a
+weaker promise than it looks.
+
+Nothing scans on open: a page that fires off forty Trivy runs because someone
+clicked a tab is a page people learn not to click. The inventory alone
+already answers "what are we actually running". Scanning is three at a time,
+streamed one image at a time so the table fills in, cached for an hour, with
+one retry on a dropped connection and SBOM export in CycloneDX.
 
 ### 5. Argo CD
 Browse free, operate Pro. Large surface, narrower audience than the above.

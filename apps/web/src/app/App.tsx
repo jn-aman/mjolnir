@@ -30,6 +30,7 @@ import { useFlags } from '../lib/flags.tsx';
 import { ToolPanel } from '../components/ToolPanel.tsx';
 import { DiagnosePanel } from '../components/DiagnosePanel.tsx';
 import { CertificatePanel } from '../components/CertificatePanel.tsx';
+import { VulnerabilityPanel } from '../components/VulnerabilityPanel.tsx';
 import { ScaleDialog } from '../components/ScaleDialog.tsx';
 import { KUBERNETES_MODULE, toolById } from '../lib/tools.ts';
 import { readRoute, writeRoute } from '../lib/route.ts';
@@ -916,7 +917,9 @@ export function App() {
               <Overview context={context} cluster={current} onNavigate={navigate} onDecorChanged={() => void loadDecor()} />
             ) : null}
 
-            {view === 'tool' && tool?.id === 'certificates' && context ? (
+            {view === 'tool' && tool?.id === 'trivy' && context ? (
+              <VulnerabilityPanel context={context} namespace={namespace || undefined} onNavigate={navigate} />
+            ) : view === 'tool' && tool?.id === 'certificates' && context ? (
               <CertificatePanel context={context} namespace={namespace || undefined} onNavigate={navigate} />
             ) : view === 'tool' && tool?.id === 'whatbroke' && context ? (
               <DiagnosePanel

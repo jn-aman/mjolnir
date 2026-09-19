@@ -359,6 +359,30 @@ export interface ScanFinding {
   url: string;
   target: string;
 }
+export interface ClusterImage {
+  image: string;
+  /** What to hand a scanner: the digest when the runtime recorded one. */
+  target: string;
+  digest?: string | null;
+  registry: string;
+  repository: string;
+  tag: string;
+  pods: number;
+  namespaces: string[];
+  usedBy: Array<{ kind: string; name: string; namespace?: string | null; pods: number }>;
+  initOnly: boolean;
+  /** The spec names a tag that moves, so a clean scan is a weaker promise. */
+  mutableTag: boolean;
+  report: ScanReport | null;
+}
+
+export interface ClusterImages {
+  images: ClusterImage[];
+  pods: number;
+  namespaces: number;
+  trivy: boolean;
+}
+
 export interface ScanReport {
   cached?: boolean;
   image: string;
@@ -595,6 +619,11 @@ export const api = {
   scan: {
     status: () => request<{ available: boolean; path: string | null; install: string }>('/api/scan'),
     image: (image: string, force = false) => request<ScanReport>('/api/scan/image', { method: 'POST', body: JSON.stringify({ image, force }) }),
+    /** Every distinct image the cluster runs, with any scan already in hand. */
+    cluster: (context: string, namespace?: string) =>
+      request<ClusterImages>(
+        `/api/scan/cluster/${encodeURIComponent(context)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`,
+      ),
   },
 
   forwards: {

@@ -7,3 +7,4 @@ export * from './watch.ts';
 export * from './helm.ts';
 export * from './diagnose.ts';
 export * from './certificates.ts';
+export * from './images.ts';

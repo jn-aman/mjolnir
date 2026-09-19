@@ -62,6 +62,14 @@ export interface ContainerStatus {
   readonly started?: boolean;
   readonly restartCount?: number;
   readonly image?: string;
+  /**
+   * What the kubelet actually pulled, which is not the same field as `image`.
+   *
+   * `image` echoes the reference from the spec; `imageID` carries the digest.
+   * Reading the first where you meant the second gives you a tag back and
+   * everything downstream silently loses the identity of what is running.
+   */
+  readonly imageID?: string;
   readonly state?: ContainerState;
   readonly lastState?: ContainerState;
 }
