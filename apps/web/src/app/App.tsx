@@ -549,14 +549,25 @@ export function App() {
       {
         id: 'assistant',
         label: 'Assistant',
+        detail: 'Ask about anything in the cluster, and keep it open while you look',
         onSelect: () => openAssistant(),
       },
       {
-        id: 'pods',
-        label: 'Shell into a pod\u2026',
+        id: 'shell',
+        label: 'Shell',
+        detail: 'Pick a pod and open a terminal in it. It keeps running while you navigate away',
         onSelect: () => {
           navigate({ kind: 'Pod' });
-          toast.message('Pick a pod, then Shell from its menu', { description: 'Right-click any row, or use the terminal button on it.' });
+          toast.message('Pick a pod, then Shell', { description: 'The terminal button on any row, or right-click it.' });
+        },
+      },
+      {
+        id: 'logs',
+        label: 'Logs',
+        detail: 'Tail a pod here while you read the deployment that owns it',
+        onSelect: () => {
+          navigate({ kind: 'Pod' });
+          toast.message('Pick a pod, then Logs', { description: 'The logs button on any row opens it here.' });
         },
       },
     ],

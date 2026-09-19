@@ -190,28 +190,47 @@ export function Dock({
             );
           })}
 
-          {newTabs && newTabs.length > 0 ? (
+          {/*
+            Empty, this is buttons rather than a sentence explaining what
+            buttons would do. "Logs, shells and pinned objects stay here while
+            you work elsewhere" is a paragraph asking to be read by someone
+            who is trying to get something done; two things they can press
+            teach the same lesson by being pressed.
+          */}
+          {tabs.length === 0 && newTabs
+            ? newTabs.map((entry) => (
+                <Tip key={entry.id} label={entry.detail ?? entry.label}>
+                  <button
+                    type="button"
+                    data-testid={`dock-open-${entry.id}`}
+                    onClick={entry.onSelect}
+                    className="flex shrink-0 items-center gap-1.5 px-2.5 text-[12px] text-tertiary transition-colors duration-100 hover:text-primary"
+                  >
+                    <Plus size={12} strokeWidth={2.2} aria-hidden />
+                    {entry.label}
+                  </button>
+                </Tip>
+              ))
+            : null}
+
+          {tabs.length > 0 && newTabs && newTabs.length > 0 ? (
             <Menu
               label="Open in the dock"
               testId="dock-new-menu"
               entries={newTabs.map((entry) => ({ id: entry.id, label: entry.label, onSelect: entry.onSelect }))}
             >
-              <button
-                type="button"
-                data-testid="dock-new"
-                aria-label="Open something in the dock"
-                onClick={() => newTabs[0]?.onSelect()}
-                className="flex w-[30px] shrink-0 items-center justify-center text-tertiary hover:text-primary"
-              >
-                <Plus size={14} strokeWidth={2} />
-              </button>
+              <Tip label="Open something else in the dock">
+                <button
+                  type="button"
+                  data-testid="dock-new"
+                  aria-label="Open something in the dock"
+                  onClick={() => newTabs[0]?.onSelect()}
+                  className="flex w-[30px] shrink-0 items-center justify-center text-tertiary hover:text-primary"
+                >
+                  <Plus size={14} strokeWidth={2} />
+                </button>
+              </Tip>
             </Menu>
-          ) : null}
-
-          {tabs.length === 0 ? (
-            <span className="flex items-center px-2 text-[11.5px] text-tertiary">
-              Logs, shells and pinned objects stay here while you work elsewhere.
-            </span>
           ) : null}
         </div>
 

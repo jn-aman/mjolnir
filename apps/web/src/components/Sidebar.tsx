@@ -4,6 +4,9 @@ import type { ResourceDefinition } from '@mjolnir/k8s';
 import { CATEGORY_TINT } from '../lib/tint.ts';
 import { KIND_ICON } from '../lib/kindIcons.ts';
 import { clusterTools, type ToolDefinition } from '../lib/tools.ts';
+import { sectionIcon } from '../lib/sectionIcons.ts';
+import { useModuleNav } from '../lib/moduleNav.ts';
+import { Folder } from 'lucide-react';
 import { useFlags } from '../lib/flags.tsx';
 import type { CustomResource } from '../lib/api.ts';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
@@ -75,6 +78,7 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
     });
 
   const { values: flagValues } = useFlags();
+  const moduleNav = useModuleNav();
 
   const isActive = (candidate: NavSelection) =>
     candidate.kind === selection.kind && candidate.value === selection.value;
@@ -91,11 +95,24 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
     const Icon = module.icon;
     return (
       <nav data-testid="sidebar" className="flex shrink-0 flex-col overflow-y-auto border-r border-line bg-raised py-2" style={{ width }}>
-        <div className="flex items-center gap-2 px-3 py-2">
-          <Icon size={15} strokeWidth={1.8} aria-hidden style={{ color: module.tint }} />
-          <span className="text-[13px] font-semibold text-primary">{module.label}</span>
-          {module.built ? null : <span className="rounded-xs border border-line px-1 text-[9.5px] font-semibold uppercase tracking-wide text-tertiary">planned</span>}
-        </div>
+        {/*
+          Collapsed, the title is four icons wide and wraps to three lines of
+          broken words. There is no room for a name in a 56px rail, so it does
+          not try: the icon is the title, and its tooltip says the rest.
+        */}
+        {compact ? (
+          <Tip label={module.label} side="right">
+            <div className="mx-auto flex h-[30px] w-[30px] items-center justify-center" data-testid="module-title">
+              <Icon size={16} strokeWidth={1.8} aria-hidden style={{ color: module.tint }} />
+            </div>
+          </Tip>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2" data-testid="module-title">
+            <Icon size={15} strokeWidth={1.8} aria-hidden style={{ color: module.tint }} />
+            <span className="min-w-0 truncate text-[13px] font-semibold text-primary">{module.label}</span>
+            {module.built ? null : <span className="shrink-0 rounded-xs border border-line px-1 text-[9.5px] font-semibold uppercase tracking-wide text-tertiary">planned</span>}
+          </div>
+        )}
         <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
         <ul>
           {(module.sections ?? []).map((section) => {
@@ -104,7 +121,10 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
               <li key={section}>
                 <Entry
                   compact={compact}
-                  icon={Icon}
+                  // Its own icon, not the module's. Four identical archive
+                  // boxes stacked up read as a rendering fault, and in the
+                  // collapsed rail they are the only thing to go on.
+                  icon={sectionIcon(section, Icon)}
                   label={section}
                   testId={`nav-${id}`}
                   active={activeSection === id.split(':')[1]}
@@ -116,6 +136,53 @@ export function Sidebar({ kinds, custom = [], selection, counts, onSelect, width
             );
           })}
         </ul>
+
+        {/*
+          What the module itself has to show: the buckets in the open store,
+          the databases in the open connection. It belongs in the navigation
+          and the module is the only thing that knows it, so the module
+          publishes and this subscribes.
+        */}
+        {moduleNav.map((group) => (
+          <section key={group.title} className="mt-2" data-testid={`nav-group-${group.title.toLowerCase().replace(/\s+/g, '-')}`}>
+            <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
+            {compact ? null : (
+              <div className="flex items-center gap-2 px-3 pb-0.5 pt-1.5">
+                <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">{group.title}</span>
+                <div className="flex-1" />
+                {group.action ? (
+                  <button
+                    type="button"
+                    onClick={group.action.onSelect}
+                    className="rounded-xs px-1 text-[11px] text-tertiary hover:bg-hover hover:text-primary"
+                  >
+                    {group.action.label}
+                  </button>
+                ) : null}
+              </div>
+            )}
+            {group.items.length === 0 && group.empty && !compact ? (
+              <p className="px-3 py-1 text-[11.5px] leading-[1.5] text-tertiary">{group.empty}</p>
+            ) : null}
+            <ul>
+              {group.items.map((item) => (
+                <li key={item.id}>
+                  <Entry
+                    compact={compact}
+                    icon={Folder}
+                    label={item.label}
+                    {...(item.hint === undefined ? {} : { count: undefined })}
+                    testId={`nav-item-${item.id}`}
+                    active={item.active ?? false}
+                    tint={module.tint}
+                    menu={[{ id: 'open', label: `Open ${item.label}`, onSelect: item.onSelect }]}
+                    onSelect={item.onSelect}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </nav>
     );
   }

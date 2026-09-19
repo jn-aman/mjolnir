@@ -133,14 +133,37 @@ export function Overview({ context, cluster, onDecorChanged, onNavigate }: Overv
       .map((event) => {
         const at = (event as { lastTimestamp?: string }).lastTimestamp;
         const reason = (event as { reason?: string }).reason ?? 'Warning';
+        const message = (event as { message?: string }).message ?? '';
+        const object = (event as { involvedObject?: { kind?: string; name?: string } }).involvedObject;
         if (!at) return null;
         const t = new Date(at).getTime();
         if (!Number.isFinite(t) || t < first) return null;
-        return { from: t - 60_000, to: t + 60_000, label: reason };
+        // The label is the handle; the detail is the answer. "BackOff" tells
+        // nobody which pod, or why, and that is the whole question.
+        const subject = object?.name ? `${object.kind ?? 'Object'} ${object.name}` : '';
+        const detail = [subject, message].filter(Boolean).join(': ');
+        return { from: t - 60_000, to: t + 60_000, label: reason, ...(detail ? { detail } : {}) };
       })
-      .filter((band): band is { from: number; to: number; label: string } => band !== null)
+      .filter((band): band is { from: number; to: number; label: string; detail?: string } => band !== null)
       .slice(0, 2);
   }, [warnings, nodeMetrics]);
+
+  /**
+   * How much history there actually is.
+   *
+   * Kubernetes keeps none, so the chart is built from what Mjolnir has
+   * collected since it started. Labelling that "last hour" two minutes in is
+   * a small lie with a real cost: someone reads a flat line as a quiet hour
+   * and it is a quiet two minutes.
+   */
+  const window = useMemo(() => {
+    const first = nodeMetrics?.series[0]?.points[0]?.t;
+    if (!first) return 'collecting';
+    const minutes = Math.round((Date.now() - first) / 60_000);
+    if (minutes < 1) return 'just started';
+    if (minutes < 60) return `last ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+    return 'last hour';
+  }, [nodeMetrics]);
 
   const capacity = useMemo(() => {
     let cpuAlloc = 0;
@@ -228,13 +251,13 @@ export function Overview({ context, cluster, onDecorChanged, onNavigate }: Overv
 
       <div className="relative mb-4 flex gap-3.5">
         <div className="relative shrink-0" style={{ width: split.width }}>
-        <Card title="CPU by node" icon={Activity} tint="var(--series-1)" subtitle="last hour, cores" className="h-full">
+        <Card title="CPU by node" icon={Activity} tint="var(--series-1)" subtitle={`${window}, cores`} className="h-full">
           {nodeMetrics?.available ? (
             <TimeSeries
               series={cpuSeries}
               format={formatCpu}
               bands={bands}
-              ariaLabel="CPU usage per node over the last hour"
+              ariaLabel={`CPU usage per node, ${window}`}
               onSelect={(name) => onNavigate({ kind: 'Node', name })}
             />
           ) : (
@@ -245,13 +268,13 @@ export function Overview({ context, cluster, onDecorChanged, onNavigate }: Overv
         </div>
 
         {/* Deliberately a second chart rather than a second axis on the first. */}
-        <Card title="Memory by node" icon={Activity} tint="var(--series-2)" subtitle="last hour" className="min-w-0 flex-1">
+        <Card title="Memory by node" icon={Activity} tint="var(--series-2)" subtitle={window} className="min-w-0 flex-1">
           {nodeMetrics?.available ? (
             <TimeSeries
               series={memorySeries}
               format={formatMemory}
               bands={bands}
-              ariaLabel="Memory usage per node over the last hour"
+              ariaLabel={`Memory usage per node, ${window}`}
               onSelect={(name) => onNavigate({ kind: 'Node', name })}
             />
           ) : (

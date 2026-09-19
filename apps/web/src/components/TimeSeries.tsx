@@ -4,6 +4,7 @@ import { bisector, extent, max as d3max } from 'd3-array';
 import { scaleLinear, scaleTime } from 'd3-scale';
 import { area, curveMonotoneX, line } from 'd3-shape';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Tip } from './ui/Tooltip.tsx';
 
 /**
  * A multi-series time chart.
@@ -37,7 +38,17 @@ export interface Series {
 export interface Band {
   readonly from: number;
   readonly to: number;
+  /** The short name on the chart. Usually a Kubernetes event reason. */
   readonly label: string;
+  /**
+   * What actually happened, in a sentence.
+   *
+   * A red band labelled "BackOff" is a word from Kubernetes' vocabulary
+   * dropped onto a chart with no explanation: it says something went wrong at
+   * this moment and nothing about what, to which object, or whether it
+   * matters. The label is the handle; this is the answer.
+   */
+  readonly detail?: string | undefined;
 }
 
 interface TimeSeriesProps {
@@ -151,7 +162,7 @@ export function TimeSeries({
   const mergedBands = useMemo(() => {
     if (bands.length === 0) return [];
     const sorted = [...bands].sort((a, b) => a.from - b.from);
-    const out: Array<{ from: number; to: number; labels: string[] }> = [];
+    const out: Array<{ from: number; to: number; labels: string[]; details: string[] }> = [];
 
     for (const band of sorted) {
       const last = out.at(-1);
@@ -161,8 +172,9 @@ export function TimeSeries({
       if (last && band.from <= last.to + slack) {
         last.to = Math.max(last.to, band.to);
         if (!last.labels.includes(band.label)) last.labels.push(band.label);
+        if (band.detail && !last.details.includes(band.detail)) last.details.push(band.detail);
       } else {
-        out.push({ from: band.from, to: band.to, labels: [band.label] });
+        out.push({ from: band.from, to: band.to, labels: [band.label], details: band.detail ? [band.detail] : [] });
       }
     }
     return out;
@@ -213,6 +225,16 @@ export function TimeSeries({
 
           return (
             <g key={`${band.from}-${label}`}>
+              {/*
+                The whole band is the hover target, not just the label, and it
+                carries the sentence. A native title on an SVG group is the one
+                tooltip that works inside a chart without the element needing
+                to be a DOM node in the layout.
+              */}
+              <title>
+                {`${band.labels.join(', ')} at ${new Date(band.from + 60_000).toLocaleTimeString()}`}
+                {band.details.length ? `\n${band.details.join('\n')}` : ''}
+              </title>
               <rect
                 x={left}
                 width={bandWidth}
@@ -408,6 +430,28 @@ export function TimeSeries({
             </Menu>
           );
         })}
+
+        {/*
+          A legend entry for the bands, because they are a series too: a
+          different colour on the same chart meaning a different thing. A red
+          stripe labelled "BackOff" with nothing explaining it is a word from
+          Kubernetes' vocabulary dropped on a chart, and the person reading it
+          is entitled to know it marks a warning rather than a threshold, a
+          deploy or a gap in the data.
+        */}
+        {mergedBands.length > 0 ? (
+          <Tip
+            label="Cluster warnings"
+            hint="Each band marks a minute either side of a warning event. Hover one on the chart to see what it was."
+          >
+            <span className="flex items-center gap-2 rounded-full border border-line bg-raised px-2.5 py-1" data-testid="legend-bands">
+              <span aria-hidden className="h-[10px] w-[3px] rounded-full" style={{ background: 'var(--status-error)' }} />
+              <span className="text-[11px] text-secondary">
+                {mergedBands.length === 1 ? 'warning' : `${mergedBands.length} warnings`}
+              </span>
+            </span>
+          </Tip>
+        ) : null}
       </div>
 
       {hover !== null && hovered ? (

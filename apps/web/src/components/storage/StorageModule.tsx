@@ -17,6 +17,7 @@ import { FileViewer } from './FileViewer.tsx';
 import type { ToolDefinition } from '../../lib/tools.ts';
 import { bucketName, url as urlRule } from '../../lib/validate.ts';
 import { useSticky } from '../../lib/sticky.ts';
+import { clearModuleNav, setModuleNav } from '../../lib/moduleNav.ts';
 import { useFlags } from '../../lib/flags.tsx';
 
 /**
@@ -189,6 +190,34 @@ function Buckets({ connections, connectionId, onConnection }: { connections: Sto
   useEffect(() => {
     void loadBuckets();
   }, [loadBuckets]);
+
+  /**
+   * The buckets, in the sidebar.
+   *
+   * A store's buckets are the first thing anyone wants after connecting, and
+   * they were behind a dropdown in a toolbar: something you have to know is
+   * there before you can look. The sidebar is where a list of places belongs,
+   * so that is where they go, and the dropdown stays for when the sidebar is
+   * collapsed.
+   */
+  useEffect(() => {
+    setModuleNav([
+      {
+        title: connectionId ? 'Buckets' : 'No store',
+        items: buckets.map((entry) => ({
+          id: entry.name,
+          label: entry.name,
+          active: entry.name === bucket,
+          onSelect: () => setBucket(entry.name),
+        })),
+        empty: connectionId
+          ? 'This store has no buckets yet.'
+          : 'Connect a store to see its buckets. Stores in your cluster are found from the pod that runs them.',
+        ...(canWrite && connectionId ? { action: { label: 'New', onSelect: () => setCreatingBucket(true) } } : {}),
+      },
+    ]);
+    return () => clearModuleNav();
+  }, [buckets, bucket, connectionId, canWrite, setBucket]);
 
   // A prefix belongs to the bucket it was read from. Changing bucket has to
   // drop it, but mounting with a remembered pair must not, so this compares
