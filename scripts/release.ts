@@ -67,10 +67,10 @@ function childEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-function run(command: string, args: string[], cwd = root): void {
+function run(command: string, args: string[], cwd = root, extraEnv: Record<string, string> = {}): void {
   process.stdout.write(`\n  $ ${command} ${args.join(' ')}\n`);
   try {
-    execFileSync(command, args, { cwd, stdio: 'inherit', env: childEnv() });
+    execFileSync(command, args, { cwd, stdio: 'inherit', env: { ...childEnv(), ...extraEnv } });
   } catch (error) {
     const status = (error as { status?: number }).status ?? 1;
     process.stdout.write(`\n  ${command} ${args.join(' ')} exited ${status}.\n\n`);
@@ -235,7 +235,17 @@ async function main(): Promise<void> {
     const builderArgs = ['electron-builder', '--mac'];
     if (args.includes('--dir')) builderArgs.push('--dir');
     if (args.includes('--arm64')) builderArgs.push('--arm64');
-    run('npx', builderArgs, join(root, 'apps/desktop'));
+    /*
+     * CI has no signing identity, and should not.
+     *
+     * A Developer ID certificate in a build runner is a certificate anybody
+     * who can open a pull request can borrow. CI builds unsigned to prove the
+     * package is the right shape, which is the failure that actually
+     * happened: a DMG shipped without two workspace packages, exited at
+     * launch, and nothing before the user's machine noticed.
+     */
+    const skipSign = args.includes('--skip-sign') || process.env['CSC_IDENTITY_AUTO_DISCOVERY'] === 'false';
+    run('npx', builderArgs, join(root, 'apps/desktop'), skipSign ? { CSC_IDENTITY_AUTO_DISCOVERY: 'false' } : {});
   } finally {
     // Written back from what was read, not `git checkout`: restoring from git
     // would silently throw away an uncommitted edit to this file, which is

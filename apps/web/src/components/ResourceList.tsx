@@ -348,17 +348,15 @@ export function ResourceList({
         viewport width while the header scrolled past them.
       */}
       {/*
-        The edges of a table that scrolls.
+        A scrollbar, on purpose, whenever the table is wider than the window.
         
-        Purely a cue, so it takes no pointer events and sits above the rows
-        and below the pinned actions. Without it the only hint that a wide
-        table has more in it is a scrollbar that macOS hides until you touch
-        the trackpad, which is a hint nobody gets.
+        macOS hides overlay scrollbars until you touch the trackpad, so a wide
+        table looks finished: the last column you can see reads as the last
+        column there is. A gradient at the edge was tried and reads as a
+        smudge rather than as "there is more"; the control everybody already
+        understands is the scrollbar, so the table keeps one.
       */}
-      <div className="relative flex min-h-0 min-w-0 flex-1">
-      {more.left ? <span aria-hidden className="table-edge table-edge-left" /> : null}
-      {more.right ? <span aria-hidden className="table-edge table-edge-right" /> : null}
-      <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto">
+      <div ref={scrollRef} className={`min-h-0 min-w-0 flex-1 overflow-auto ${overflowing ? 'table-scroller' : ''}`}>
        <div className="flex min-h-full min-w-max flex-col">
         <div
           role="row"
@@ -592,7 +590,6 @@ export function ResourceList({
           </div>
         )}
        </div>
-      </div>
       </div>
 
       <div className="flex h-[26px] shrink-0 items-center gap-3 border-t border-line bg-raised px-4 font-mono text-[11px] text-tertiary">

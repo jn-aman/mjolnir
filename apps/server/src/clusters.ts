@@ -428,11 +428,24 @@ export class ClusterRegistry {
     this.#kubeconfig = result.config;
     this.#failures = result.failures;
 
-    // The demo cluster is always present. Someone evaluating the app should
-    // never have to point it at production to find out whether it is any good.
-    const demo = new DemoConnection();
-    this.#contexts = [demo.context, ...result.contexts];
-    this.#current = result.currentContext ?? DEMO_CONTEXT;
+    /*
+     * The demo cluster is for tests, not for the product.
+     *
+     * It used to be listed beside the real ones always, on the reasoning that
+     * somebody evaluating the app should not have to point it at production.
+     * In practice it then sits in the switcher forever, a fake cluster among
+     * real ones, and the cost of that is paid every day by everybody who
+     * needed it once.
+     *
+     * It is still here, because every end-to-end test runs against it: a
+     * synthetic cluster is the only way to assert on a CrashLoopBackOff pod at
+     * a known moment in time. `MJOLNIR_DEMO=1` is how CI asks for it, and it
+     * is then the only context, so a spec on a machine that does have a
+     * cluster cannot reach one.
+     */
+    const demo = demoOnly ? [new DemoConnection().context] : [];
+    this.#contexts = [...demo, ...result.contexts];
+    this.#current = result.currentContext ?? (demoOnly ? DEMO_CONTEXT : null);
 
     const names = new Set(this.#contexts.map((context) => context.name));
     for (const [name, connection] of this.#connections) {

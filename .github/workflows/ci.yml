@@ -8,15 +8,27 @@ on:
 permissions:
   contents: read
 
+# A push that lands while the previous one is still running cancels it. The
+# older result is about code nobody has any more.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The version the licence service runs in production, and the first with
+  # node:sqlite stable. Testing on an older one tests something we do not ship.
+  NODE_VERSION: '24'
+
 jobs:
   verify:
+    name: Types and unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - run: npm ci
@@ -26,23 +38,30 @@ jobs:
       - run: npm run verify
 
   e2e:
+    name: End to end
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - run: npm ci
       - run: npm run build
 
-      # Drives the real Electron app against the built-in demo cluster, so no
-      # kubeconfig or network access is needed.
+      # Drives the real Electron app against the built-in demo cluster. That
+      # cluster is the whole reason these can run here at all: no kubeconfig,
+      # no network, and a CrashLoopBackOff pod that is reliably crash-looping
+      # at the moment a spec asserts on it.
+      #
+      # MJOLNIR_DEMO makes it the only context, so a spec on a machine that
+      # does have a cluster cannot reach it.
       - run: npm run e2e
         env:
           CI: 'true'
+          MJOLNIR_DEMO: '1'
 
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -50,3 +69,35 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  package:
+    name: The app actually packages
+    runs-on: macos-latest
+    # Only on main: it builds a real DMG, which takes minutes, and a pull
+    # request is answered by the two jobs above.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Unsigned here, because the signing identity is not in CI. The point of
+      # this job is that the shape is right: every workspace package inside the
+      # asar, the web client present, the icon current. A DMG that is missing a
+      # package fails at launch on somebody's machine and nowhere earlier,
+      # which is exactly what happened once.
+      - run: npm run release -- --skip-sign
+        env:
+          CI: 'true'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mjolnir-dmg
+          path: apps/desktop/release/*.dmg
+          retention-days: 7
+          if-no-files-found: error

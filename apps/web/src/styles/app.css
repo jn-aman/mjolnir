@@ -427,34 +427,42 @@
 }
 
 /*
- * The edges of a table that scrolls sideways.
+ * A scrollbar the table keeps, rather than one the platform hides.
  *
- * A frozen actions column is an excellent way to hide the fact that a table
- * scrolls at all: everything ends neatly before it, so the last thing you can
- * see reads as the last thing there is. macOS hides the scrollbar until you
- * touch the trackpad, so that is not the cue either.
+ * macOS shows overlay scrollbars only while you are scrolling, which for a
+ * wide table means the only signal that there is more to the right appears
+ * after you have already gone looking. The last visible column reads as the
+ * last column there is.
  *
- * These sit above the rows and below the pinned column, take no pointer
- * events, and disappear the moment there is genuinely nothing further that
- * way. A cue that is always on is decoration.
+ * A gradient at the edge was the first attempt and it reads as a smudge, not
+ * as "there is more". This is the control everyone already knows, kept thin
+ * and quiet enough to live under a row of data.
  */
-.table-edge {
-  position: absolute;
-  top: 36px;
-  bottom: 0;
-  width: 28px;
-  z-index: 2;
-  pointer-events: none;
+.table-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
-.table-edge-left {
-  left: 0;
-  background: linear-gradient(to right, var(--surface-ground), transparent);
+.table-scroller::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
 }
-.table-edge-right {
-  /* Clear of the pinned actions, so it marks where the hidden columns go
-     rather than fading the buttons that sit on top of them. */
-  right: 176px;
-  background: linear-gradient(to left, var(--surface-ground), transparent);
+.table-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.table-scroller::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  /* Inset from the track so the bar reads as floating rather than as a
+     border welded to the bottom of the table. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.table-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+  background-clip: content-box;
+}
+.table-scroller::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* The pinned column only casts a shadow while something is under it. */
