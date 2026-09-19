@@ -9,7 +9,7 @@
  */
 export interface DockTab {
     readonly id: string;
-    readonly kind: 'logs' | 'terminal' | 'assistant';
+    readonly kind: 'logs' | 'terminal' | 'assistant' | 'resource';
     readonly title: string;
     readonly subtitle?: string;
     readonly context: string;
@@ -19,6 +19,9 @@ export interface DockTab {
     /** For terminal tabs: the container to exec into. */
     readonly container?: string | undefined;
     readonly source?: 'kubernetes' | 'docker' | undefined;
+    /** For resource tabs: the object pinned here. */
+    readonly resourceKind?: string | undefined;
+    readonly name?: string | undefined;
 }
 interface DockProps {
     readonly tabs: readonly DockTab[];
@@ -31,6 +34,12 @@ interface DockProps {
     readonly onCloseAll: () => void;
     /** Opens the tab's subject in the details panel, full size. */
     readonly onExpand: (tab: DockTab) => void;
+    /** Lets a pinned object's reference chips open other objects. */
+    readonly onNavigate?: ((target: {
+        kind: string;
+        name?: string;
+        namespace?: string;
+    }) => void) | undefined;
     readonly assistant?: {
         readonly incoming: {
             readonly id: number;
@@ -39,6 +48,6 @@ interface DockProps {
         readonly onOpenSettings: () => void;
     } | undefined;
 }
-export declare function Dock({ tabs, activeId, height, dragging, onResizeStart, onActivate, onClose, onCloseAll, onExpand, assistant }: DockProps): import("react").JSX.Element | null;
+export declare function Dock({ tabs, activeId, height, dragging, onResizeStart, onActivate, onClose, onCloseAll, onExpand, onNavigate, assistant }: DockProps): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=Dock.d.ts.map

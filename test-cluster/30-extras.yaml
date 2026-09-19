@@ -1,0 +1,104 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop
+  namespace: shop
+  annotations: { "nginx.ingress.kubernetes.io/rewrite-target": / }
+spec:
+  rules:
+    - host: shop.localhost
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: frontend, port: { number: 80 } } } }
+    - host: api.shop.localhost
+      http:
+        paths:
+          - { path: /cart, pathType: Prefix, backend: { service: { name: cartservice, port: { number: 7070 } } } }
+          - { path: /catalog, pathType: Prefix, backend: { service: { name: productcatalogservice, port: { number: 3550 } } } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: frontend, namespace: shop }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: frontend }
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: frontend, namespace: shop }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: frontend } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: cart-from-frontend, namespace: shop }
+spec:
+  podSelector: { matchLabels: { app: cartservice } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: frontend } }
+        - podSelector: { matchLabels: { app: checkoutservice } }
+      ports: [{ port: 7070, protocol: TCP }]
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata: { name: shop, namespace: shop }
+spec:
+  hard: { "requests.cpu": "4", "requests.memory": 8Gi, pods: "40" }
+---
+apiVersion: v1
+kind: LimitRange
+metadata: { name: defaults, namespace: shop }
+spec:
+  limits:
+    - type: Container
+      default: { cpu: 200m, memory: 256Mi }
+      defaultRequest: { cpu: 50m, memory: 64Mi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: catalog-reindex, namespace: shop }
+spec:
+  schedule: "*/5 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: reindex
+              image: busybox:1.36
+              command: [sh, -c, "echo reindexing the catalog; sleep 5; echo done"]
+              resources: { requests: { cpu: 10m, memory: 16Mi } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: seed-buckets, namespace: data }
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: quay.io/minio/mc:latest
+          command:
+            - sh
+            - -c
+            - |
+              until mc alias set local http://minio.data.svc.cluster.local:9000 mjolnir mjolnir-secret; do sleep 3; done
+              mc mb --ignore-existing local/product-images local/invoices local/backups
+              echo '{"sku":"OLJCESPC7Z","name":"Sunglasses","price":19.99}' > /tmp/product.json
+              printf 'id,name,total\n1,ada,42.00\n2,grace,19.99\n' > /tmp/invoices.csv
+              mc cp /tmp/product.json local/product-images/catalog/product.json
+              mc cp /tmp/invoices.csv local/invoices/2026/09/invoices.csv
+              mc cp /tmp/product.json local/backups/nightly/2026-09-19/product.json
+              mc ls --recursive local

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { logger } from '@mjolnir/logger';
-import { ENDPOINTS } from '@mjolnir/endpoints';
+import { BUILD, ENDPOINTS } from '@mjolnir/endpoints';
 
 const log = logger.child('settings');
 
@@ -30,18 +30,26 @@ export const AiSettings = z.object({
   instructions: z.string().default(''),
 });
 
-/** Flags: switches the person moved, and the Unleash Edge behind unleash.mjolnir.sh. */
+/**
+ * Flags: switches the person moved, and the Unleash behind unleash.mjolnir.sh.
+ *
+ * A release build carries its own read-only client token, so flags work on
+ * first launch with nothing configured and nobody is ever asked for a key. It
+ * starts enabled for the same reason. A source checkout has no token, so the
+ * default is off there and the compiled fallbacks are what runs.
+ */
 export const FlagSettings = z.object({
   overrides: z.record(z.string(), z.boolean()).default({}),
   remote: z
     .object({
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().default(BUILD.flagsToken !== ''),
       url: z.string().default(ENDPOINTS.flags),
+      /** Empty means "use the token this build shipped with". */
       token: z.string().default(''),
       environment: z.string().default('production'),
       refreshSeconds: z.number().int().min(30).max(86_400).default(900),
     })
-    .default({ enabled: false, url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 900 }),
+    .default({ enabled: BUILD.flagsToken !== '', url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 900 }),
 });
 
 /**

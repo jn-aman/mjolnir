@@ -15,6 +15,7 @@ import {
   Server,
   Terminal,
   Trash2,
+  Pin as PinIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { KubeItem } from './columns.tsx';
@@ -36,6 +37,7 @@ import { ShieldAlert } from 'lucide-react';
 
 export type RowActionId =
   | 'open'
+  | 'pin'
   | 'logs'
   | 'dock-logs'
   | 'forward'
@@ -91,6 +93,9 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
 
   const entries: MenuEntry[] = [
     { id: 'open', label: 'Open details', icon: icon(FileText), shortcut: '↵', onSelect: () => act('open') },
+    // Pinned objects live in the dock and survive navigating away, which is
+    // the point: you read the pods while the deployment stays in front of you.
+    { id: 'pin', label: 'Keep open in the dock', icon: icon(PinIcon), onSelect: () => act('pin') },
     askEntry(isPod && problem ? 'Ask why it is failing' : 'Ask the assistant about this', askPrompt),
     ...(isPod
       ? [

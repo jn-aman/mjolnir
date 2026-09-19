@@ -1,0 +1,52 @@
+# Real topics, a producer that never stops, and a consumer that reads slower
+# than the producer writes, so consumer lag is a real number and not a demo.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: orders-producer, namespace: data, labels: { app: orders-producer } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: orders-producer } }
+  template:
+    metadata: { labels: { app: orders-producer } }
+    spec:
+      containers:
+        - name: producer
+          image: bitnamilegacy/kafka:3.7
+          command: [bash, -c]
+          args:
+            - |
+              until kafka-topics.sh --bootstrap-server kafka.data:9092 --list; do sleep 5; done
+              for t in orders payments shipments audit; do
+                kafka-topics.sh --bootstrap-server kafka.data:9092 --create --if-not-exists --topic "$t" --partitions 3 --replication-factor 1
+              done
+              i=0
+              while true; do
+                i=$((i+1))
+                printf '{"order":%d,"sku":"OLJCESPC7Z","total":19.99}\n' "$i" | kafka-console-producer.sh --bootstrap-server kafka.data:9092 --topic orders >/dev/null 2>&1
+                printf '{"payment":%d,"status":"captured"}\n' "$i" | kafka-console-producer.sh --bootstrap-server kafka.data:9092 --topic payments >/dev/null 2>&1
+                sleep 1
+              done
+          resources: { requests: { cpu: 50m, memory: 384Mi }, limits: { memory: 1Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: orders-consumer, namespace: data, labels: { app: orders-consumer } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: orders-consumer } }
+  template:
+    metadata: { labels: { app: orders-consumer } }
+    spec:
+      containers:
+        - name: consumer
+          image: bitnamilegacy/kafka:3.7
+          command: [bash, -c]
+          args:
+            - |
+              until kafka-topics.sh --bootstrap-server kafka.data:9092 --list; do sleep 5; done
+              # Deliberately slower than the producer, so the group falls behind.
+              while true; do
+                timeout 20 kafka-console-consumer.sh --bootstrap-server kafka.data:9092 --topic orders --group fulfilment --max-messages 5 >/dev/null 2>&1 || true
+                sleep 25
+              done
+          resources: { requests: { cpu: 50m, memory: 384Mi }, limits: { memory: 1Gi } }

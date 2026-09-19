@@ -17,6 +17,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
+    "build:secrets": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/build-secrets.ts",
     "unleash:export": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/unleash-sync.ts export",
     "unleash:sync": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/unleash-sync.ts sync",
     "licence": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/licence-grant.ts",

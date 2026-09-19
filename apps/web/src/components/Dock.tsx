@@ -6,6 +6,8 @@ import { LogViewer } from './LogViewer.tsx';
 import { ResizeHandle } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
 import { copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
+import { KindMark } from './ui/KindMark.tsx';
+import { DockResource } from './DockResource.tsx';
 
 /**
  * The dock: a strip along the bottom that holds things you want to keep open
@@ -19,7 +21,7 @@ import { copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx
 
 export interface DockTab {
   readonly id: string;
-  readonly kind: 'logs' | 'terminal' | 'assistant';
+  readonly kind: 'logs' | 'terminal' | 'assistant' | 'resource';
   readonly title: string;
   readonly subtitle?: string;
   readonly context: string;
@@ -29,6 +31,9 @@ export interface DockTab {
   /** For terminal tabs: the container to exec into. */
   readonly container?: string | undefined;
   readonly source?: 'kubernetes' | 'docker' | undefined;
+  /** For resource tabs: the object pinned here. */
+  readonly resourceKind?: string | undefined;
+  readonly name?: string | undefined;
 }
 
 interface DockProps {
@@ -42,10 +47,12 @@ interface DockProps {
   readonly onCloseAll: () => void;
   /** Opens the tab's subject in the details panel, full size. */
   readonly onExpand: (tab: DockTab) => void;
+  /** Lets a pinned object's reference chips open other objects. */
+  readonly onNavigate?: ((target: { kind: string; name?: string; namespace?: string }) => void) | undefined;
   readonly assistant?: { readonly incoming: { readonly id: number; readonly text: string } | null; readonly onOpenSettings: () => void } | undefined;
 }
 
-export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActivate, onClose, onCloseAll, onExpand, assistant }: DockProps) {
+export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActivate, onClose, onCloseAll, onExpand, onNavigate, assistant }: DockProps) {
   const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
   if (!active) return null;
 
@@ -101,6 +108,8 @@ export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActiva
                   <ScrollText size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
                 ) : tab.kind === 'assistant' ? (
                   <Sparkles size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
+                ) : tab.kind === 'resource' ? (
+                  <KindMark kind={tab.resourceKind ?? ''} />
                 ) : (
                   <TerminalIcon size={12} strokeWidth={1.9} aria-hidden className={isActive ? 'text-accent' : ''} />
                 )}
@@ -144,6 +153,14 @@ export function Dock({ tabs, activeId, height, dragging, onResizeStart, onActiva
               <Assistant context={tab.context || null} incoming={assistant?.incoming ?? null} onOpenSettings={assistant?.onOpenSettings ?? (() => undefined)} />
             ) : tab.kind === 'terminal' && tab.pod ? (
               <Terminal source={tab.source} context={tab.context} namespace={tab.namespace ?? ''} pod={tab.pod} container={tab.container} />
+            ) : tab.kind === 'resource' && tab.resourceKind && tab.name ? (
+              <DockResource
+                context={tab.context}
+                kind={tab.resourceKind}
+                name={tab.name}
+                namespace={tab.namespace}
+                {...(onNavigate ? { onNavigate } : {})}
+              />
             ) : null}
           </div>
         ))}

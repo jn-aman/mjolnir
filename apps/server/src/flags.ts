@@ -1,6 +1,6 @@
 import { platform, release } from 'node:os';
 import { evaluateAll, fetchFeatures, type FlagState, type UnleashContext, type UnleashFeature } from '@mjolnir/flags';
-import { hostRefusal } from '@mjolnir/endpoints';
+import { BUILD, hostRefusal } from '@mjolnir/endpoints';
 import { logger } from '@mjolnir/logger';
 import type { SettingsStore } from './settings.ts';
 
@@ -115,7 +115,9 @@ export class FlagStore {
     try {
       const features = await fetchFeatures({
         url: remote.url,
-        token: remote.token,
+        // A token typed into settings wins; otherwise the one this build ships
+        // with, so nobody has to paste anything for flags to work.
+        token: remote.token || BUILD.flagsToken,
         appName: 'mjolnir',
         environment: remote.environment,
         instanceId: this.#settings.installId(),

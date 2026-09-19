@@ -1,0 +1,101 @@
+# Every file type the bucket store viewer claims to handle, in both stores.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: seed-script, namespace: data }
+data:
+  seed.sh: |
+    set -eu
+    alias_name="$1"; endpoint="$2"; access="$3"; secret="$4"
+    until mc alias set "$alias_name" "$endpoint" "$access" "$secret"; do echo "waiting for $endpoint"; sleep 3; done
+    for b in product-images invoices backups logs datasets media documents archives; do
+      mc mb --ignore-existing "$alias_name/$b"
+    done
+    cd /tmp
+
+    # Text and code, one of everything the viewer highlights.
+    printf '{\n  "sku": "OLJCESPC7Z",\n  "name": "Sunglasses",\n  "price": 19.99,\n  "tags": ["summer", "sale"]\n}\n' > product.json
+    printf 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: catalog\ndata:\n  region: eu-west-1\n' > catalog.yaml
+    printf 'id,name,total,currency\n1,ada,42.00,GBP\n2,grace,19.99,USD\n3,katherine,7.50,EUR\n' > invoices.csv
+    printf 'export function price(cents: number): string {\n  return (cents / 100).toFixed(2);\n}\n' > price.ts
+    printf 'def price(cents):\n    return f"{cents / 100:.2f}"\n' > price.py
+    printf 'package main\n\nimport "fmt"\n\nfunc main() { fmt.Println("hello") }\n' > main.go
+    printf 'SELECT sku, sum(total) FROM orders GROUP BY sku ORDER BY 2 DESC;\n' > report.sql
+    printf '# Runbook\n\n## Restarting the catalog\n\n1. Scale to zero\n2. Scale back\n' > runbook.md
+    printf '<html><body><h1>Receipt</h1><p>Thank you</p></body></html>\n' > receipt.html
+    printf 'body { color: #111; font-family: system-ui; }\n' > site.css
+    printf '<?xml version="1.0"?>\n<order id="42"><item sku="OLJ">2</item></order>\n' > order.xml
+    printf 'FROM alpine:3.20\nRUN apk add --no-cache curl\nCMD ["sh"]\n' > Dockerfile
+    printf 'level=info msg="order placed" sku=OLJ total=19.99\nlevel=warn msg="slow query" ms=812\nlevel=error msg="payment declined" card=****\n' > app.log
+    printf 'ORDERS_TOPIC=orders\nKAFKA_BROKERS=kafka.data:9092\n' > .env
+    printf 'a plain note, nothing special\n' > note.txt
+
+    # A big one, to exercise ranged reads and the size formatting.
+    head -c 5242880 /dev/urandom | base64 > large.txt
+
+    # Images: a real PNG, a real GIF, an SVG.
+    printf '\211PNG\r\n\032\n' > tiny.png
+    printf '\000\000\000\015IHDR\000\000\000\001\000\000\000\001\010\006\000\000\000\037\025\304\211' >> tiny.png
+    printf '\000\000\000\012IDATx\234c\000\001\000\000\005\000\001\015\012\055\264\000\000\000\000IEND\256B\140\202' >> tiny.png
+    printf 'GIF89a\001\000\001\000\200\000\000\377\377\377\000\000\000!\371\004\001\000\000\000\000,\000\000\000\000\001\000\001\000\000\002\002D\001\000;' > dot.gif
+    printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="28" fill="#2f52d8"/></svg>\n' > logo.svg
+
+    # A real, minimal PDF.
+    printf '%%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 120]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 54>>stream\nBT /F1 18 Tf 20 60 Td (Mjolnir invoice) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n' > invoice.pdf
+
+    # Binaries the viewer should fall back to a hex dump for.
+    head -c 4096 /dev/urandom > blob.bin
+    printf 'RIFF$\000\000\000WAVEfmt \020\000\000\000\001\000\001\000\104\254\000\000\210X\001\000\002\000\020\000data\000\000\000\000' > silence.wav
+    head -c 2048 /dev/urandom > clip.mp4
+    printf 'PK\003\004\024\000\000\000\000\000' > empty.zip
+
+    put() { mc cp --quiet "$1" "$alias_name/$2"; }
+
+    put product.json  product-images/catalog/2026/09/product.json
+    put logo.svg      product-images/brand/logo.svg
+    put tiny.png      product-images/thumbs/sunglasses.png
+    put dot.gif       product-images/thumbs/loading.gif
+    put invoice.pdf   invoices/2026/09/INV-00042.pdf
+    put invoices.csv  invoices/2026/09/summary.csv
+    put receipt.html  invoices/2026/09/receipt.html
+    put order.xml     invoices/2026/09/order.xml
+    put app.log       logs/frontend/2026-09-19/app.log
+    put app.log       logs/cartservice/2026-09-19/app.log
+    put large.txt     logs/frontend/2026-09-19/verbose.txt
+    put catalog.yaml  backups/nightly/2026-09-19/catalog.yaml
+    put .env          backups/nightly/2026-09-19/env
+    put blob.bin      backups/nightly/2026-09-19/snapshot.bin
+    put price.ts      datasets/code/price.ts
+    put price.py      datasets/code/price.py
+    put main.go       datasets/code/main.go
+    put report.sql    datasets/code/report.sql
+    put Dockerfile    datasets/code/Dockerfile
+    put site.css      datasets/code/site.css
+    put runbook.md    documents/runbooks/catalog.md
+    put note.txt      documents/notes/note.txt
+    put silence.wav   media/audio/silence.wav
+    put clip.mp4      media/video/clip.mp4
+    put empty.zip     archives/2026/bundle.zip
+    put blob.bin      archives/2026/deep/nested/path/that/keeps/going/snapshot.bin
+
+    echo "--- $alias_name ---"
+    mc ls --recursive "$alias_name" | head -50
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: seed-objects, namespace: data }
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: quay.io/minio/mc:latest
+          command: [sh, -c]
+          args:
+            - |
+              sh /scripts/seed.sh minio http://minio.data.svc.cluster.local:9000 mjolnir mjolnir-secret
+              sh /scripts/seed.sh rustfs http://rustfs.data.svc.cluster.local:9000 rustfsadmin rustfsadmin || echo "rustfs seeding failed, continuing"
+          volumeMounts: [{ name: scripts, mountPath: /scripts }]
+          resources: { requests: { cpu: 50m, memory: 64Mi } }
+      volumes: [{ name: scripts, configMap: { name: seed-script } }]

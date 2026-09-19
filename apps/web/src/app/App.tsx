@@ -466,6 +466,30 @@ export function App() {
     [context],
   );
 
+  /**
+   * Pin an object into the dock.
+   *
+   * The drawer belongs to the list you opened it from and closes when you
+   * leave. The dock is the other half of that: the deployment you are rolling
+   * out stays in front of you while you read its pods, its events and the
+   * config map it mounts.
+   */
+  const pinToDock = useCallback(
+    (item: KubeItem, itemKind: string) => {
+      if (!context) return;
+      const name = item.metadata?.name ?? '';
+      const ns = item.metadata?.namespace ?? '';
+      const id = `resource:${context}:${itemKind}:${ns}:${name}`;
+      setDockTabs((current) =>
+        current.some((tab) => tab.id === id)
+          ? current
+          : [...current, { id, kind: 'resource', title: name, subtitle: itemKind, context, namespace: ns, resourceKind: itemKind, name }],
+      );
+      setDockActive(id);
+    },
+    [context],
+  );
+
   const openShell = useCallback(
     (item: KubeItem, container?: string) => {
       if (!context) return;
@@ -565,6 +589,9 @@ export function App() {
           return;
         case 'dock-logs':
           openInDock(item);
+          return;
+        case 'pin':
+          pinToDock(item, kind);
           return;
         case 'shell':
           openShell(item);
@@ -890,7 +917,12 @@ export function App() {
                   setDockActive((active) => (active === id ? null : active));
                 }}
                 onCloseAll={() => setDockTabs([])}
+                onNavigate={navigate}
                 onExpand={(tab) => {
+                  if (tab.kind === 'resource' && tab.resourceKind && tab.name) {
+                    navigate({ kind: tab.resourceKind, name: tab.name, namespace: tab.namespace ?? '' });
+                    return;
+                  }
                   if (tab.kind !== 'logs') return;
                   navigate({ kind: 'Pod', name: tab.pod ?? '', namespace: tab.namespace ?? '' });
                   setDrawerTab('logs');

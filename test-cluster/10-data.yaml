@@ -1,0 +1,129 @@
+# Postgres, the database behind the shop.
+apiVersion: v1
+kind: Secret
+metadata: { name: postgres, namespace: data }
+stringData: { POSTGRES_PASSWORD: shop-secret, POSTGRES_USER: shop, POSTGRES_DB: shop }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: postgres, namespace: data, labels: { app: postgres } }
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          envFrom: [{ secretRef: { name: postgres } }]
+          env: [{ name: PGDATA, value: /var/lib/postgresql/data/pgdata }]
+          ports: [{ containerPort: 5432, name: sql }]
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 512Mi } }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+          readinessProbe: { exec: { command: [pg_isready, -U, shop] }, initialDelaySeconds: 5, periodSeconds: 10 }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 1Gi } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: data, labels: { app: postgres } }
+spec:
+  selector: { app: postgres }
+  ports: [{ name: sql, port: 5432, targetPort: sql }]
+---
+# Redis, the cart store.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis, namespace: data, labels: { app: redis } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports: [{ containerPort: 6379, name: redis }]
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 128Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: data, labels: { app: redis } }
+spec:
+  selector: { app: redis }
+  ports: [{ name: redis, port: 6379, targetPort: redis }]
+---
+# MinIO, S3 for product images.
+apiVersion: v1
+kind: Secret
+metadata: { name: minio, namespace: data }
+stringData: { MINIO_ROOT_USER: mjolnir, MINIO_ROOT_PASSWORD: mjolnir-secret }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: minio, namespace: data, labels: { app: minio } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: minio } }
+  template:
+    metadata: { labels: { app: minio } }
+    spec:
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:latest
+          args: [server, /data, --console-address, ":9001"]
+          envFrom: [{ secretRef: { name: minio } }]
+          ports:
+            - { containerPort: 9000, name: s3 }
+            - { containerPort: 9001, name: console }
+          resources: { requests: { cpu: 50m, memory: 256Mi }, limits: { memory: 1Gi } }
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: minio } }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: minio, namespace: data }
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 2Gi } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: minio, namespace: data, labels: { app: minio } }
+spec:
+  selector: { app: minio }
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }
+    - { name: console, port: 9001, targetPort: console }
+---
+# RustFS, a second S3 implementation to prove the bucket store is not MinIO-only.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: rustfs, namespace: data, labels: { app: rustfs } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: rustfs } }
+  template:
+    metadata: { labels: { app: rustfs } }
+    spec:
+      containers:
+        - name: rustfs
+          image: rustfs/rustfs:latest
+          env:
+            - { name: RUSTFS_ACCESS_KEY, value: rustfsadmin }
+            - { name: RUSTFS_SECRET_KEY, value: rustfsadmin }
+            - { name: RUSTFS_VOLUMES, value: /data }
+            - { name: RUSTFS_ADDRESS, value: "0.0.0.0:9000" }
+          ports: [{ containerPort: 9000, name: s3 }]
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 1Gi } }
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: rustfs, namespace: data, labels: { app: rustfs } }
+spec:
+  selector: { app: rustfs }
+  ports: [{ name: s3, port: 9000, targetPort: s3 }]

@@ -14,6 +14,8 @@
  * `isAllowedHost` is the check that keeps it that way.
  */
 
+export { BUILD } from './build.ts';
+
 export const APEX = 'mjolnir.sh';
 
 export const ENDPOINTS = {

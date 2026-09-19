@@ -11,7 +11,7 @@ import { type MenuEntry } from './ui/ContextMenu.tsx';
  * Destructive entries are separated, coloured, and still open a confirm. The
  * menu is not the confirmation.
  */
-export type RowActionId = 'open' | 'logs' | 'dock-logs' | 'forward' | 'shell' | 'yaml' | 'restart' | 'scale' | 'filter-namespace' | 'filter-node' | 'cordon' | 'uncordon' | 'drain' | 'taint' | 'pause' | 'resume' | 'undo' | 'delete';
+export type RowActionId = 'open' | 'pin' | 'logs' | 'dock-logs' | 'forward' | 'shell' | 'yaml' | 'restart' | 'scale' | 'filter-namespace' | 'filter-node' | 'cordon' | 'uncordon' | 'drain' | 'taint' | 'pause' | 'resume' | 'undo' | 'delete';
 interface RowMenuProps {
     readonly item: KubeItem;
     readonly kind: string;

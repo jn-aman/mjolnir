@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import type { MenuEntry } from './ui/ContextMenu.tsx';
@@ -12,13 +13,21 @@ import type { MenuEntry } from './ui/ContextMenu.tsx';
  * open, so the row never flickers.
  */
 export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; name: string }) {
+  // Opening the menu moves the pointer into a portal, which ends the row's
+  // hover and used to fade the buttons out from under the cursor. The wrapper
+  // has always had the rule for this; nothing was setting the attribute.
+  const [open, setOpen] = useState(false);
   const items = entries.filter((entry): entry is Extract<MenuEntry, { id: string }> => entry.type !== 'separator' && entry.type !== 'heading');
   const edit = items.find((entry) => entry.id === 'yaml' || entry.id === 'edit');
   const remove = items.find((entry) => entry.id === 'delete' || entry.id === 'remove');
   const rest = items.filter((entry) => entry !== edit && entry !== remove);
 
   return (
-    <span className="flex items-center gap-0.5 opacity-0 transition-opacity duration-100 focus-within:opacity-100 group-hover/row:opacity-100 data-[open=true]:opacity-100" data-testid="row-actions">
+    <span
+      data-testid="row-actions"
+      data-open={open}
+      className="flex items-center gap-0.5 opacity-0 transition-opacity duration-100 focus-within:opacity-100 group-hover/row:opacity-100 data-[open=true]:opacity-100"
+    >
       {edit ? (
         <button
           type="button"
@@ -46,7 +55,7 @@ export function RowActions({ entries, name }: { entries: readonly MenuEntry[]; n
         </button>
       ) : null}
       {rest.length ? (
-        <DropdownMenu.Root>
+        <DropdownMenu.Root open={open} onOpenChange={setOpen}>
           <DropdownMenu.Trigger asChild>
             <button
               type="button"
