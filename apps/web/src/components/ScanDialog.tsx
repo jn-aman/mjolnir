@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, ExternalLink, RotateCw, Search, X } from 'lucide-react';
+import { Download, RotateCw, Search, X } from 'lucide-react';
 import { api, type ScanReport } from '../lib/api.ts';
 import { Modal } from './ui/Modal.tsx';
 import { Button } from './ui/Button.tsx';
@@ -8,7 +8,9 @@ import { Switch } from './ui/Switch.tsx';
 import { Select } from './ui/Select.tsx';
 import { Truncate } from './ui/Truncate.tsx';
 import { MarkTile } from './ui/Mark.tsx';
-import { copyEntry, copyText, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
+import { copyEntry, copyText } from './ui/ContextMenu.tsx';
+import { ResourceList } from './ResourceList.tsx';
+import type { KubeItem } from './columns.tsx';
 
 /**
  * Trivy, on one image, right here.
@@ -161,6 +163,30 @@ export function ScanDialog({ image, onClose }: { image: string | null; onClose: 
 
   const filtered = report ? findings.length !== report.total : false;
 
+  /*
+   * Findings as rows.
+   *
+   * The same shape every other table in the app takes, so the columns for
+   * this kind live beside the columns for pods and deployments rather than
+   * inside this dialog.
+   */
+  const rows = useMemo(
+    () =>
+      findings.map((finding) => ({
+        metadata: { name: finding.id, uid: `${finding.id}:${finding.package}:${finding.target}` },
+        spec: {
+          severity: finding.severity,
+          package: finding.package,
+          installed: finding.installed,
+          fixed: finding.fixed,
+          url: finding.url,
+          target: finding.target,
+        },
+        status: { title: finding.title },
+      })) as unknown as KubeItem[],
+    [findings],
+  );
+
   return (
     <Modal
       open={image !== null}
@@ -299,52 +325,37 @@ export function ScanDialog({ image, onClose }: { image: string | null; onClose: 
               <div className="mb-1.5 text-[11.5px] text-tertiary" data-testid="scan-count">
                 Showing {findings.length} of {report.total}
               </div>
-              <div className="max-h-[420px] overflow-y-auto rounded-lg border border-line">
-                <div className="sticky top-0 z-10 grid grid-cols-[92px_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,2fr)] gap-x-3 border-b border-line bg-raised px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary">
-                  <span>Severity</span>
-                  <span>Vulnerability</span>
-                  <span>Package</span>
-                  <span>Installed, fixed</span>
-                  <span>Title</span>
-                </div>
-                {findings.map((finding) => {
-                  const entries: MenuEntry[] = [
-                    ...(finding.url ? [{ id: 'open', label: 'Open advisory', onSelect: () => window.open(finding.url, '_blank') }] : []),
-                    ...copyEntry('copy-id', 'Copy id', finding.id),
-                    ...copyEntry('copy-fix', 'Copy fix', finding.fixed ? `${finding.package} ${finding.installed} to ${finding.fixed}` : undefined),
-                    { id: 'filter-pkg', label: `Only ${finding.package}`, onSelect: () => setPkg(finding.package) },
-                  ];
-                  return (
-                    <Menu key={`${finding.id}:${finding.package}:${finding.target}`} label={finding.id} entries={entries}>
-                      <div
-                        className="grid grid-cols-[92px_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,2fr)] items-center gap-x-3 border-b border-subtle px-3 py-[7px] text-[12px] hover:bg-hover"
-                        data-testid="scan-finding"
-                      >
-                        <span className="flex items-center gap-1.5 whitespace-nowrap text-secondary">
-                          <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: SEVERITY_TONE[finding.severity] }} />
-                          {finding.severity.charAt(0) + finding.severity.slice(1).toLowerCase()}
-                        </span>
-                        <span className="flex min-w-0 items-center gap-1 font-mono text-primary">
-                          <Truncate text={finding.id} />
-                          {finding.url ? (
-                            <a href={finding.url} target="_blank" rel="noreferrer" className="shrink-0 text-tertiary hover:text-accent" aria-label={`Advisory for ${finding.id}`}>
-                              <ExternalLink size={10} />
-                            </a>
-                          ) : null}
-                        </span>
-                        <span className="min-w-0 font-mono text-secondary">
-                          <Truncate text={finding.package} />
-                        </span>
-                        <span className="min-w-0 font-mono text-tertiary">
-                          <Truncate text={finding.fixed ? `${finding.installed} → ${finding.fixed}` : finding.installed} mode="middle" tail={14} />
-                        </span>
-                        <span className="min-w-0 text-secondary">
-                          <Truncate text={finding.title} />
-                        </span>
-                      </div>
-                    </Menu>
-                  );
-                })}
+              {/*
+                The shared table, not a grid of its own.
+                
+                This was a fixed five-column grid with no sorting, no
+                reordering and no resizing, so the one column somebody wanted
+                wider was the one they could not widen. Going through the same
+                component as every other list means each of those arrives here
+                without being built again, and arrives everywhere at once.
+              */}
+              <div className="flex h-[420px] min-h-0 flex-col overflow-hidden rounded-lg border border-line">
+                <ResourceList
+                  kind="ScanFinding"
+                  label="Findings"
+                  items={rows}
+                  state="synced"
+                  error={null}
+                  filter=""
+                  menu={(item: KubeItem) => {
+                    const finding = findings.find(
+                      (entry) => entry.id === item.metadata?.name && entry.package === (item.spec as { package?: string } | undefined)?.package,
+                    );
+                    if (!finding) return [];
+                    return [
+                      ...(finding.url ? [{ id: 'open', label: 'Open advisory', onSelect: () => window.open(finding.url, '_blank') }] : []),
+                      ...copyEntry('copy-id', 'Copy id', finding.id),
+                      ...copyEntry('copy-fix', 'Copy fix', finding.fixed ? `${finding.package} ${finding.installed} to ${finding.fixed}` : undefined),
+                      { id: 'filter-pkg', label: `Only ${finding.package}`, onSelect: () => setPkg(finding.package) },
+                    ];
+                  }}
+                  empty={{ title: 'Nothing matches those filters', detail: 'Widen the severity or clear the package filter.' }}
+                />
               </div>
             </>
           )}

@@ -624,6 +624,115 @@ const STORAGE_COLUMNS: Array<Column<StorageItem>> = [
   { ...ageColumn<StorageItem>(), header: 'Modified' },
 ];
 
+/**
+ * A Trivy finding, as a row.
+ *
+ * Shaped like every other table in the app rather than hand-rolled, which is
+ * what it was: a fixed grid with no sorting, no reordering and no resizing,
+ * so the one column somebody wanted wider was the one they could not widen.
+ * Going through here means every table in the app gains a capability at once
+ * instead of each one growing its own half of it.
+ */
+interface ScanItem extends KubeItem {
+  spec?: { severity?: string; package?: string; installed?: string; fixed?: string | null; url?: string; target?: string };
+  status?: { title?: string };
+}
+
+const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, UNKNOWN: 4 };
+const SEVERITY_TONE: Record<string, string> = {
+  CRITICAL: 'var(--status-error)',
+  HIGH: 'var(--status-warn)',
+  MEDIUM: 'var(--series-3)',
+  LOW: 'var(--text-tertiary)',
+  UNKNOWN: 'var(--text-tertiary)',
+};
+
+const SCAN_COLUMNS: Array<Column<ScanItem>> = [
+  {
+    id: 'severity',
+    priority: 10,
+    header: 'Severity',
+    width: '108px',
+    content: (f) => (
+      <span className="flex items-center gap-1.5 text-[12px]">
+        <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: SEVERITY_TONE[f.spec?.severity ?? 'UNKNOWN'] }} />
+        <span className="text-secondary">{title(f.spec?.severity ?? '')}</span>
+      </span>
+    ),
+    // By danger, not alphabetically: "Critical" sorting under "High" is the
+    // kind of correctness nobody wants.
+    sortBy: (f) => SEVERITY_ORDER[f.spec?.severity ?? 'UNKNOWN'] ?? 9,
+  },
+  {
+    id: 'id',
+    priority: 20,
+    header: 'Vulnerability',
+    width: 'minmax(190px, 1.1fr)',
+    content: (f) =>
+      f.spec?.url ? (
+        <a
+          href={f.spec.url}
+          target="_blank"
+          rel="noreferrer"
+          className="truncate font-mono text-[12.5px] text-primary underline-offset-2 hover:underline"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {f.metadata?.name}
+        </a>
+      ) : (
+        <span className="truncate font-mono text-[12.5px] text-primary">{f.metadata?.name}</span>
+      ),
+    sortBy: (f) => f.metadata?.name ?? '',
+    searchText: (f) => f.metadata?.name,
+  },
+  {
+    id: 'package',
+    priority: 30,
+    header: 'Package',
+    width: 'minmax(140px, 0.9fr)',
+    content: (f) => <span className="truncate font-mono text-[12px] text-secondary">{f.spec?.package}</span>,
+    sortBy: (f) => f.spec?.package ?? '',
+    searchText: (f) => f.spec?.package,
+  },
+  {
+    id: 'fix',
+    priority: 40,
+    header: 'Installed, fixed',
+    width: 'minmax(170px, 1.1fr)',
+    content: (f) => (
+      <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11.5px]">
+        <span className="truncate text-tertiary">{f.spec?.installed}</span>
+        {f.spec?.fixed ? <span className="truncate text-ok">{f.spec.fixed}</span> : <span className="text-tertiary">no fix</span>}
+      </span>
+    ),
+    // Fixable first: a critical nobody can fix today is information, and a
+    // high that a version bump closes is work.
+    sortBy: (f) => (f.spec?.fixed ? `0${f.spec.fixed}` : '1'),
+    searchText: (f) => `${f.spec?.installed ?? ''} ${f.spec?.fixed ?? ''}`,
+  },
+  {
+    id: 'title',
+    priority: 50,
+    header: 'Title',
+    width: 'minmax(220px, 2fr)',
+    content: (f) => <span className="truncate text-[12px] text-secondary">{f.status?.title}</span>,
+    sortBy: (f) => f.status?.title ?? '',
+    searchText: (f) => f.status?.title,
+  },
+  {
+    id: 'target',
+    priority: 60,
+    header: 'Where',
+    width: 'minmax(140px, 1fr)',
+    content: (f) => <span className="truncate font-mono text-[11px] text-tertiary">{f.spec?.target}</span>,
+    searchText: (f) => f.spec?.target,
+  },
+];
+
+function title(text: string): string {
+  return text ? text.charAt(0) + text.slice(1).toLowerCase() : '';
+}
+
 const GENERIC_COLUMNS: Array<Column<KubeItem>> = [name(), namespace(), ageColumn()];
 
 const BY_KIND: Record<string, Array<Column<never>>> = {
@@ -638,6 +747,7 @@ const BY_KIND: Record<string, Array<Column<never>>> = {
   DockerImage: DOCKER_IMAGE_COLUMNS as Array<Column<never>>,
   DockerVolume: DOCKER_VOLUME_COLUMNS as Array<Column<never>>,
   DockerNetwork: DOCKER_NETWORK_COLUMNS as Array<Column<never>>,
+  ScanFinding: SCAN_COLUMNS as Array<Column<never>>,
 };
 
 /** Columns for a kind, priority-ordered, falling back to name/namespace/age. */
