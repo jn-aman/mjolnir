@@ -28,7 +28,7 @@ export const ENDPOINTS = {
   /** Usage events and crash reports, when the person has said yes. */
   telemetry: 'https://telemetry.mjolnir.sh',
   /** The electron-updater feed: the channel file and the artefacts beside it. */
-  updates: 'https://updates.mjolnir.sh',
+  updates: 'https://api.mjolnir.sh/updates',
   /** Release notes, linked from the update prompt. */
   releases: 'https://mjolnir.sh/releases',
 } as const;

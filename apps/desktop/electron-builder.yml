@@ -15,12 +15,14 @@ extraResources:
     to: web
 extraMetadata:
   main: dist/main.js
-# The update feed is our own domain, so a network that allows *.mjolnir.sh and
-# nothing else can still update the app. ${channel} and the platform path are
-# filled in by the updater at runtime.
+# The update feed sits on the API host rather than one of its own. It is a
+# directory of files served by the process that is already there, so this is
+# one less hostname, one less certificate and one less thing to be down while
+# everything else is fine. Still *.mjolnir.sh, so a network that allows only
+# that can still update the app.
 publish:
   - provider: generic
-    url: https://updates.mjolnir.sh/${channel}/${os}/${arch}
+    url: https://api.mjolnir.sh/updates/${channel}/${os}/${arch}
     channel: stable
     useMultipleRangeRequest: false
 mac:

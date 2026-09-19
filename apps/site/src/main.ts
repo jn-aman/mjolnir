@@ -13,6 +13,7 @@ import { paddleRoutes } from './routes/paddle.ts';
 import { authRoutes } from './routes/auth.ts';
 import { scimRoutes } from './routes/scim.ts';
 import { wwwRoutes } from './www/routes.ts';
+import { updateRoutes } from './routes/updates.ts';
 import { OAuth, type OAuthConfig } from './auth/oauth.ts';
 
 const log = logger.child('site');
@@ -89,6 +90,7 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
   app.use('/api', accountRoutes(store, signer));
   app.use('/api/auth', authRoutes(store, options.sendEmail, oauth));
   app.use('/scim/v2', scimRoutes(store, { publicUrl }));
+  app.use('/updates', updateRoutes({ directory: process.env['MJOLNIR_UPDATES_DIR'] ?? '/data/updates' }));
 
   /*
    * The website, last.
@@ -101,6 +103,7 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
   app.use(
     wwwRoutes({
       version: process.env['MJOLNIR_VERSION'] ?? '0.1.0',
+      updatesDir: process.env['MJOLNIR_UPDATES_DIR'] ?? '/data/updates',
       ...(releaseInfo() ? { release: releaseInfo() } : {}),
     }),
   );

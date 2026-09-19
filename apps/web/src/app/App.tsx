@@ -81,7 +81,7 @@ export function App() {
    */
   const [diagnosing, setDiagnosing] = useState<{ kind: string; name: string; namespace?: string } | undefined>(undefined);
   /** Which picker the dock's plus button opened, if any. */
-  const [picking, setPicking] = useState<'logs' | 'shell' | null>(null);
+  const [picking, setPicking] = useState<'logs' | 'shell' | 'yaml' | null>(null);
   /** Reported by the list, shown in the toolbar above it. */
   const [listStatus, setListStatus] = useState<{ visible: number; total: number; state: WatchState } | null>(null);
   const [kind, setKind] = useState(route.selection?.kind === 'resource' ? route.selection.value : 'Pod');
@@ -636,6 +636,12 @@ export function App() {
         label: 'Shell…',
         detail: 'Open a terminal in a pod. It keeps running while you navigate away',
         onSelect: () => setPicking('shell'),
+      },
+      {
+        id: 'yaml',
+        label: 'YAML…',
+        detail: 'Keep an object open here with its YAML editable, whatever else you go and look at',
+        onSelect: () => setPicking('yaml'),
       },
     ],
     // openAssistant is a stable callback
@@ -1245,10 +1251,13 @@ export function App() {
           context={context}
           namespace={namespace || undefined}
           intent={picking ?? 'logs'}
+          // YAML lists whatever is on screen; logs and shells are pod-only.
+          kind={picking === 'yaml' ? kind : 'Pod'}
           onClose={() => setPicking(null)}
-          onPick={(pod, container) => {
-            if (picking === 'shell') openShell(pod, container);
-            else openInDock(pod);
+          onPick={(item, container) => {
+            if (picking === 'shell') openShell(item, container);
+            else if (picking === 'yaml') pinToDock(item, kind);
+            else openInDock(item);
           }}
         />
 

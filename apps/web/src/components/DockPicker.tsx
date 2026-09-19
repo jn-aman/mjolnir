@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollText, Search, Terminal as TerminalIcon } from 'lucide-react';
+import { FileText, ScrollText, Search, Terminal as TerminalIcon } from 'lucide-react';
 import { api, type ResourceListResponse } from '../lib/api.ts';
 import type { KubeItem } from './columns.tsx';
 import { Modal } from './ui/Modal.tsx';
@@ -19,12 +19,18 @@ export interface DockPickerProps {
   readonly open: boolean;
   readonly context: string | null;
   readonly namespace?: string | undefined;
-  readonly intent: 'logs' | 'shell';
+  readonly intent: 'logs' | 'shell' | 'yaml';
+  /**
+   * What to list. Pods for logs and shells, because those are pod-only, and
+   * whatever is on screen for YAML: asking for YAML while looking at
+   * deployments and being offered pods is answering a different question.
+   */
+  readonly kind?: string | undefined;
   readonly onClose: () => void;
-  readonly onPick: (pod: KubeItem, container?: string) => void;
+  readonly onPick: (item: KubeItem, container?: string) => void;
 }
 
-export function DockPicker({ open, context, namespace, intent, onClose, onPick }: DockPickerProps) {
+export function DockPicker({ open, context, namespace, intent, kind = 'Pod', onClose, onPick }: DockPickerProps) {
   const [pods, setPods] = useState<KubeItem[] | null>(null);
   const [filter, setFilter] = useState('');
 
@@ -35,7 +41,7 @@ export function DockPicker({ open, context, namespace, intent, onClose, onPick }
     let cancelled = false;
     void (async () => {
       try {
-        const response = (await api.list(context, 'Pod', namespace)) as ResourceListResponse<KubeItem>;
+        const response = (await api.list(context, kind, namespace)) as ResourceListResponse<KubeItem>;
         if (!cancelled) setPods(response.items ?? []);
       } catch {
         if (!cancelled) setPods([]);
@@ -44,7 +50,7 @@ export function DockPicker({ open, context, namespace, intent, onClose, onPick }
     return () => {
       cancelled = true;
     };
-  }, [open, context, namespace]);
+  }, [open, context, namespace, kind]);
 
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -62,30 +68,34 @@ export function DockPicker({ open, context, namespace, intent, onClose, onPick }
     );
   }, [pods, filter, intent]);
 
-  const Icon = intent === 'logs' ? ScrollText : TerminalIcon;
+  const Icon = intent === 'logs' ? ScrollText : intent === 'yaml' ? FileText : TerminalIcon;
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={intent === 'logs' ? 'Tail a pod in the dock' : 'Open a shell in the dock'}
+      title={
+        intent === 'logs' ? 'Tail a pod in the dock' : intent === 'shell' ? 'Open a shell in the dock' : `Open a ${kind.toLowerCase()} in the dock`
+      }
       description={
         intent === 'logs'
           ? 'It keeps streaming while you work on something else.'
-          : 'The shell stays open while you navigate away.'
+          : intent === 'shell'
+            ? 'The shell stays open while you navigate away.'
+            : 'Its YAML is editable there, and it stays open while you look at something else.'
       }
       width={520}
       testId="dock-picker"
     >
       <Field
         id="dock-picker-filter"
-        label="Filter pods"
+        label={`Filter ${kind.toLowerCase()}`}
         hideLabel
         mono
         autoFocus
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
-        placeholder="Filter pods"
+        placeholder={`Filter ${kind.toLowerCase()}`}
         leading={<Search size={13} strokeWidth={2} aria-hidden className="shrink-0 text-tertiary" />}
       />
 
@@ -94,7 +104,7 @@ export function DockPicker({ open, context, namespace, intent, onClose, onPick }
           <p className="px-3 py-3 text-[12.5px] text-tertiary">Reading pods…</p>
         ) : shown.length === 0 ? (
           <p className="px-3 py-3 text-[12.5px] text-tertiary">
-            {(pods ?? []).length === 0 ? 'No pods in reach of this token.' : 'Nothing matches that.'}
+            {(pods ?? []).length === 0 ? `Nothing of that kind in reach of this token.` : 'Nothing matches that.'}
           </p>
         ) : (
           <ul>
@@ -130,7 +140,7 @@ export function DockPicker({ open, context, namespace, intent, onClose, onPick }
                     offered here rather than defaulted to the first and
                     corrected afterwards.
                   */}
-                  {containers.length > 1 ? (
+                  {intent !== 'yaml' && containers.length > 1 ? (
                     <div className="flex flex-wrap gap-1 px-3 pb-2 pl-[34px]">
                       {containers.map((container) => (
                         <button

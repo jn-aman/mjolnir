@@ -5,7 +5,7 @@ import { logger } from '@mjolnir/logger';
 const log = logger.child('updater');
 const require_ = createRequire(import.meta.url);
 const electron = require_('electron') as typeof import('electron');
-const { app, dialog, shell } = electron;
+const { app, dialog, shell, Notification } = electron;
 
 /**
  * Updates, from our own domain, with the person in the loop.
@@ -38,6 +38,15 @@ export interface UpdateState {
   readonly percent?: number;
   readonly error?: string;
   readonly checkedAt?: string;
+  /**
+   * What changed, as the release said it.
+   *
+   * Carried all the way through rather than dropped, because somebody being
+   * asked to restart what they are doing is entitled to know what they get
+   * for it. "Minor bug fixes and improvements" is what an app says when it
+   * has not bothered, and it teaches people to dismiss the prompt.
+   */
+  readonly notes?: string;
 }
 
 type Autoupdater = {
@@ -106,16 +115,28 @@ export function initUpdater(preferences: UpdatePreferences, notify: (next: Updat
   updater.on('checking-for-update', () => set({ status: 'checking' }));
   updater.on('update-not-available', () => set({ status: 'current', checkedAt: new Date().toISOString() }));
   updater.on('update-available', ((info: UpdateInfo) => {
-    set({ status: 'available', version: info.version, checkedAt: new Date().toISOString() });
+    const notes = plainNotes(info.releaseNotes);
+    set({ status: 'available', version: info.version, checkedAt: new Date().toISOString(), ...(notes ? { notes } : {}) });
     if (info.version === prefs.skipped) return;
-    if (!prefs.automatic) void promptForDownload(info.version);
+    /*
+     * Say something, either way.
+     *
+     * On automatic the download starts on its own and the old code said
+     * nothing until it was ready to restart, so the first a person heard of a
+     * new version was a dialog asking them to quit. A notification is the
+     * right weight for news that needs no decision: it says what arrived and
+     * gets out of the way.
+     */
+    if (prefs.automatic) notifyAvailable(info.version, notes);
+    else void promptForDownload(info.version, notes);
   }) as (...args: never[]) => void);
   updater.on('download-progress', ((progress: { percent: number }) => {
     set({ status: 'downloading', version: state.version ?? '', percent: Math.round(progress.percent) });
   }) as (...args: never[]) => void);
   updater.on('update-downloaded', ((info: UpdateInfo) => {
-    set({ status: 'ready', version: info.version });
-    void promptForInstall(info.version);
+    const notes = plainNotes(info.releaseNotes) || state.notes;
+    set({ status: 'ready', version: info.version, ...(notes ? { notes } : {}) });
+    void promptForInstall(info.version, notes);
   }) as (...args: never[]) => void);
   updater.on('error', ((error: Error) => {
     set({ status: 'error', error: error.message });
@@ -170,18 +191,59 @@ export async function check(interactive: boolean): Promise<UpdateState> {
   return state;
 }
 
-async function promptForDownload(version: string): Promise<void> {
+/**
+ * A notification, for news that needs no decision.
+ *
+ * Silent on purpose: an update is not urgent, and a sound for something the
+ * app is already handling by itself is the kind of thing people turn off
+ * notifications over. Clicking it opens the dialog that does ask something.
+ */
+function notifyAvailable(version: string, notes: string): void {
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({
+    title: `Mjolnir ${version} is available`,
+    body: notes ? firstLines(notes, 3) : `You are on ${app.getVersion()}. It will install when you quit.`,
+    silent: true,
+  });
+  notification.on('click', () => void promptForDownload(version, notes));
+  notification.show();
+}
+
+async function promptForDownload(version: string, notes = ''): Promise<void> {
   const result = await dialog.showMessageBox({
     type: 'info',
     message: `Mjolnir ${version} is available`,
-    detail: `You are on ${app.getVersion()}. Downloading happens in the background and installs when you quit.`,
-    buttons: ['Download', 'Release notes', `Skip ${version}`, 'Not now'],
+    // The notes in the dialog rather than behind a button that opens a
+    // browser: somebody deciding whether to restart should not have to leave
+    // the app to find out what they would get.
+    detail: notes
+      ? `You are on ${app.getVersion()}.\n\n${firstLines(notes, 12)}\n\nDownloading happens in the background and installs when you quit.`
+      : `You are on ${app.getVersion()}. Downloading happens in the background and installs when you quit.`,
+    buttons: ['Download', 'All release notes', `Skip ${version}`, 'Not now'],
     defaultId: 0,
     cancelId: 3,
   });
   if (result.response === 0) await updater?.downloadUpdate();
   if (result.response === 1) void shell.openExternal(ENDPOINTS.releases);
   if (result.response === 2) skipped = version;
+}
+
+/** Markdown or HTML from a release manifest, as text a dialog can show. */
+export function plainNotes(notes: string | null | undefined): string {
+  if (!notes) return '';
+  return notes
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|li|h\d)>/gi, '\n')
+    .replace(/<li>/gi, '- ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/^#+\s*/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function firstLines(text: string, count: number): string {
+  const lines = text.split('\n');
+  return lines.length <= count ? text : `${lines.slice(0, count).join('\n')}\n…`;
 }
 
 let skipped = '';
@@ -191,11 +253,13 @@ export function skippedVersion(): string {
   return skipped;
 }
 
-async function promptForInstall(version: string): Promise<void> {
+async function promptForInstall(version: string, notes = ''): Promise<void> {
   const result = await dialog.showMessageBox({
     type: 'info',
     message: `Mjolnir ${version} is ready`,
-    detail: 'Restarting takes a few seconds. Port forwards and shells will close.',
+    detail: notes
+      ? `${firstLines(notes, 10)}\n\nRestarting takes a few seconds. Port forwards and shells will close.`
+      : 'Restarting takes a few seconds. Port forwards and shells will close.',
     buttons: ['Restart now', 'On next quit'],
     defaultId: 1,
     cancelId: 1,

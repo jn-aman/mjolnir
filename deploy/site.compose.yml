@@ -21,6 +21,7 @@ services:
       MJOLNIR_PUBLIC_URL: ${MJOLNIR_PUBLIC_URL:-https://api.mjolnir.sh}
       MJOLNIR_VERIFY_URI: ${MJOLNIR_VERIFY_URI:-https://mjolnir.sh/device}
       MJOLNIR_LICENCE_KEY_FILE: /run/secrets/licence-key
+      MJOLNIR_UPDATES_DIR: /data/updates
       PADDLE_WEBHOOK_SECRET: ${PADDLE_WEBHOOK_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
@@ -28,6 +29,10 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     volumes:
       - state:/data
+      # Published builds, on the host rather than in the container's volume:
+      # the release script writes them over ssh, and they have to survive the
+      # container being rebuilt from a newer image.
+      - /var/lib/mjolnir/updates:/data/updates:ro
       # Read-only, and the file stays owned by root on the host. The one
       # artefact here that cannot be rebuilt from Paddle and a sign-in is this
       # key, so the container gets to read it and nothing more.

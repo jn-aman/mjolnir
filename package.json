@@ -42,7 +42,9 @@
     "dmg": "npm run release",
     "org": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/org.ts",
     "deploy:site": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/deploy-site.ts",
-    "verify:all": "npm run verify && npm run build --workspaces --if-present && npm run e2e"
+    "verify:all": "npm run verify && npm run build --workspaces --if-present && npm run e2e",
+    "version": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/version.ts",
+    "publish": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/publish.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
