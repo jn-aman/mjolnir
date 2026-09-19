@@ -190,3 +190,43 @@ changing it later breaks the update path for every existing install.
 5. electron-builder config, signing, notarization, stapling
 6. Auto-update
 7. Paddle integration, licence-issuing service, purchase flow
+
+## Building the app today
+
+```
+npm run dmg          # both macOS DMGs into apps/desktop/release
+npm run desktop      # run the shell from the checkout
+```
+
+`npm run dmg` produces `Mjolnir-<version>-arm64.dmg` and `Mjolnir-<version>.dmg`
+(Intel). Both are around 130 MB: Electron, the server, and the built client,
+which ships in `Contents/Resources/web` and is served by the local server the
+app starts on a port the OS picks.
+
+Unsigned builds work for you and for anyone who right-clicks Open once.
+Shipping them to other people needs two more things, in this order:
+
+1. **Sign.** A Developer ID Application certificate in the keychain, then
+   `electron-builder` picks it up: drop `CSC_IDENTITY_AUTO_DISCOVERY=false`
+   and it signs with hardened runtime and the entitlements in
+   `apps/desktop/build/entitlements.mac.plist`.
+2. **Notarize.** `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`
+   in the environment; electron-builder submits the DMG and staples the
+   ticket. Without it macOS refuses the first launch with no useful reason.
+
+Windows needs an Authenticode certificate for the same reason; the NSIS
+target is already configured. Linux AppImage and deb need neither.
+
+## What the app is
+
+One process. Electron starts the same Express server the web and Docker
+modes run, on 127.0.0.1 with a port the OS chooses, so two copies never
+fight and nothing is reachable from the network. The window is a normal
+renderer with no Node integration, sandboxed, loading only from that
+server. A second launch raises the first window instead of starting a rival
+copy.
+
+The menu bar extra (macOS) and the application menu are in
+`apps/desktop/src/main.ts`; both drive the app by setting the URL hash,
+which is the same route the web build uses, so there is one navigation
+model rather than two.

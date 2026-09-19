@@ -1,0 +1,28 @@
+{
+  "name": "@mjolnir/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "npm run build && electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@mjolnir/logger": "*",
+    "@mjolnir/server": "*"
+  },
+  "devDependencies": {
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3"
+  },
+  "description": "Kubernetes, containers, object storage and cloud access in one desktop app.",
+  "author": {
+    "name": "Aman Jain",
+    "email": "jain.aman1497@gmail.com"
+  },
+  "homepage": "https://mjolnir.sh",
+  "license": "Elastic-2.0"
+}

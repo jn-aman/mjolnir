@@ -29,7 +29,9 @@
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report",
     "lint:no-js": "! find packages apps e2e -type f \\( -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \\) -not -path '*/node_modules/*' -not -path '*/dist/*' | grep . || (echo 'JavaScript source files found \u2014 Mjolnir is TypeScript only' && exit 1)",
-    "verify": "npm run lint:no-js && npm run typecheck && npm test"
+    "verify": "npm run lint:no-js && npm run typecheck && npm test",
+    "desktop": "npm run build --workspaces --if-present && cd apps/desktop && electron .",
+    "dmg": "npm run build --workspaces --if-present && cd apps/desktop && electron-builder --mac"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

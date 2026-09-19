@@ -9,3 +9,5 @@ release/
 .env.local
 coverage/
 vendor/trivy*
+apps/desktop/release/
+apps/desktop/build/*.icns

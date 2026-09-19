@@ -78,14 +78,13 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   /**
    * The built client, when there is one.
    *
-   * In the desktop app Electron loads these files directly; this path is what
-   * makes the standalone web and Docker modes work, and it is also the quickest
-   * way to look at the app during development without a second dev server.
+   * The desktop app ships the client beside itself and says where with
+   * MJOLNIR_WEB_DIST, because inside an app bundle nothing sits where the
+   * repository put it. Everywhere else the sibling build is right.
    */
-  const webDist = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '../../web/dist',
-  );
+  const webDist =
+    process.env['MJOLNIR_WEB_DIST'] ??
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 
   if (existsSync(webDist)) {
     app.use(express.static(webDist, { index: false }));

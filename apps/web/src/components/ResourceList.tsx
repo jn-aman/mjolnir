@@ -487,7 +487,7 @@ export function ResourceList({
             className="surface-card absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 !rounded-full px-2 py-1.5"
             style={{ boxShadow: 'var(--shadow-lift)' }}
           >
-            <span className="px-2 text-[12.5px] text-secondary">
+            <span className="whitespace-nowrap px-2 text-[12.5px] text-secondary">
               <span className="font-mono text-primary">{picked.size}</span> selected
             </span>
             <span className="h-4 w-px bg-[var(--border-default)]" />
@@ -506,14 +506,14 @@ export function ResourceList({
                       .catch(() => undefined)
                       .finally(() => setRunning(null));
                   }}
-                  className={`flex h-[28px] items-center gap-1.5 rounded-full px-2.5 text-[12px] transition-colors duration-100 disabled:opacity-50 ${action.danger ? 'text-error hover:bg-error-bg' : 'text-primary hover:bg-hover'}`}
+                  className={`flex h-[28px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] transition-colors duration-100 disabled:opacity-50 ${action.danger ? 'text-error hover:bg-error-bg' : 'text-primary hover:bg-hover'}`}
                 >
                   {action.icon}
                   {running === action.id ? 'Working…' : action.label}
                 </button>
               ))}
             <span className="h-4 w-px bg-[var(--border-default)]" />
-            <button type="button" data-testid="bulk-clear" onClick={() => setPicked(new Set())} className="flex h-[28px] items-center gap-1 rounded-full px-2.5 text-[12px] text-tertiary hover:bg-hover hover:text-primary">
+            <button type="button" data-testid="bulk-clear" onClick={() => setPicked(new Set())} className="flex h-[28px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] text-tertiary hover:bg-hover hover:text-primary">
               <X size={12} strokeWidth={2} aria-hidden /> Clear
             </button>
           </motion.div>

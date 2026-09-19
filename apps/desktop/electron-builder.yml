@@ -1,0 +1,42 @@
+appId: sh.mjolnir.app
+productName: Mjolnir
+copyright: Copyright © 2026 Aman Jain
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - build/**/*
+  - package.json
+  - '!**/*.map'
+extraResources:
+  # The built web client, served by the local server inside the app.
+  - from: ../web/dist
+    to: web
+extraMetadata:
+  main: dist/main.js
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  darkModeSupport: true
+dmg:
+  title: Mjolnir ${version}
+  contents:
+    - x: 140
+      y: 180
+      type: file
+    - x: 400
+      y: 180
+      type: link
+      path: /Applications
+win:
+  target: nsis
+linux:
+  target: [AppImage, deb]
+  category: Development

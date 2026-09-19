@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../lib/api.ts';
 import { formatCpu, formatMemory, type MetricsResponse } from '../lib/metrics.ts';
 import { parseCpu, parseMemory } from '@mjolnir/schemas';
 import { TimeSeries } from './TimeSeries.tsx';
@@ -7,6 +6,7 @@ import { Card } from './ui/Card.tsx';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
+import { useLiveList } from '../lib/live.ts';
 import { ClusterHero } from './ClusterHero.tsx';
 import { Activity, AlertTriangle, ArrowRight, Bell, Gauge as GaugeIcon, PieChart } from 'lucide-react';
 import { StatusChip, toneFor } from './StatusChip.tsx';
@@ -48,37 +48,28 @@ interface OverviewProps {
 
 export function Overview({ context, cluster, onDecorChanged, onNavigate }: OverviewProps) {
   const [nodeMetrics, setNodeMetrics] = useState<MetricsResponse | null>(null);
-  const [pods, setPods] = useState<KubeItem[]>([]);
-  const [nodes, setNodes] = useState<KubeItem[]>([]);
-  const [events, setEvents] = useState<KubeItem[]>([]);
-  const [ready, setReady] = useState(false);
+  // Pods, nodes and events come over the live wire, like every other list, so
+  // this screen changes with the cluster rather than every five seconds.
+  const podWatch = useLiveList<KubeItem>(context, 'Pod', undefined);
+  const nodeWatch = useLiveList<KubeItem>(context, 'Node', undefined);
+  const eventWatch = useLiveList<KubeItem>(context, 'Event', undefined);
+  const pods = podWatch.items;
+  const nodes = nodeWatch.items;
+  const events = eventWatch.items;
+  // A watch reports "connecting" before its first sync. Rendering that as
+  // zero would tell someone their cluster is empty when it is not.
+  const ready = podWatch.state === 'synced';
   // The charts/lists split is the user's. Stored like every other edge.
   const split = useResizable({ key: 'overview-split', initial: 640, min: 360, max: 1100, direction: 'right' });
 
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
-
     const load = async () => {
-      const [metricsResponse, podList, nodeList, eventList] = await Promise.all([
-        fetch(`/api/metrics/${encodeURIComponent(context)}/nodes`).then(
-          (response) => response.json() as Promise<MetricsResponse>,
-        ),
-        api.list<KubeItem>(context, 'Pod'),
-        api.list<KubeItem>(context, 'Node'),
-        api.list<KubeItem>(context, 'Event'),
-      ]);
-      if (cancelled) return;
-      setNodeMetrics(metricsResponse);
-      setPods(podList.items);
-      setNodes(nodeList.items);
-      setEvents(eventList.items);
-      // A watch reports "connecting" before its first sync. Rendering that as
-      // zero tells someone their cluster is empty when it is not, the same
-      // lie the resource list was careful to avoid, missed here.
-      if (podList.state === 'synced') setReady(true);
+      // Metrics are sampled, not watched: a poll is the honest shape for them.
+      const response = await fetch(`/api/metrics/${encodeURIComponent(context)}/nodes`);
+      const body = (await response.json()) as MetricsResponse;
+      if (!cancelled) setNodeMetrics(body);
     };
-
     void load();
     const timer = setInterval(() => void load(), 5_000);
     return () => {
