@@ -99,6 +99,7 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
   const [zip, setZip] = useState<ZipEntry[] | null>(null);
   const [inner, setInner] = useState<Opened | null>(null);
+  const [archivePrefix, setArchivePrefix] = useState('');
   const [language, setLanguage] = useState<EditorLanguage>('plain');
   const [wrap, setWrap] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -112,6 +113,7 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
     setBuffer(null);
     setZip(null);
     setInner(null);
+    setArchivePrefix('');
     setError(null);
     if (!file) return;
     const detected = languageFor(file.key);
@@ -279,6 +281,8 @@ export function FileViewer({ file, urlFor, onPresign, onClose }: FileViewerProps
           <ArchiveView
             entries={zip}
             buffer={buffer}
+            prefix={archivePrefix}
+            onPrefix={setArchivePrefix}
             onOpen={(entry, bytes) => setInner(openedFrom(entry, bytes))}
           />
         ) : null}

@@ -18,17 +18,25 @@ export function ArchiveView({
   entries,
   buffer,
   onOpen,
+  prefix,
+  onPrefix,
 }: {
   entries: readonly ZipEntry[];
   buffer: ArrayBuffer;
   onOpen: (entry: ZipEntry, bytes: Uint8Array) => void;
+  /**
+   * Held by the viewer above, not here. Opening an entry unmounts this, and
+   * coming back to the top of a deep archive after reading one file in it is
+   * the same as losing your place.
+   */
+  prefix: string;
+  onPrefix: (next: string) => void;
 }) {
-  const [prefix, setPrefix] = useState('');
   const [needle, setNeedle] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { folders, files } = useMemo(() => zipFolders(entries, prefix), [entries, needle ? entries : entries, prefix]);
+  const { folders, files } = useMemo(() => zipFolders(entries, prefix), [entries, prefix]);
   const lower = needle.trim().toLowerCase();
   const shownFolders = lower ? [] : folders;
   const shownFiles = useMemo(
@@ -73,14 +81,14 @@ export function ArchiveView({
           <button
             type="button"
             aria-label="Up one folder"
-            onClick={() => setPrefix(crumbs.slice(0, -1).map((part) => `${part}/`).join(''))}
+            onClick={() => onPrefix(crumbs.slice(0, -1).map((part) => `${part}/`).join(''))}
             className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-tertiary hover:bg-hover hover:text-primary"
           >
             <ArrowLeft size={13} strokeWidth={2} />
           </button>
         ) : null}
         <nav className="flex min-w-0 shrink items-center gap-0.5 overflow-hidden font-mono text-[12px]" aria-label="Path inside the archive">
-          <button type="button" onClick={() => setPrefix('')} className="shrink-0 rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary">
+          <button type="button" onClick={() => onPrefix('')} className="shrink-0 rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary">
             archive
           </button>
           {crumbs.map((part, index) => (
@@ -88,7 +96,7 @@ export function ArchiveView({
               <ChevronRight size={12} className="shrink-0 text-tertiary" aria-hidden />
               <button
                 type="button"
-                onClick={() => setPrefix(crumbs.slice(0, index + 1).map((entry) => `${entry}/`).join(''))}
+                onClick={() => onPrefix(crumbs.slice(0, index + 1).map((entry) => `${entry}/`).join(''))}
                 className="max-w-[160px] truncate rounded-xs px-1 text-secondary hover:bg-hover hover:text-primary"
               >
                 {part}
@@ -127,7 +135,7 @@ export function ArchiveView({
               key={folder}
               type="button"
               data-testid="archive-folder"
-              onClick={() => setPrefix(`${prefix}${folder}`)}
+              onClick={() => onPrefix(`${prefix}${folder}`)}
               className="flex w-full items-center gap-2.5 border-b border-subtle px-3 py-[9px] text-left hover:bg-hover"
             >
               <Folder size={13} strokeWidth={1.9} aria-hidden className="shrink-0 text-accent" />
