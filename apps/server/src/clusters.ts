@@ -84,10 +84,12 @@ class LiveConnection implements ClusterConnection {
   readonly #transport: ClusterTransport;
   readonly #watches = new Map<string, ResourceWatch>();
 
-  constructor(
-    readonly context: ClusterContext,
-    readonly config: KubeConfig,
-  ) {
+  readonly context: ClusterContext;
+  readonly config: KubeConfig;
+
+  constructor(context: ClusterContext, config: KubeConfig) {
+    this.context = context;
+    this.config = config;
     this.#transport = new ClusterTransport(config);
   }
 

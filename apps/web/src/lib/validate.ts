@@ -149,3 +149,29 @@ export function all(...rules: Validator[]): Validator {
     return null;
   };
 }
+
+/**
+ * A Mjolnir endpoint.
+ *
+ * The app contacts mjolnir.sh and its subdomains, and loopback while someone
+ * is developing against a stand-in. Checked by parsing rather than by suffix,
+ * because `https://mjolnir.sh.example.com` ends with the right letters and is
+ * not us.
+ */
+export const mjolnirUrl: Validator = (value) => {
+  const text = value.trim();
+  if (text === '') return 'Enter an address.';
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return 'That is not a URL. It should look like https://flags.mjolnir.sh';
+  }
+  const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '::1';
+  if (loopback) return null;
+  if (parsed.protocol !== 'https:') return 'Use https. Mjolnir will not send anything over a plain connection.';
+  if (parsed.hostname !== 'mjolnir.sh' && !parsed.hostname.endsWith('.mjolnir.sh')) {
+    return `Mjolnir only contacts mjolnir.sh and its subdomains, so ${parsed.hostname} is refused.`;
+  }
+  return null;
+};

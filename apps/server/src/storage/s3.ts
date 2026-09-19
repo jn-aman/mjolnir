@@ -27,9 +27,12 @@ export interface S3Object {
 }
 
 export class S3Error extends Error {
-  constructor(readonly status: number, message: string) {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
     super(message);
     this.name = 'S3Error';
+    this.status = status;
   }
 }
 
@@ -148,7 +151,11 @@ async function fail(response: IncomingMessage): Promise<never> {
 }
 
 export class S3Client {
-  constructor(readonly config: S3Config) {}
+  readonly config: S3Config;
+
+  constructor(config: S3Config) {
+    this.config = config;
+  }
 
   async #call(method: string, url: URL, headers: Record<string, string> = {}, body?: Buffer): Promise<IncomingMessage> {
     const payloadHash = body ? sha256(body) : sha256('');

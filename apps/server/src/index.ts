@@ -24,10 +24,20 @@ import { dockerRoutes } from './routes/docker.ts';
 import { scanRoutes } from './routes/scan.ts';
 import { helmRoutes } from './routes/helm.ts';
 import { storageRoutes } from './routes/storage.ts';
+import { flagRoutes } from './routes/flags.ts';
+import { updateRoutes } from './routes/updates.ts';
+import { telemetryRoutes } from './routes/telemetry.ts';
+import { FlagStore } from './flags.ts';
+import { Telemetry } from './telemetry.ts';
+import { APP_VERSION } from './version.ts';
 import { SettingsStore } from './settings.ts';
 import { ForwardManager } from './forwards.ts';
 
+
 const log = logger.child('server');
+
+export { setDesktopBridge, type DesktopBridge } from './desktop-bridge.ts';
+export { APP_VERSION } from './version.ts';
 
 export interface ServerHandle {
   readonly port: number;
@@ -50,6 +60,13 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
 
   if (registry.extraKubeconfigs.length) await registry.reload();
 
+  const flags = new FlagStore(settings, APP_VERSION);
+  flags.start();
+
+  const telemetry = new Telemetry(settings, APP_VERSION);
+  telemetry.start();
+  telemetry.record('app.launch', { channel: settings.get().updates.channel });
+
   const toolContext = { registry, forwards, settings };
   await registry.reload();
 
@@ -62,6 +79,9 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
 
   app.use('/api/clusters', clusterRoutes(registry, settings));
   app.use('/api/settings', settingsRoutes(settings));
+  app.use('/api/flags', flagRoutes(flags, settings));
+  app.use('/api/telemetry', telemetryRoutes(telemetry, settings));
+  app.use('/api/updates', updateRoutes(settings));
   app.use('/api/licence', licenceRoutes(settings));
   app.use('/api/docker', dockerRoutes());
   app.use('/api/scan', scanRoutes());
@@ -128,6 +148,9 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   return {
     port: boundPort,
     close: async () => {
+      flags.stop();
+      telemetry.stop();
+      await telemetry.flush();
       await registry.shutdown();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

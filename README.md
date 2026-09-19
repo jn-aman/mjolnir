@@ -48,14 +48,60 @@ plain and JSON logs. No kubeconfig, no network, nothing to set up.
 
 It is also what the entire test suite runs against, so it stays honest.
 
-## Development
+## Running it
+
+Node 20.11 or newer, and nothing else. There is no database, no daemon and no
+account to make.
 
 ```bash
-npm install          # Node 20.11+
+npm install
+npm run dev
+```
+
+`npm run dev` starts three things and prints one address: a TypeScript build in
+watch mode, the local API on `127.0.0.1:7845`, and the UI on
+`127.0.0.1:5273`. Open the second one. Ctrl-C stops all three. Set
+`MJOLNIR_PORT` or `MJOLNIR_WEB_PORT` if either port is taken; if one is busy the
+command says so in a sentence instead of a stack trace.
+
+The first launch opens a short welcome: what the modules are, which clusters and
+container engines it found on this machine, whether you want an assistant, and
+what may leave the machine. It is skippable from the first frame, and Settings,
+Privacy brings it back.
+
+Other ways to run it:
+
+```bash
+npm start            # build everything and serve the built UI from the API
+npm run desktop      # the Electron app, from source
+npm run dmg          # signed-ready DMGs in apps/desktop/release
 npm run verify       # no JS source, typecheck, unit tests
 npm run e2e          # Playwright against the demo cluster
-npm run dev          # server + web client
 ```
+
+The app finds clusters in `KUBECONFIG` and `~/.kube/config`, and a container
+engine on the local Docker socket, which covers Docker Desktop, OrbStack, Colima
+and Rancher Desktop. Nothing needs configuring for either. With neither present
+there is still the built-in demo cluster.
+
+## What it connects to
+
+Mjolnir talks to `*.mjolnir.sh` and to your own infrastructure, and to nothing
+else. That is a rule in the code rather than a promise: every first-party
+address lives in `packages/endpoints`, and a URL that is not under the apex is
+refused before a request is made.
+
+| Host | What for | Default |
+|---|---|---|
+| `updates.mjolnir.sh` | The update feed and installer | on, and asks before installing |
+| `telemetry.mjolnir.sh` | Crash reports, usage counters | **off** until you say yes |
+| `flags.mjolnir.sh` | Feature toggles, Unleash | off |
+| `api.mjolnir.sh` | Licence activation | only when you enter a key |
+
+Your clusters, container engines and object stores are reached straight from
+your machine as you, never proxied through us. Settings, Privacy shows the exact
+JSON queued for sending before it is sent, and the complete list of event shapes
+that can ever exist.
 
 | Package | What it does | State |
 |---|---|---|

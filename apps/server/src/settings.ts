@@ -1,8 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { logger } from '@mjolnir/logger';
+import { ENDPOINTS } from '@mjolnir/endpoints';
 
 const log = logger.child('settings');
 
@@ -26,6 +28,42 @@ export const AiSettings = z.object({
   allowWrites: z.boolean().default(false),
   /** Extra instructions prepended to the system prompt. */
   instructions: z.string().default(''),
+});
+
+/** Flags: switches the person moved, and the Unleash Edge behind flags.mjolnir.sh. */
+export const FlagSettings = z.object({
+  overrides: z.record(z.string(), z.boolean()).default({}),
+  remote: z
+    .object({
+      enabled: z.boolean().default(false),
+      url: z.string().default(ENDPOINTS.flags),
+      token: z.string().default(''),
+      environment: z.string().default('production'),
+      refreshSeconds: z.number().int().min(30).max(86_400).default(900),
+    })
+    .default({ enabled: false, url: ENDPOINTS.flags, token: '', environment: 'production', refreshSeconds: 900 }),
+});
+
+/**
+ * What leaves the machine, and only after someone said yes.
+ *
+ * `decided` is not a third switch, it is the record that the question was
+ * asked. Without it there is no way to tell "they said no" from "we never
+ * asked", and the difference is whether asking again is a reminder or nagging.
+ */
+export const TelemetrySettings = z.object({
+  usage: z.boolean().default(false),
+  crashes: z.boolean().default(false),
+  decided: z.boolean().default(false),
+});
+
+export const UpdateSettings = z.object({
+  channel: z.enum(['stable', 'beta']).default('stable'),
+  /** Download in the background and install on quit. Off means notify only. */
+  automatic: z.boolean().default(true),
+  checkOnLaunch: z.boolean().default(true),
+  /** A version the person chose to stop being told about. */
+  skipped: z.string().default(''),
 });
 
 export const Settings = z.object({
@@ -57,6 +95,16 @@ export const Settings = z.object({
     })
     .default({ http: false, token: '', allowWrites: false }),
   licence: z.object({ key: z.string().default('') }).default({ key: '' }),
+  /** This installation, not this person: a random id, generated once, used for rollouts. */
+  install: z
+    .object({ id: z.string().default(''), firstRun: z.string().default('') })
+    .default({ id: '', firstRun: '' }),
+  flags: FlagSettings.default(FlagSettings.parse({})),
+  telemetry: TelemetrySettings.default(TelemetrySettings.parse({})),
+  updates: UpdateSettings.default(UpdateSettings.parse({})),
+  onboarding: z
+    .object({ completed: z.boolean().default(false), step: z.string().default(''), version: z.number().default(0) })
+    .default({ completed: false, step: '', version: 0 }),
   storage: z
     .object({
       connections: z
@@ -93,6 +141,21 @@ export class SettingsStore {
     return this.#value;
   }
 
+  /**
+   * The installation id, minted on first read.
+   *
+   * It identifies a copy of the app, never a person: a random UUID with nothing
+   * derived from the machine, so it cannot be correlated with anything outside
+   * Mjolnir, and deleting settings.json genuinely starts a new one.
+   */
+  installId(): string {
+    if (!this.#value.install.id) {
+      this.#value = Settings.parse({ ...this.#value, install: { id: randomUUID(), firstRun: new Date().toISOString() } });
+      this.#write();
+    }
+    return this.#value.install.id;
+  }
+
   /** What the client may see: keys and tokens become "set" / "". */
   redacted(): unknown {
     const value = this.#value;
@@ -100,6 +163,7 @@ export class SettingsStore {
       ...value,
       ai: { ...value.ai, apiKey: value.ai.apiKey ? 'set' : '' },
       mcp: { ...value.mcp, token: value.mcp.token ? 'set' : '' },
+      flags: { ...value.flags, remote: { ...value.flags.remote, token: value.flags.remote.token ? 'set' : '' } },
       licence: { key: value.licence.key ? 'set' : '' },
       storage: { connections: value.storage.connections.map((c) => ({ ...c, secretKey: c.secretKey ? 'set' : '' })) },
     };
@@ -112,6 +176,8 @@ export class SettingsStore {
     if (ai && (ai['apiKey'] === 'set' || ai['apiKey'] === undefined)) ai['apiKey'] = this.#value.ai.apiKey;
     const mcp = merged['mcp'] as Record<string, unknown> | undefined;
     if (mcp && (mcp['token'] === 'set' || mcp['token'] === undefined)) mcp['token'] = this.#value.mcp.token;
+    const flags = merged['flags'] as { remote?: Record<string, unknown> } | undefined;
+    if (flags?.remote && (flags.remote['token'] === 'set' || flags.remote['token'] === undefined)) flags.remote['token'] = this.#value.flags.remote.token;
     const licence = merged['licence'] as Record<string, unknown> | undefined;
     if (licence && (licence['key'] === 'set' || licence['key'] === undefined)) licence['key'] = this.#value.licence.key;
     this.#value = Settings.parse(merged);

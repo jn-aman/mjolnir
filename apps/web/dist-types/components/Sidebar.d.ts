@@ -28,8 +28,7 @@ interface SidebarProps {
     readonly module?: ToolDefinition | undefined;
     /** Icons only. */
     readonly compact?: boolean;
-    readonly onToggleCompact?: (() => void) | undefined;
 }
-export declare function Sidebar({ kinds, selection, counts, onSelect, width, module, compact, onToggleCompact }: SidebarProps): import("react").JSX.Element;
+export declare function Sidebar({ kinds, selection, counts, onSelect, width, module, compact }: SidebarProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=Sidebar.d.ts.map

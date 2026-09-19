@@ -19,13 +19,14 @@ export interface ApiErrorBody {
 }
 
 export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: ErrorCode,
-    message: string,
-  ) {
+  readonly status: number;
+  readonly code: ErrorCode;
+
+  constructor(status: number, code: ErrorCode, message: string) {
     super(message);
     this.name = 'HttpError';
+    this.status = status;
+    this.code = code;
   }
 
   static badRequest(message: string): HttpError {

@@ -3,8 +3,8 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { toast, Toaster } from 'sonner';
 import type { ClusterContext, ResourceDefinition, WatchState } from '@mjolnir/k8s';
 import { AnimatePresence, motion } from 'motion/react';
-import { Ban, Circle, CirclePlay, Command as CommandIcon, Copy, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Plus, RotateCw, Search, Sparkles, Sun, Tag, Trash2, Zap } from 'lucide-react';
-import { api, type ClustersResponse } from '../lib/api.ts';
+import { Ban, Circle, CirclePlay, Command as CommandIcon, Copy, Moon, Plus, RotateCw, Search, Sparkles, Sun, Tag, Trash2, Zap } from 'lucide-react';
+import { api, type AppSettings, type ClustersResponse } from '../lib/api.ts';
 import { useTheme } from '../lib/theme.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { ResourceList, type BulkAction } from '../components/ResourceList.tsx';
@@ -13,6 +13,8 @@ import { Sidebar, type NavSelection } from '../components/Sidebar.tsx';
 import { NamespacePicker } from '../components/NamespacePicker.tsx';
 import { ClusterStrip } from '../components/ClusterStrip.tsx';
 import { ModuleRail } from '../components/ModuleRail.tsx';
+import { EdgeToggle } from '../components/ui/EdgeToggle.tsx';
+import { Welcome } from '../components/Welcome.tsx';
 import { Overview, type NavigateTarget } from '../components/Overview.tsx';
 import { SettingsPanel } from '../components/SettingsPanel.tsx';
 import { podStatus, type KubeItem } from '../components/columns.tsx';
@@ -59,6 +61,9 @@ export function App() {
   const setNamespace = useCallback((next: string) => setNamespaces(next ? [next] : []), []);
   const [allNamespaces, setAllNamespaces] = useState<string[]>([]);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined);
+  /** null until the settings file has been read; the welcome cannot decide before then. */
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [welcome, setWelcome] = useState(false);
   const [statusFilter, setStatusFilter] = useState(route.status ?? '');
   const [filter, setFilter] = useState('');
   const [items, setItems] = useState<KubeItem[]>([]);
@@ -95,8 +100,28 @@ export function App() {
       // fine
     }
   }, [chrome]);
+  /** The module rail reading as words rather than shapes. Its own preference. */
+  const [railOpen, setRailOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mjolnir.rail') === 'open';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('mjolnir.rail', railOpen ? 'open' : 'closed');
+    } catch {
+      // fine
+    }
+  }, [railOpen]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.altKey && !event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        setRailOpen((current) => !current);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
         event.preventDefault();
         setChrome((current) => (event.shiftKey ? (current === 'hidden' ? 'full' : 'hidden') : current === 'compact' ? 'full' : 'compact'));
@@ -104,6 +129,17 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
+    void api.settings
+      .get()
+      .then((response) => {
+        setAppSettings(response.settings);
+        // First run is "the file has never recorded an answer", not "no
+        // settings file", so a reset that keeps preferences does not replay it.
+        if (!response.settings.onboarding.completed) setWelcome(true);
+      })
+      .catch(() => undefined);
   }, []);
   const dock = useResizable({ key: 'dock', initial: 280, min: 120, max: 720, direction: 'up' });
   const [dockTabs, setDockTabs] = useState<DockTab[]>([]);
@@ -605,14 +641,14 @@ export function App() {
           onToggleTheme={() => theme.set(theme.resolved === 'dark' ? 'light' : 'dark')}
           onPalette={() => setPaletteOpen(true)}
           onAssistant={() => openAssistant()}
-          chrome={chrome}
-          onChrome={setChrome}
         />
 
         <div className="relative flex min-h-0 flex-1">
           {chrome !== 'hidden' ? (
           <ModuleRail
             active={moduleId}
+            expanded={railOpen}
+            onToggleExpanded={() => setRailOpen((current) => !current)}
             settingsActive={isAppSettings}
             onSelect={(id) => go(id === KUBERNETES_MODULE.id ? { kind: 'page', value: 'overview' } : { kind: 'workspace', value: lastSection[id] ?? id })}
             onSettings={() => setSelection({ kind: 'page', value: 'app-settings' })}
@@ -643,7 +679,6 @@ export function App() {
                 counts={counts}
                 width={chrome === 'compact' ? 56 : sidebar.width}
                 compact={chrome === 'compact'}
-                onToggleCompact={() => setChrome((current) => (current === 'compact' ? 'full' : 'compact'))}
                 module={moduleId === KUBERNETES_MODULE.id ? undefined : tool}
                 onSelect={go}
               />
@@ -655,19 +690,19 @@ export function App() {
                   onPointerDown={sidebar.onPointerDown}
                 />
               ) : null}
+              <EdgeToggle
+                open={chrome === 'full'}
+                onToggle={() => setChrome(chrome === 'full' ? 'compact' : 'full')}
+                label={chrome === 'full' ? 'Collapse navigation to icons' : 'Expand navigation'}
+                hint="Cmd B, Cmd Shift B hides it"
+                testId="sidebar-collapse"
+              />
             </div>
           )}
           {chrome === 'hidden' ? (
-            <button
-              type="button"
-              data-testid="chrome-show"
-              onClick={() => setChrome('full')}
-              aria-label="Show navigation"
-              title="Show navigation (⌘⇧B)"
-              className="btn-secondary absolute bottom-3 left-3 z-30 flex h-[30px] items-center gap-1.5 rounded-md border border-line px-2.5 text-[12px] text-secondary hover:text-primary"
-            >
-              <PanelLeft size={13} strokeWidth={2} /> Navigation
-            </button>
+            <div className="relative w-0 shrink-0">
+              <EdgeToggle open={false} onToggle={() => setChrome('full')} label="Show navigation" hint="Cmd Shift B" testId="chrome-show" />
+            </div>
           ) : null}
 
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -702,6 +737,7 @@ export function App() {
                 scope={view === 'settings' ? 'kubernetes' : 'app'}
                 initialSection={settingsSection}
                 onSectionShown={() => setSettingsSection(undefined)}
+                onReplayWelcome={() => setWelcome(true)}
                 clusters={clusters}
                 theme={theme.choice}
                 onTheme={theme.set}
@@ -1033,6 +1069,24 @@ export function App() {
           }}
         />
 
+        <AnimatePresence>
+          {welcome ? (
+            <Welcome
+              settings={appSettings}
+              clusters={clusters}
+              onFinish={() => {
+                setWelcome(false);
+                void api.settings.get().then((response) => setAppSettings(response.settings)).catch(() => undefined);
+              }}
+              onOpenSettings={(section) => {
+                setWelcome(false);
+                setSettingsSection(section);
+                setSelection({ kind: 'page', value: section === 'kubeconfig' ? 'settings' : 'app-settings' });
+              }}
+            />
+          ) : null}
+        </AnimatePresence>
+
         <Toaster theme={theme.resolved} position="bottom-right" />
       </div>
     </Tooltip.Provider>
@@ -1074,8 +1128,6 @@ interface TitleBarProps {
   readonly onToggleTheme: () => void;
   readonly onPalette: () => void;
   readonly onAssistant: () => void;
-  readonly chrome: 'full' | 'compact' | 'hidden';
-  readonly onChrome: (next: 'full' | 'compact' | 'hidden') => void;
 }
 
 /** True inside the Electron shell, where macOS draws traffic lights over us. */
@@ -1100,7 +1152,7 @@ const PROVIDER_LABEL: Record<string, string> = {
  * rail. What is left is who you are connected to and whether it is answering -
  * the two things worth having on screen permanently.
  */
-function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistant, chrome, onChrome }: TitleBarProps) {
+function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistant }: TitleBarProps) {
   const provider = current ? PROVIDER_LABEL[current.provider] : '';
   const timezone = useTimezone();
   const zoneOptions = useMemo(() => timezoneOptions(), []);
@@ -1116,17 +1168,6 @@ function TitleBar({ module, current, theme, onToggleTheme, onPalette, onAssistan
     >
       <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px" style={{ background: `linear-gradient(90deg, transparent, color-mix(in oklab, ${tint} 55%, transparent) 30%, transparent 80%)` }} />
 
-      <button
-        type="button"
-        data-testid="chrome-toggle"
-        aria-label={chrome === 'full' ? 'Collapse navigation to icons' : chrome === 'compact' ? 'Hide navigation' : 'Show navigation'}
-        title="Navigation: ⌘B collapses, ⌘⇧B hides"
-        onClick={() => onChrome(chrome === 'full' ? 'compact' : chrome === 'compact' ? 'hidden' : 'full')}
-        className="mr-1 flex h-[28px] w-[28px] items-center justify-center rounded-md text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        {chrome === 'hidden' ? <PanelLeftOpen size={15} strokeWidth={1.9} /> : chrome === 'compact' ? <PanelLeft size={15} strokeWidth={1.9} /> : <PanelLeftClose size={15} strokeWidth={1.9} />}
-      </button>
       <span className="flex items-center gap-2" data-testid="brand">
         <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] text-white" style={{ background: 'linear-gradient(145deg, color-mix(in oklab, var(--accent-solid) 100%, white 22%), color-mix(in oklab, var(--accent-solid) 100%, black 18%))', boxShadow: '0 1px 0 rgb(255 255 255 / 0.25) inset, 0 4px 12px color-mix(in oklab, var(--accent-solid) 50%, transparent)' }}>
           <Zap size={14} strokeWidth={2.4} aria-hidden />

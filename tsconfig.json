@@ -17,6 +17,12 @@
       "path": "./packages/licensing"
     },
     {
+      "path": "./packages/endpoints"
+    },
+    {
+      "path": "./packages/flags"
+    },
+    {
       "path": "./packages/paddle"
     },
     {

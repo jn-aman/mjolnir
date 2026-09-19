@@ -34,4 +34,13 @@ export declare const modelName: Validator;
 export declare const taintEffect: Validator;
 /** Runs several rules; the first sentence wins. */
 export declare function all(...rules: Validator[]): Validator;
+/**
+ * A Mjolnir endpoint.
+ *
+ * The app contacts mjolnir.sh and its subdomains, and loopback while someone
+ * is developing against a stand-in. Checked by parsing rather than by suffix,
+ * because `https://mjolnir.sh.example.com` ends with the right letters and is
+ * not us.
+ */
+export declare const mjolnirUrl: Validator;
 //# sourceMappingURL=validate.d.ts.map

@@ -69,6 +69,84 @@ export interface AppSettings {
     licence: {
         key: string;
     };
+    install: {
+        id: string;
+        firstRun: string;
+    };
+    flags: {
+        overrides: Record<string, boolean>;
+        remote: {
+            enabled: boolean;
+            url: string;
+            token: string;
+            environment: string;
+            refreshSeconds: number;
+        };
+    };
+    telemetry: {
+        usage: boolean;
+        crashes: boolean;
+        decided: boolean;
+    };
+    updates: {
+        channel: 'stable' | 'beta';
+        automatic: boolean;
+        checkOnLaunch: boolean;
+        skipped: string;
+    };
+    onboarding: {
+        completed: boolean;
+        step: string;
+        version: number;
+    };
+}
+export interface FlagState {
+    id: string;
+    label: string;
+    description: string;
+    stage: 'internal' | 'experimental' | 'beta' | 'stable';
+    module: string;
+    warning?: string;
+    value: boolean;
+    source: 'override' | 'remote' | 'default';
+    fallback: boolean;
+    remote?: boolean;
+}
+export interface RemoteFlagStatus {
+    enabled: boolean;
+    url: string;
+    state: 'off' | 'never-fetched' | 'ok' | 'failed';
+    fetchedAt?: string;
+    error?: string;
+    count: number;
+}
+export interface TelemetryView {
+    consent: {
+        usage: boolean;
+        crashes: boolean;
+        decided: boolean;
+    };
+    catalogue: Array<{
+        name: string;
+        strings: Record<string, string[]>;
+        numbers: string[];
+    }>;
+    queue: unknown[];
+    envelope: Record<string, unknown>;
+    lastSend?: string;
+    lastError?: string;
+}
+export interface UpdateView {
+    version: string;
+    feed: string;
+    preferences: AppSettings['updates'];
+    state: {
+        status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'current' | 'error' | 'unsupported';
+        version?: string;
+        percent?: number;
+        error?: string;
+        checkedAt?: string;
+    };
 }
 export interface LicenceStatus {
     kind: 'none' | 'valid' | 'grace' | 'expired' | 'invalid' | 'unconfigured';
@@ -245,6 +323,62 @@ export declare const api: {
         }>;
         mcpToken: () => Promise<{
             token: string;
+        }>;
+    };
+    flags: {
+        list: () => Promise<{
+            flags: FlagState[];
+            remote: RemoteFlagStatus;
+            context: Record<string, unknown>;
+        }>;
+        set: (id: string, value: boolean | null) => Promise<{
+            flags: FlagState[];
+        }>;
+        refresh: () => Promise<{
+            flags: FlagState[];
+            remote: RemoteFlagStatus;
+        }>;
+        test: (config: {
+            url: string;
+            token: string;
+            environment: string;
+        }) => Promise<{
+            ok: boolean;
+            count?: number;
+            matched?: string[];
+            ignored?: string[];
+            error?: string;
+        }>;
+    };
+    telemetry: {
+        get: () => Promise<TelemetryView>;
+        consent: (usage: boolean, crashes: boolean) => Promise<{
+            consent: TelemetryView['consent'];
+        }>;
+        flush: () => Promise<{
+            sent: number;
+            error?: string;
+        }>;
+        clear: () => Promise<{
+            ok: boolean;
+        }>;
+        event: (name: string, props?: Record<string, unknown>) => Promise<{
+            ok: boolean;
+        } | {
+            ok: boolean;
+        }>;
+    };
+    updates: {
+        get: () => Promise<UpdateView>;
+        preferences: (patch: Partial<AppSettings['updates']>) => Promise<{
+            preferences: AppSettings['updates'];
+        }>;
+        check: () => Promise<{
+            state: UpdateView['state'];
+            message?: string;
+        }>;
+        install: () => Promise<{
+            ok: boolean;
         }>;
     };
     ai: {

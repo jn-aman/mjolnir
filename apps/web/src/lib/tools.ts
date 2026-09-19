@@ -54,6 +54,8 @@ export interface ToolDefinition {
   readonly today: readonly ToolCommand[];
   /** A module's sidebar entries. Only for `workspace` entries. */
   readonly sections?: readonly string[];
+  /** Built and working today. Anything without this is honestly labelled planned. */
+  readonly built?: boolean;
 }
 
 /** The Kubernetes module, alongside the others; it is not the app. */
@@ -189,6 +191,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     ],
     today: [{ label: 'Running containers', command: 'docker ps' }],
     sections: ['Containers', 'Images', 'Volumes', 'Networks', 'Compose', 'Registries', 'System'],
+    built: true,
   },
   {
     id: 'storage',
@@ -206,6 +209,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     ],
     today: [{ label: 'List a bucket', command: 'mc ls <alias>/<bucket>' }],
     sections: ['Connections', 'Buckets', 'Transfers', 'Presigned links'],
+    built: true,
   },
   {
     id: 'machines',

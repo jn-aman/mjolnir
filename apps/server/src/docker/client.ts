@@ -17,9 +17,12 @@ export interface DockerRequest {
 }
 
 export class DockerError extends Error {
-  constructor(readonly status: number, message: string) {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
     super(message);
     this.name = 'DockerError';
+    this.status = status;
   }
 }
 
@@ -31,7 +34,11 @@ function withQuery(path: string, query: DockerRequest['query']): string {
 }
 
 export class DockerClient {
-  constructor(readonly socketPath: string) {}
+  readonly socketPath: string;
+
+  constructor(socketPath: string) {
+    this.socketPath = socketPath;
+  }
 
   async raw(method: string, path: string, options: DockerRequest = {}): Promise<IncomingMessage> {
     const body = options.body === undefined ? undefined : JSON.stringify(options.body);

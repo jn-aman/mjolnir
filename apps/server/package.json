@@ -7,12 +7,14 @@
   "bin": { "mjolnir-mcp": "./dist/mcp/stdio.js" },
   "scripts": {
     "build": "tsc -b",
-    "dev": "node --experimental-strip-types src/index.ts"
+    "dev": "tsc -b && node dist/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
     "@mjolnir/k8s": "*",
     "@mjolnir/demo": "*",
+    "@mjolnir/endpoints": "*",
+    "@mjolnir/flags": "*",
     "@mjolnir/licensing": "*",
     "@mjolnir/logger": "*",
     "@mjolnir/schemas": "*",

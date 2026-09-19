@@ -16,13 +16,14 @@ const base = (): string => {
 export type ErrorCode = 'bad-request' | 'auth' | 'not-found' | 'upstream' | 'internal';
 
 export class ApiError extends Error {
-  constructor(
-    readonly code: ErrorCode,
-    message: string,
-    readonly status: number,
-  ) {
+  readonly code: ErrorCode;
+  readonly status: number;
+
+  constructor(code: ErrorCode, message: string, status: number) {
     super(message);
     this.name = 'ApiError';
+    this.code = code;
+    this.status = status;
   }
 
   /** The cue to offer a session refresh rather than show a failure. */
@@ -90,6 +91,49 @@ export interface AppSettings {
   ai: { provider: 'anthropic' | 'openai'; preset: string; baseUrl: string; apiKey: string; model: string; allowWrites: boolean; instructions: string };
   mcp: { http: boolean; token: string; allowWrites: boolean };
   licence: { key: string };
+  install: { id: string; firstRun: string };
+  flags: { overrides: Record<string, boolean>; remote: { enabled: boolean; url: string; token: string; environment: string; refreshSeconds: number } };
+  telemetry: { usage: boolean; crashes: boolean; decided: boolean };
+  updates: { channel: 'stable' | 'beta'; automatic: boolean; checkOnLaunch: boolean; skipped: string };
+  onboarding: { completed: boolean; step: string; version: number };
+}
+
+export interface FlagState {
+  id: string;
+  label: string;
+  description: string;
+  stage: 'internal' | 'experimental' | 'beta' | 'stable';
+  module: string;
+  warning?: string;
+  value: boolean;
+  source: 'override' | 'remote' | 'default';
+  fallback: boolean;
+  remote?: boolean;
+}
+
+export interface RemoteFlagStatus {
+  enabled: boolean;
+  url: string;
+  state: 'off' | 'never-fetched' | 'ok' | 'failed';
+  fetchedAt?: string;
+  error?: string;
+  count: number;
+}
+
+export interface TelemetryView {
+  consent: { usage: boolean; crashes: boolean; decided: boolean };
+  catalogue: Array<{ name: string; strings: Record<string, string[]>; numbers: string[] }>;
+  queue: unknown[];
+  envelope: Record<string, unknown>;
+  lastSend?: string;
+  lastError?: string;
+}
+
+export interface UpdateView {
+  version: string;
+  feed: string;
+  preferences: AppSettings['updates'];
+  state: { status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'current' | 'error' | 'unsupported'; version?: string; percent?: number; error?: string; checkedAt?: string };
 }
 
 export interface LicenceStatus {
@@ -267,6 +311,27 @@ export const api = {
     get: () => request<{ settings: AppSettings; path: string; mcpCommand?: string }>('/api/settings'),
     update: (patch: unknown) => request<{ settings: AppSettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(patch) }),
     mcpToken: () => request<{ token: string }>('/api/settings/mcp-token', { method: 'POST', body: '{}' }),
+  },
+  flags: {
+    list: () => request<{ flags: FlagState[]; remote: RemoteFlagStatus; context: Record<string, unknown> }>('/api/flags'),
+    set: (id: string, value: boolean | null) => request<{ flags: FlagState[] }>(`/api/flags/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+    refresh: () => request<{ flags: FlagState[]; remote: RemoteFlagStatus }>('/api/flags/refresh', { method: 'POST', body: '{}' }),
+    test: (config: { url: string; token: string; environment: string }) =>
+      request<{ ok: boolean; count?: number; matched?: string[]; ignored?: string[]; error?: string }>('/api/flags/test', { method: 'POST', body: JSON.stringify(config) }),
+  },
+  telemetry: {
+    get: () => request<TelemetryView>('/api/telemetry'),
+    consent: (usage: boolean, crashes: boolean) => request<{ consent: TelemetryView['consent'] }>('/api/telemetry/consent', { method: 'PUT', body: JSON.stringify({ usage, crashes }) }),
+    flush: () => request<{ sent: number; error?: string }>('/api/telemetry/flush', { method: 'POST', body: '{}' }),
+    clear: () => request<{ ok: boolean }>('/api/telemetry', { method: 'DELETE' }),
+    event: (name: string, props: Record<string, unknown> = {}) =>
+      request<{ ok: boolean }>('/api/telemetry/event', { method: 'POST', body: JSON.stringify({ name, props }) }).catch(() => ({ ok: false })),
+  },
+  updates: {
+    get: () => request<UpdateView>('/api/updates'),
+    preferences: (patch: Partial<AppSettings['updates']>) => request<{ preferences: AppSettings['updates'] }>('/api/updates/preferences', { method: 'PUT', body: JSON.stringify(patch) }),
+    check: () => request<{ state: UpdateView['state']; message?: string }>('/api/updates/check', { method: 'POST', body: '{}' }),
+    install: () => request<{ ok: boolean }>('/api/updates/install', { method: 'POST', body: '{}' }),
   },
   ai: {
     tools: () => request<{ tools: Array<{ name: string; description: string; kind: 'read' | 'write' }> }>('/api/ai/tools'),

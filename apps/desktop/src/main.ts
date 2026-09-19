@@ -2,8 +2,10 @@ import { createRequire } from 'node:module';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BrowserWindow as BrowserWindowType, MenuItemConstructorOptions } from 'electron';
+import { ENDPOINTS } from '@mjolnir/endpoints';
 import { logger } from '@mjolnir/logger';
-import { startServer, type ServerHandle } from '@mjolnir/server';
+import { setDesktopBridge, startServer, type ServerHandle } from '@mjolnir/server';
+import { check, initUpdater, installNow, setPreferences, updateState } from './updater.ts';
 
 const log = logger.child('desktop');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -163,6 +165,9 @@ function buildMenu(): void {
         { label: 'mjolnir.sh', click: () => void shell.openExternal('https://mjolnir.sh') },
         { label: 'Source on GitHub', click: () => void shell.openExternal('https://github.com/jn-aman/mjolnir') },
         { label: 'Copy the local API address', click: () => clipboard.writeText(origin()) },
+        { type: 'separator' },
+        { label: 'Check for updates…', click: () => void check(true) },
+        { label: 'Release notes', click: () => void shell.openExternal(ENDPOINTS.releases) },
       ],
     },
   ];
@@ -218,6 +223,8 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
     buildTray();
     createWindow();
+    startUpdates();
+    reportCrashesToServer();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -233,5 +240,61 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     void server?.close();
     tray?.destroy();
+  });
+}
+
+/**
+ * The updater reads its preferences from the same settings file the UI writes,
+ * through the local server, so there is one answer to "does this update itself"
+ * rather than one per process.
+ */
+async function startUpdates(): Promise<void> {
+  try {
+    const response = await fetch(`${origin()}/api/settings`);
+    const payload = (await response.json()) as { settings?: { updates?: { channel?: 'stable' | 'beta'; automatic?: boolean; checkOnLaunch?: boolean; skipped?: string } } };
+    const updates = payload.settings?.updates ?? {};
+    setDesktopBridge({
+      updateState,
+      check,
+      installNow,
+      applyPreferences: setPreferences,
+    });
+    initUpdater(
+      {
+        channel: updates.channel ?? 'stable',
+        automatic: updates.automatic ?? true,
+        checkOnLaunch: updates.checkOnLaunch ?? true,
+        skipped: updates.skipped ?? '',
+      },
+      (next) => {
+        for (const window of windows) window.webContents.send?.('mjolnir:update', next);
+      },
+    );
+  } catch (error) {
+    log.warn('update preferences could not be read', { error: String(error) });
+  }
+}
+
+/**
+ * A crash in the main process is the one crash the renderer cannot report, so
+ * it goes to the local server's queue, which sends it only if the person said
+ * yes and only after stripping paths.
+ */
+function reportCrashesToServer(): void {
+  const send = (kind: 'main', error: Error): void => {
+    void fetch(`${origin()}/api/telemetry/crash`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind, message: error.message, stack: error.stack ?? '' }),
+    }).catch(() => {});
+  };
+  process.on('uncaughtException', (error) => {
+    log.error('uncaught exception in the main process', { error: error.message });
+    send('main', error);
+  });
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    log.error('unhandled rejection in the main process', { error: error.message });
+    send('main', error);
   });
 }

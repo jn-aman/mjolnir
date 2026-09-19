@@ -6,7 +6,9 @@ import {
   Bot,
   Cloud,
   Copy,
+  Download,
   EyeOff,
+  Flag,
   FolderOpen,
   Info,
   Keyboard,
@@ -33,6 +35,9 @@ import { Switch } from './ui/Switch.tsx';
 import { ConfirmDialog } from './ui/Modal.tsx';
 import { copyText } from './ui/ContextMenu.tsx';
 import { AskSave } from './ui/AskSave.tsx';
+import { FlagsSection } from './settings/FlagsSection.tsx';
+import { PrivacySection } from './settings/PrivacySection.tsx';
+import { UpdatesSection } from './settings/UpdatesSection.tsx';
 import { filePath, licenceKey, modelName, namespaceName, optionalUrl } from '../lib/validate.ts';
 
 /**
@@ -58,6 +63,8 @@ interface SettingsPanelProps {
   /** Open on this section, e.g. "kubeconfig" from the + on the cluster strip. */
   readonly initialSection?: string | undefined;
   readonly onSectionShown?: (() => void) | undefined;
+  /** Opens the first-run welcome again from the privacy section. */
+  readonly onReplayWelcome?: (() => void) | undefined;
 }
 
 interface Section {
@@ -72,9 +79,11 @@ const APP_SECTIONS: readonly Section[] = [
   { id: 'ai', label: 'AI assistant', icon: Bot },
   { id: 'mcp', label: 'MCP server', icon: Plug },
   { id: 'licence', label: 'Licence', icon: BadgeCheck },
+  { id: 'flags', label: 'Feature flags', icon: Flag },
+  { id: 'updates', label: 'Updates', icon: Download },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
   { id: 'cloud', label: 'Cloud access', icon: Cloud, planned: 'Identities, sessions and where credentials are kept arrive with the Cloud access workspace.' },
-  { id: 'privacy', label: 'Privacy', icon: ShieldCheck, planned: 'Mjolnir sends nothing anywhere: no analytics, no session replay, no fonts or scripts from third parties. Cluster data and API keys stay on this machine. When update checks arrive they are opt-in and listed here.' },
+  { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
   { id: 'advanced', label: 'Advanced', icon: SlidersHorizontal, planned: 'Log level, data directory, local API port and the reset button.' },
   { id: 'about', label: 'About', icon: Info },
 ];
@@ -116,7 +125,7 @@ const AI_PRESETS: ReadonlyArray<{ id: string; label: string; provider: 'anthropi
   { id: 'custom', label: 'Custom (OpenAI-compatible)', provider: 'openai', baseUrl: '', model: '', needsKey: false },
 ];
 
-export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown }: SettingsPanelProps) {
+export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown, onReplayWelcome }: SettingsPanelProps) {
   const sections = scope === 'app' ? APP_SECTIONS : K8S_SECTIONS;
   const [section, setSection] = useState(sections[0]?.id ?? 'general');
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -207,6 +216,9 @@ export function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClu
             {section === 'ai' ? <Ai settings={settings} onSave={save} /> : null}
             {section === 'mcp' ? <Mcp settings={settings} meta={meta} onSave={save} onRefresh={refresh} /> : null}
             {section === 'licence' ? <Licence /> : null}
+            {section === 'flags' ? <FlagsSection settings={settings} onSave={save} /> : null}
+            {section === 'updates' ? <UpdatesSection /> : null}
+            {section === 'privacy' ? <PrivacySection onReplayWelcome={() => void onReplayWelcome?.()} /> : null}
             {section === 'shortcuts' ? <Shortcuts /> : null}
             {section === 'about' ? <About path={meta?.path} /> : null}
 

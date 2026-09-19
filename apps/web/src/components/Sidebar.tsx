@@ -5,7 +5,7 @@ import { CATEGORY_TINT } from '../lib/tint.ts';
 import { KIND_ICON } from '../lib/kindIcons.ts';
 import { TOOLS, type ToolDefinition } from '../lib/tools.ts';
 import { copyEntry, Menu, type MenuEntry } from './ui/ContextMenu.tsx';
-import { Boxes, ChevronDown, LayoutDashboard, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Boxes, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
 
 /**
  * Resource navigation.
@@ -49,10 +49,9 @@ interface SidebarProps {
   readonly module?: ToolDefinition | undefined;
   /** Icons only. */
   readonly compact?: boolean;
-  readonly onToggleCompact?: (() => void) | undefined;
 }
 
-export function Sidebar({ kinds, selection, counts, onSelect, width, module, compact = false, onToggleCompact }: SidebarProps) {
+export function Sidebar({ kinds, selection, counts, onSelect, width, module, compact = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const grouped = new Map<string, ResourceDefinition[]>();
@@ -88,7 +87,7 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module, com
         <div className="flex items-center gap-2 px-3 py-2">
           <Icon size={15} strokeWidth={1.8} aria-hidden style={{ color: module.tint }} />
           <span className="text-[13px] font-semibold text-primary">{module.label}</span>
-          <span className="rounded-xs border border-line px-1 text-[9.5px] font-semibold uppercase tracking-wide text-tertiary">planned</span>
+          {module.built ? null : <span className="rounded-xs border border-line px-1 text-[9.5px] font-semibold uppercase tracking-wide text-tertiary">planned</span>}
         </div>
         <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
         <ul>
@@ -233,21 +232,6 @@ export function Sidebar({ kinds, selection, counts, onSelect, width, module, com
 
       <div className="flex-1" />
       <div className="mx-3 my-1.5 h-px bg-[var(--border-subtle)]" />
-      {onToggleCompact ? (
-        <button
-          type="button"
-          data-testid="sidebar-collapse"
-          onClick={onToggleCompact}
-          title={compact ? 'Expand navigation (⌘B)' : 'Collapse navigation (⌘B)'}
-          aria-label={compact ? 'Expand navigation' : 'Collapse navigation'}
-          className="mx-2 mb-1 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-md py-[6px] pl-2 pr-2.5 text-[12.5px] text-tertiary transition-colors duration-100 hover:bg-hover hover:text-primary"
-        >
-          <span className="icon-chip !h-[22px] !w-[22px] !rounded-[6px]" style={{ ['--chip-tint' as string]: 'var(--text-tertiary)' }} aria-hidden>
-            {compact ? <PanelLeftOpen size={12} strokeWidth={2} /> : <PanelLeftClose size={12} strokeWidth={2} />}
-          </span>
-          {compact ? null : 'Collapse'}
-        </button>
-      ) : null}
       <Entry
         compact={compact}
         icon={Settings}

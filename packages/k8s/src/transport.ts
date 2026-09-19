@@ -7,13 +7,16 @@ import type { Readable } from 'node:stream';
 const log = logger.child('transport');
 
 export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly path: string,
-    readonly body: string,
-  ) {
+  readonly status: number;
+  readonly path: string;
+  readonly body: string;
+
+  constructor(status: number, path: string, body: string) {
     super(`${status} on ${path}: ${summarize(body)}`);
     this.name = 'ApiError';
+    this.status = status;
+    this.path = path;
+    this.body = body;
   }
 
   /** The object is gone, or was never there. Callers usually render empty, not an error. */

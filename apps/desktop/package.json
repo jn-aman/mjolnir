@@ -11,8 +11,10 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@mjolnir/endpoints": "*",
     "@mjolnir/logger": "*",
-    "@mjolnir/server": "*"
+    "@mjolnir/server": "*",
+    "electron-updater": "6.7.1"
   },
   "devDependencies": {
     "electron": "44.4.3",

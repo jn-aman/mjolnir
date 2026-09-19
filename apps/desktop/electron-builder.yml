@@ -15,10 +15,21 @@ extraResources:
     to: web
 extraMetadata:
   main: dist/main.js
+# The update feed is our own domain, so a network that allows *.mjolnir.sh and
+# nothing else can still update the app. ${channel} and the platform path are
+# filled in by the updater at runtime.
+publish:
+  - provider: generic
+    url: https://updates.mjolnir.sh/${channel}/${os}/${arch}
+    channel: stable
+    useMultipleRangeRequest: false
 mac:
   category: public.app-category.developer-tools
   target:
     - target: dmg
+      arch: [arm64, x64]
+    # zip is what electron-updater downloads for a delta-free in-place update.
+    - target: zip
       arch: [arm64, x64]
   hardenedRuntime: true
   gatekeeperAssess: false

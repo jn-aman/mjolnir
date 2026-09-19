@@ -21,7 +21,9 @@ interface SettingsPanelProps {
     /** Open on this section, e.g. "kubeconfig" from the + on the cluster strip. */
     readonly initialSection?: string | undefined;
     readonly onSectionShown?: (() => void) | undefined;
+    /** Opens the first-run welcome again from the privacy section. */
+    readonly onReplayWelcome?: (() => void) | undefined;
 }
-export declare function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown }: SettingsPanelProps): import("react").JSX.Element;
+export declare function SettingsPanel({ scope, clusters, theme, onTheme, onReload, onClustersChanged, initialSection, onSectionShown, onReplayWelcome }: SettingsPanelProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=SettingsPanel.d.ts.map

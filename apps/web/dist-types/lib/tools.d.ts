@@ -31,6 +31,8 @@ export interface ToolDefinition {
     readonly today: readonly ToolCommand[];
     /** A module's sidebar entries. Only for `workspace` entries. */
     readonly sections?: readonly string[];
+    /** Built and working today. Anything without this is honestly labelled planned. */
+    readonly built?: boolean;
 }
 /** The Kubernetes module, alongside the others; it is not the app. */
 export declare const KUBERNETES_MODULE: {
