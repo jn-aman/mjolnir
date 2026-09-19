@@ -268,7 +268,7 @@ export function ResourceDrawer({
     askEntry('Ask the assistant about this', `Look at ${kind} ${name}${namespace ? ` in namespace ${namespace}` : ''}: describe it, check logs and events, and tell me anything that needs attention.`),
     ...(isPod ? [{ id: 'logs', label: 'Logs in the dock', onSelect: () => (onLogsInDock ? onLogsInDock(item) : openLogs(containers[0] ?? '', false)) }] : []),
     ...(isPod ? [{ id: 'logs-here', label: 'Logs in this panel', onSelect: () => openLogs(containers[0] ?? '', false) }] : []),
-    ...(onPin ? [{ id: 'pin', label: 'Keep open in the dock', onSelect: () => onPin(item) }] : []),
+    ...(onPin ? [{ id: 'pin', label: 'Open in the dock', onSelect: () => onPin(item) }] : []),
     ...(isPod && onShell ? [{ id: 'shell', label: 'Shell', onSelect: () => onShell(item, containers[0]) }] : []),
     ...(isPod && onForward ? [{ id: 'forward', label: 'Port forward…', onSelect: () => onForward(item) }] : []),
     { id: 'yaml', label: 'Edit YAML', onSelect: () => setTab('yaml') },

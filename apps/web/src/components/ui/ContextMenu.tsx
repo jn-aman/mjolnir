@@ -1,4 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Copy, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ReactNode } from 'react';
@@ -142,4 +143,79 @@ export function Menu({ label, entries, children, testId = 'context-menu' }: Menu
 
 function Separator() {
   return <ContextMenu.Separator className="my-1 h-px bg-[var(--border-subtle)]" />;
+}
+
+/**
+ * The same menu, opened by a left click.
+ *
+ * A right-click menu is for acting on something that is already on screen. A
+ * button that offers a list of things to create is a different gesture and
+ * wants a different primitive, and building it out of a context menu means
+ * the one obvious click does nothing. Same entries, same styling, so the two
+ * cannot drift apart.
+ */
+export function DropMenu({
+  label,
+  entries,
+  children,
+  testId = 'drop-menu',
+  align = 'start',
+}: MenuProps & { readonly align?: 'start' | 'center' | 'end' }) {
+  const visible = tidy(entries);
+  if (visible.length === 0) return <>{children}</>;
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align={align}
+          sideOffset={4}
+          data-testid={testId}
+          className="z-50 min-w-[216px] max-w-[340px] rounded-lg border border-line bg-overlay p-1 shadow-[var(--shadow-lg)]"
+        >
+          {label ? (
+            <>
+              <DropdownMenu.Label className="block max-w-full truncate px-2 py-1 font-mono text-[11px] text-tertiary">
+                {label}
+              </DropdownMenu.Label>
+              <DropdownMenu.Separator className="my-1 h-px bg-[var(--border-subtle)]" />
+            </>
+          ) : null}
+          {visible.map((entry, index) => {
+            if (entry.type === 'separator') {
+              return <DropdownMenu.Separator key={`sep-${index}`} className="my-1 h-px bg-[var(--border-subtle)]" />;
+            }
+            if (entry.type === 'heading') {
+              return (
+                <DropdownMenu.Label
+                  key={`head-${index}`}
+                  className="px-2 pb-0.5 pt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-tertiary"
+                >
+                  {entry.label}
+                </DropdownMenu.Label>
+              );
+            }
+            return (
+              <DropdownMenu.Item
+                key={entry.id}
+                data-testid={`menu-${entry.id}`}
+                disabled={entry.disabled ?? false}
+                onSelect={entry.onSelect}
+                className={`flex cursor-pointer select-none items-center gap-2.5 rounded-sm px-2 py-[6px] text-[12.5px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 ${
+                  entry.danger
+                    ? 'text-error data-[highlighted]:bg-error-bg'
+                    : 'text-secondary data-[highlighted]:bg-hover data-[highlighted]:text-primary'
+                }`}
+              >
+                <span className="flex w-[14px] shrink-0 justify-center">{entry.icon}</span>
+                <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{entry.label}</span>
+                {entry.shortcut ? <kbd className="ml-4 shrink-0 font-sans text-[10.5px] text-tertiary">{entry.shortcut}</kbd> : null}
+              </DropdownMenu.Item>
+            );
+          })}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
 }

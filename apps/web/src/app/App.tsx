@@ -24,11 +24,12 @@ import { Select } from '../components/ui/Select.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import type { MetricsResponse } from '../lib/metrics.ts';
 import { Dock, type DockTab } from '../components/Dock.tsx';
-import { openPinned, openTab, togglePinned } from '../lib/dockTabs.ts';
+import { closeTab, openTab, reorderTabs } from '../lib/dockTabs.ts';
 import { CommandPalette } from '../components/CommandPalette.tsx';
 import { useFlags } from '../lib/flags.tsx';
 import { ToolPanel } from '../components/ToolPanel.tsx';
 import { DiagnosePanel } from '../components/DiagnosePanel.tsx';
+import { DockPicker } from '../components/DockPicker.tsx';
 import { CertificatePanel } from '../components/CertificatePanel.tsx';
 import { VulnerabilityPanel } from '../components/VulnerabilityPanel.tsx';
 import { ScaleDialog } from '../components/ScaleDialog.tsx';
@@ -79,6 +80,8 @@ export function App() {
    * right-clicked twenty minutes ago.
    */
   const [diagnosing, setDiagnosing] = useState<{ kind: string; name: string; namespace?: string } | undefined>(undefined);
+  /** Which picker the dock's plus button opened, if any. */
+  const [picking, setPicking] = useState<'logs' | 'shell' | null>(null);
   const [kind, setKind] = useState(route.selection?.kind === 'resource' ? route.selection.value : 'Pod');
   const [namespaces, setNamespaces] = useState<string[]>(route.namespace ? route.namespace.split(',').filter(Boolean) : []);
   /** The one namespace to scope a server request to; empty means all, or several (filtered here). */
@@ -510,15 +513,16 @@ export function App() {
   }, [items, selected]);
 
   /**
-   * Puts a tab in the dock, taking over the unpinned one of its kind.
+   * Puts a tab in the dock, beside whatever is already there.
    *
-   * The slot rule lives in `openTab`: look at logs for one pod, then another,
-   * and the second replaces the first, because you were looking at logs and
-   * you still are. Pin one and it stays put while the next opens beside it.
+   * Nothing is replaced. Every tab in the dock is a live thing, a log that is
+   * streaming or a shell with your history in it, so taking over its slot
+   * would kill it rather than put it away. Opening something already open
+   * focuses it instead of tailing the same log twice.
    */
-  const addTab = useCallback((tab: DockTab, pin = false) => {
+  const addTab = useCallback((tab: DockTab) => {
     setDockTabs((current) => {
-      const result = pin ? openPinned(current, tab) : openTab(current, tab);
+      const result = openTab(current, tab);
       setDockActive(result.activeId);
       return result.tabs;
     });
@@ -552,32 +556,40 @@ export function App() {
   );
 
   const openInDock = useCallback(
-    (item: KubeItem, pin = false) => {
+    (item: KubeItem) => {
       if (!context) return;
       const name = item.metadata?.name ?? '';
       const ns = item.metadata?.namespace ?? '';
       const spec = item.spec as { containers?: Array<{ name?: string }> } | undefined;
       const containers = (spec?.containers ?? []).map((c) => c.name ?? '').filter(Boolean);
-      addTab({ id: `logs:${context}:${ns}:${name}`, kind: 'logs', title: name, subtitle: ns, context, namespace: ns, pod: name, containers }, pin);
+      addTab({ id: `logs:${context}:${ns}:${name}`, kind: 'logs', title: name, subtitle: ns, context, namespace: ns, pod: name, containers });
     },
     [context, addTab],
   );
 
   /**
-   * Pin an object into the dock.
+   * Open an object in the dock: a deployment, a config map, anything.
    *
    * The drawer belongs to the list you opened it from and closes when you
    * leave. The dock is the other half of that: the deployment you are rolling
-   * out stays in front of you while you read its pods, its events and the
-   * config map it mounts.
+   * out stays in front of you, with its YAML editable, while you read its
+   * pods, its events and the config map it mounts.
    */
   const pinToDock = useCallback(
     (item: KubeItem, itemKind: string) => {
       if (!context) return;
       const name = item.metadata?.name ?? '';
       const ns = item.metadata?.namespace ?? '';
-      // Pinned on purpose: "keep this open" is the whole verb.
-      addTab({ id: `resource:${context}:${itemKind}:${ns}:${name}`, kind: 'resource', title: name, subtitle: itemKind, context, namespace: ns, resourceKind: itemKind, name }, true);
+      addTab({
+        id: `resource:${context}:${itemKind}:${ns}:${name}`,
+        kind: 'resource',
+        title: name,
+        subtitle: itemKind,
+        context,
+        namespace: ns,
+        resourceKind: itemKind,
+        name,
+      });
     },
     [context, addTab],
   );
@@ -590,6 +602,19 @@ export function App() {
    * is one would mean silently picking a pod for someone. Opening the
    * assistant belongs here too; it is a thing you keep beside your work.
    */
+  /**
+   * What the dock's plus button offers.
+   *
+   * Each entry does the thing. The first version answered "Logs" by
+   * navigating to the pod list and showing a toast telling you to click a
+   * button there, which is a control whose response is instructions for using
+   * a different control.
+   *
+   * There is no local terminal here yet, and it is the one Lens has that this
+   * does not: it needs a PTY on the server, which means a native module in
+   * the Electron build. Stated rather than faked with a shell that is secretly
+   * inside a pod.
+   */
   const dockNewTabs = useMemo(
     () => [
       {
@@ -599,25 +624,19 @@ export function App() {
         onSelect: () => openAssistant(),
       },
       {
-        id: 'shell',
-        label: 'Shell',
-        detail: 'Pick a pod and open a terminal in it. It keeps running while you navigate away',
-        onSelect: () => {
-          navigate({ kind: 'Pod' });
-          toast.message('Pick a pod, then Shell', { description: 'The terminal button on any row, or right-click it.' });
-        },
+        id: 'logs',
+        label: 'Logs…',
+        detail: 'Tail a pod here while you read the deployment that owns it',
+        onSelect: () => setPicking('logs'),
       },
       {
-        id: 'logs',
-        label: 'Logs',
-        detail: 'Tail a pod here while you read the deployment that owns it',
-        onSelect: () => {
-          navigate({ kind: 'Pod' });
-          toast.message('Pick a pod, then Logs', { description: 'The logs button on any row opens it here.' });
-        },
+        id: 'shell',
+        label: 'Shell…',
+        detail: 'Open a terminal in a pod. It keeps running while you navigate away',
+        onSelect: () => setPicking('shell'),
       },
     ],
-    // openAssistant and navigate are stable callbacks
+    // openAssistant is a stable callback
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -932,7 +951,11 @@ export function App() {
             ) : view === 'tool' && tool?.id === 'helm' && context ? (
               <HelmPanel context={context} namespace={namespace || undefined} onNavigate={navigate} />
             ) : view === 'tool' && tool?.id === 'portforward' ? (
-              <ForwardsPanel onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })} />
+              <ForwardsPanel
+                context={context ?? undefined}
+                namespace={namespace || undefined}
+                onOpenPod={(record) => navigate({ kind: 'Pod', name: record.pod, namespace: record.namespace })}
+              />
             ) : view === 'workspace' && tool?.id === 'storage' ? (
               <StorageModule tool={tool} section={(section ?? 'buckets') as StorageSection} focusConnection={focusStorage} />
             ) : view === 'workspace' && tool?.id === 'docker' ? (
@@ -1077,21 +1100,16 @@ export function App() {
                 onResizeStart={dock.onPointerDown}
                 onActivate={setDockActive}
                 newTabs={dockNewTabs}
-                onTogglePin={(id) => setDockTabs((current) => togglePinned(current, id))}
-                onReorder={(from, to) =>
+                onReorder={(from, to) => setDockTabs((current) => reorderTabs(current, from, to))}
+                onClose={(id) =>
                   setDockTabs((current) => {
-                    const next = [...current];
-                    const at = next.findIndex((tab) => tab.id === from);
-                    const onto = next.findIndex((tab) => tab.id === to);
-                    if (at < 0 || onto < 0) return current;
-                    next.splice(onto, 0, ...next.splice(at, 1));
-                    return next;
+                    const result = closeTab(current, id);
+                    // Focus the neighbour rather than nothing, so closing one
+                    // of five tabs leaves you looking at the fourth.
+                    setDockActive((active) => (active === id ? result.activeId : active));
+                    return result.tabs;
                   })
                 }
-                onClose={(id) => {
-                  setDockTabs((current) => current.filter((tab) => tab.id !== id));
-                  setDockActive((active) => (active === id ? null : active));
-                }}
                 onCloseAll={() => setDockTabs([])}
                 onNavigate={navigate}
                 onExpand={(tab) => {
@@ -1199,6 +1217,17 @@ export function App() {
 
         <PortForwardDialog context={context ?? ''} pod={forwarding} onClose={() => setForwarding(null)} />
         <ScanDialog image={canScan ? scanningImage : null} onClose={() => setScanningImage(null)} />
+        <DockPicker
+          open={picking !== null}
+          context={context}
+          namespace={namespace || undefined}
+          intent={picking ?? 'logs'}
+          onClose={() => setPicking(null)}
+          onPick={(pod, container) => {
+            if (picking === 'shell') openShell(pod, container);
+            else openInDock(pod);
+          }}
+        />
 
         <ConfirmDialog
           open={bulkDelete !== null}

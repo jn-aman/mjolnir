@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronDown, ChevronUp, Maximize2, Minimize2, Pin, Plus, ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Maximize2, Minimize2, Plus, ScrollText, Sparkles, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Assistant } from './Assistant.tsx';
 import { Terminal } from './Terminal.tsx';
 import { LogViewer } from './LogViewer.tsx';
 import { ResizeHandle } from '../lib/useResizable.tsx';
 import { Button } from './ui/Button.tsx';
-import { copyEntry, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
+import { copyEntry, DropMenu, Menu, SEPARATOR, type MenuEntry } from './ui/ContextMenu.tsx';
 import { KindMark } from './ui/KindMark.tsx';
 import { Tip } from './ui/Tooltip.tsx';
 import { DockResource } from './DockResource.tsx';
@@ -16,11 +16,17 @@ import { DockResource } from './DockResource.tsx';
  * while you go and look at something else.
  *
  * A log tail keeps streaming while you read the deployment that owns the pod.
- * Terminals and pinned objects land here for the same reason. One component,
- * so every kind of tab is opened, closed, resized and reordered identically.
+ * Terminals and objects land here for the same reason. One component, so every
+ * kind of tab is opened, closed, resized and reordered identically.
  *
- * Three things make it work rather than merely exist, and the first version
- * had none of them.
+ * **Tabs accumulate.** Opening a second log does not take over the first one's
+ * slot, and there is nothing to pin: every tab in here is a live thing, a
+ * stream or a shell or an object being watched, and reusing its slot would
+ * kill it rather than put it away. Closing is the only thing that removes a
+ * tab, and collapsing is how you get your screen back.
+ *
+ * Three more things make it work rather than merely exist, and the first
+ * version had none of them.
  *
  * **It is always there.** A dock that appears only once something has put a
  * tab in it is a dock nobody discovers, and it leaves no way to simply open a
@@ -58,16 +64,9 @@ export interface DockTab {
    * that failed.
    */
   readonly previous?: boolean | undefined;
-  /** For resource tabs: the object pinned here. */
+  /** For resource tabs: the object open here. */
   readonly resourceKind?: string | undefined;
   readonly name?: string | undefined;
-  /**
-   * Kept, rather than reused.
-   *
-   * An unpinned tab is the slot for its kind: opening logs for a second pod
-   * takes it over. Pinning says this one stays and the next opens beside it.
-   */
-  readonly pinned?: boolean | undefined;
 }
 
 interface DockProps {
@@ -82,11 +81,9 @@ interface DockProps {
   readonly onClose: (id: string) => void;
   readonly onCloseAll: () => void;
   readonly onReorder: (from: string, to: string) => void;
-  /** Keeps a tab, so the next one of its kind opens beside it instead of over it. */
-  readonly onTogglePin: (id: string) => void;
   /** Opens the tab's subject in the details panel, full size. */
   readonly onExpand: (tab: DockTab) => void;
-  /** Lets a pinned object's reference chips open other objects. */
+  /** Lets an object's reference chips open other objects. */
   readonly onNavigate?: ((target: { kind: string; name?: string; namespace?: string }) => void) | undefined;
   /** What the plus button offers. Empty means no plus button. */
   readonly newTabs?: readonly { id: string; label: string; detail?: string; onSelect: () => void }[] | undefined;
@@ -108,7 +105,6 @@ export function Dock({
   onClose,
   onCloseAll,
   onReorder,
-  onTogglePin,
   onExpand,
   onNavigate,
   newTabs,
@@ -144,13 +140,6 @@ export function Dock({
           {tabs.map((tab) => {
             const isActive = tab.id === active?.id;
             const entries: MenuEntry[] = [
-              {
-                id: 'pin',
-                label: tab.pinned ? 'Let this tab be reused' : 'Keep this tab',
-                icon: <Pin size={13} strokeWidth={1.9} />,
-                onSelect: () => onTogglePin(tab.id),
-              },
-              SEPARATOR,
               { id: 'close', label: 'Close', onSelect: () => onClose(tab.id) },
               {
                 id: 'close-others',
@@ -184,12 +173,6 @@ export function Dock({
                   // and keeps the stream running, which is the whole point of
                   // a dock rather than a drawer.
                   onClick={() => (isActive ? onToggleCollapsed() : activateAndOpen(tab.id))}
-                  // Double-click pins, which is the gesture that makes a
-                  // preview tab permanent in every editor people already use.
-                  onDoubleClick={(event) => {
-                    event.preventDefault();
-                    onTogglePin(tab.id);
-                  }}
                   className={`group relative flex shrink-0 items-center gap-2 px-3 text-[12px] transition-colors duration-100 ${
                     isActive ? 'text-primary' : 'text-tertiary hover:text-secondary'
                   } ${dragTab === tab.id ? 'opacity-40' : ''}`}
@@ -203,16 +186,8 @@ export function Dock({
                     />
                   ) : null}
                   <TabIcon tab={tab} active={isActive} />
-                  <span className={`max-w-[210px] truncate font-mono ${tab.pinned ? '' : 'italic'}`}>{tab.title}</span>
+                  <span className="max-w-[210px] truncate font-mono">{tab.title}</span>
                   {tab.subtitle ? <span className="max-w-[120px] truncate text-[11px] text-tertiary">{tab.subtitle}</span> : null}
-                  {/*
-                    Italic means "this slot will be reused"; the pin means it
-                    will not. Shown rather than explained, because the rule is
-                    learned by watching a tab get replaced once.
-                  */}
-                  {tab.pinned ? (
-                    <Pin size={10} strokeWidth={2.4} aria-hidden className={isActive ? 'text-accent' : 'text-tertiary'} />
-                  ) : null}
                   <span
                     role="button"
                     aria-label={`Close ${tab.title}`}
@@ -231,7 +206,7 @@ export function Dock({
 
           {/*
             Empty, this is buttons rather than a sentence explaining what
-            buttons would do. "Logs, shells and pinned objects stay here while
+            buttons would do. "Logs, shells and objects stay here while
             you work elsewhere" is a paragraph asking to be read by someone
             who is trying to get something done; two things they can press
             teach the same lesson by being pressed.
@@ -252,24 +227,27 @@ export function Dock({
               ))
             : null}
 
-          {tabs.length > 0 && newTabs && newTabs.length > 0 ? (
-            <Menu
+          {/*
+            The plus is always there, tabs or none, and a left click opens the
+            list. A button whose one obvious gesture does nothing until you
+            discover the right click is a button nobody finds.
+          */}
+          {newTabs && newTabs.length > 0 ? (
+            <DropMenu
               label="Open in the dock"
               testId="dock-new-menu"
               entries={newTabs.map((entry) => ({ id: entry.id, label: entry.label, onSelect: entry.onSelect }))}
             >
-              <Tip label="Open something else in the dock">
-                <button
-                  type="button"
-                  data-testid="dock-new"
-                  aria-label="Open something in the dock"
-                  onClick={() => newTabs[0]?.onSelect()}
-                  className="flex w-[30px] shrink-0 items-center justify-center text-tertiary hover:text-primary"
-                >
-                  <Plus size={14} strokeWidth={2} />
-                </button>
-              </Tip>
-            </Menu>
+              <button
+                type="button"
+                data-testid="dock-new"
+                aria-label="Open something in the dock"
+                title="Open something in the dock"
+                className="flex w-[30px] shrink-0 items-center justify-center text-tertiary hover:text-primary"
+              >
+                <Plus size={14} strokeWidth={2} />
+              </button>
+            </DropMenu>
           ) : null}
         </div>
 

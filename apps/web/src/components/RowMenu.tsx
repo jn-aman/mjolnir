@@ -109,10 +109,11 @@ export function rowMenuEntries(item: KubeItem, kind: string, act: (action: RowAc
 
   const entries: MenuEntry[] = [
     { id: 'open', label: 'Open details', icon: icon(FileText), shortcut: '↵', onSelect: () => act('open') },
-    // Pinned objects live in the dock and survive navigating away, which is
-    // the point: you read the pods while the deployment stays in front of you.
+    // The dock holds it while you go and look at something else: you read
+    // the pods while the deployment stays in front of you, with its YAML
+    // editable in the tab.
     ...(on(flags, 'ui.dock')
-      ? [{ id: 'pin', label: 'Keep open in the dock', icon: icon(PinIcon), onSelect: () => act('pin') }]
+      ? [{ id: 'pin', label: 'Open in the dock', icon: icon(PinIcon), shortcut: '⇧↵', onSelect: () => act('pin') }]
       : []),
     /*
      * Offered first when something is visibly wrong, because that is the
