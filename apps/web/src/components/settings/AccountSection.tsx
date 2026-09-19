@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Building2, Check, Copy, ExternalLink, KeyRound, LogOut, Mail, Monitor, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Building2, Check, Copy, ExternalLink, KeyRound, Laptop, LogOut, Mail, Monitor, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, type AccountStatus, type SignInPrompt, type SignInProvider } from '../../lib/api.ts';
+import { api, type AccountDevice, type AccountStatus, type SignInPrompt, type SignInProvider } from '../../lib/api.ts';
 import { Card } from '../ui/Card.tsx';
 import { Button } from '../ui/Button.tsx';
 import { copyText } from '../ui/ContextMenu.tsx';
@@ -124,12 +124,7 @@ export function AccountSection() {
             </div>
             {status.detail ? <p className="text-[12px] leading-[1.6] text-tertiary">{status.detail}</p> : null}
 
-            {status.seats ? (
-              <div className="text-[12px] text-secondary">
-                <span className="font-mono text-primary">{status.seats.used}</span> of{' '}
-                <span className="font-mono text-primary">{status.seats.total}</span> seats in use
-              </div>
-            ) : null}
+            {status.seats ? <Seats used={status.seats.used} total={status.seats.total} /> : null}
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {status.signedIn ? (
@@ -291,6 +286,28 @@ export function AccountSection() {
         </Card>
       ) : null}
 
+      {status && status.signedIn ? (
+        <Card
+          title="Your machines"
+          subtitle="A seat is held by a machine with a current licence, not by one that merely signed in. A machine that stops renewing gives its seat back a week later, on its own."
+        >
+          {status.devices.length === 0 ? (
+            <p className="py-2 text-[12.5px] text-tertiary">No machines yet. This one appears once it has a licence.</p>
+          ) : (
+            <div className="-mx-1" data-testid="account-devices">
+              {status.devices.map((device) => (
+                <DeviceRow
+                  key={device.id}
+                  device={device}
+                  busy={busy === `revoke:${device.id}`}
+                  onRevoke={() => void act(`revoke:${device.id}`, () => api.account.revokeDevice(device.id), device.current ? 'Signed out' : `${device.name} signed out`)}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : null}
+
       <Card
         title="What an account is not"
         subtitle="Worth stating plainly, because a desktop tool asking you to sign in deserves the question."
@@ -342,6 +359,72 @@ function ProviderIcon({ id }: { id: SignInProvider['id'] }) {
   if (id === 'okta') return <Building2 size={size} strokeWidth={strokeWidth} aria-hidden />;
   if (id === 'google') return <ShieldCheck size={size} strokeWidth={strokeWidth} aria-hidden />;
   return <Mail size={size} strokeWidth={strokeWidth} aria-hidden />;
+}
+
+/**
+ * Seats as a bar, not a sentence.
+ *
+ * "4 of 5" is a number people have to think about. A bar that is nearly full
+ * is understood before it is read, which matters because the moment this
+ * matters is the moment someone is trying to use a sixth machine.
+ */
+function Seats({ used, total }: { used: number; total: number }) {
+  const full = used >= total;
+  const tint = full ? 'var(--status-warn)' : 'var(--status-ok)';
+  return (
+    <div className="flex items-center gap-2.5" data-testid="account-seats">
+      <span className="flex h-[6px] w-[120px] overflow-hidden rounded-full bg-sunken" aria-hidden>
+        <span className="h-full rounded-full transition-[width] duration-200" style={{ width: `${Math.min(100, (used / Math.max(total, 1)) * 100)}%`, background: tint }} />
+      </span>
+      <span className="text-[12px] text-secondary">
+        <span className="font-mono text-primary">{used}</span> of <span className="font-mono text-primary">{total}</span> machines
+        {full ? <span className="ml-1.5 text-[var(--status-warn)]">all in use</span> : null}
+      </span>
+    </div>
+  );
+}
+
+function DeviceRow({ device, busy, onRevoke }: { device: AccountDevice; busy: boolean; onRevoke: () => void }) {
+  const seen = new Date(device.lastSeenAt);
+  const days = Math.floor((Date.now() - seen.getTime()) / 86_400_000);
+  const when = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+  return (
+    <div className="group/row flex items-center gap-3 rounded-md px-1 py-2 hover:bg-hover" data-testid="account-device">
+      <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-md border border-line text-tertiary">
+        {device.platform === 'linux' ? <Server size={13} strokeWidth={1.9} aria-hidden /> : <Laptop size={13} strokeWidth={1.9} aria-hidden />}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[13px] text-primary">{device.name}</span>
+          {device.current ? (
+            <span className="shrink-0 rounded-full bg-accent-subtle px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[0.05em] text-accent">
+              this machine
+            </span>
+          ) : null}
+          {!device.active ? (
+            <Tip label="No current licence, so it is not using a seat">
+              <span className="shrink-0 rounded-full border border-line px-1.5 py-[1px] text-[10px] uppercase tracking-[0.05em] text-tertiary">
+                no seat
+              </span>
+            </Tip>
+          ) : null}
+        </span>
+        <span className="truncate font-mono text-[11px] text-tertiary">
+          {device.platform} · {device.appVersion} · last seen {when}
+        </span>
+      </span>
+      <Button
+        variant="ghost"
+        data-testid={`revoke-${device.id}`}
+        disabled={busy}
+        onClick={onRevoke}
+        icon={<LogOut size={12} strokeWidth={1.9} />}
+        hint={device.current ? 'Signs this machine out and frees its seat' : 'Frees this seat straight away. That machine keeps Pro until its licence runs out, up to a week.'}
+      >
+        {busy ? 'Signing out…' : 'Sign out'}
+      </Button>
+    </div>
+  );
 }
 
 function Row({ label, value, hint, mono = false }: { label: string; value: string; hint?: string; mono?: boolean }) {

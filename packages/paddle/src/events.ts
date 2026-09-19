@@ -34,7 +34,13 @@ export const SubscriptionDataSchema = z.looseObject({
     .looseObject({ action: z.string().optional(), effective_at: z.string().optional() })
     .optional(),
   items: z
-    .array(z.looseObject({ price: z.looseObject({ id: z.string().optional() }).optional() }))
+    .array(
+      z.looseObject({
+        price: z.looseObject({ id: z.string().optional() }).optional(),
+        /** Seats. Paddle calls it quantity; it is the number of machines. */
+        quantity: z.number().int().positive().optional(),
+      }),
+    )
     .optional(),
 });
 
@@ -69,6 +75,32 @@ export function planForPrice(priceId: string, catalogue: PriceCatalogue): Plan |
   return null;
 }
 
+/**
+ * How many seats were bought.
+ *
+ * Paddle's `quantity` on the subscription item. Absent on a plan that was
+ * created before seats existed, so the default stands in, and a customer who
+ * bought before the change is not silently reduced to one machine.
+ */
+export function seatsFrom(items: unknown, fallback = DEFAULT_SEATS): number {
+  if (!Array.isArray(items)) return fallback;
+  for (const item of items) {
+    const quantity = (item as { quantity?: unknown })?.quantity;
+    if (typeof quantity === 'number' && Number.isInteger(quantity) && quantity > 0) return quantity;
+  }
+  return fallback;
+}
+
+/**
+ * Seats a licence comes with.
+ *
+ * Five, not one. The people who buy this run a laptop, a desktop, a work
+ * machine and something in a VM, and a tool that makes them choose is a tool
+ * they resent on the second machine. Five costs us nothing, and it is small
+ * enough that a team of twenty still has to buy twenty.
+ */
+export const DEFAULT_SEATS = 5;
+
 function firstPriceId(items: unknown): string | null {
   if (!Array.isArray(items)) return null;
   for (const item of items) {
@@ -87,8 +119,12 @@ export type LicenseAction =
       /** Subscription end, or null for a lifetime purchase. */
       readonly expiresAt: Date | null;
       readonly updatesUntil: Date;
+      /** Machines this licence covers, from the quantity that was paid for. */
+      readonly seats: number;
+      /** Paddle's subscription id, so a retry updates rather than duplicates. */
+      readonly subscriptionId?: string;
     }
-  | { readonly kind: 'extend'; readonly customerId: string; readonly expiresAt: Date }
+  | { readonly kind: 'extend'; readonly customerId: string; readonly expiresAt: Date; readonly seats?: number; readonly subscriptionId?: string }
   | { readonly kind: 'revoke'; readonly customerId: string; readonly reason: string }
   | { readonly kind: 'ignore'; readonly reason: string };
 
@@ -140,6 +176,7 @@ export function actionFor(
         plan: 'lifetime',
         expiresAt: null,
         updatesUntil: new Date(now.getTime() + YEAR_MS),
+        seats: seatsFrom(transaction.items),
       };
     }
 
@@ -158,7 +195,15 @@ export function actionFor(
       const endsAt = parseDate(subscription.current_billing_period?.ends_at);
       if (!endsAt) return { kind: 'ignore', reason: 'no billing period end' };
 
-      return { kind: 'issue', customerId, plan, expiresAt: endsAt, updatesUntil: endsAt };
+      return {
+        kind: 'issue',
+        customerId,
+        plan,
+        expiresAt: endsAt,
+        updatesUntil: endsAt,
+        seats: seatsFrom(subscription.items),
+        ...(subscription.id ? { subscriptionId: subscription.id } : {}),
+      };
     }
 
     case 'subscription.updated': {
@@ -172,7 +217,17 @@ export function actionFor(
       // A scheduled cancellation is not an immediate one. The user paid for the
       // current period and keeps Pro until it ends, cutting access at the
       // cancel click is the single most common way to earn a chargeback.
-      return { kind: 'extend', customerId, expiresAt: endsAt };
+      //
+      // The quantity comes along because this is also the event that fires
+      // when someone buys more seats, and a seat count that only arrives on
+      // the next renewal is a seat count nobody can use today.
+      return {
+        kind: 'extend',
+        customerId,
+        expiresAt: endsAt,
+        seats: seatsFrom(subscription.items),
+        ...(subscription.id ? { subscriptionId: subscription.id } : {}),
+      };
     }
 
     case 'subscription.canceled': {
@@ -184,7 +239,7 @@ export function actionFor(
       // Access runs to the end of the paid period; the licence simply stops
       // being renewed after that.
       if (endsAt && endsAt.getTime() > now.getTime()) {
-        return { kind: 'extend', customerId, expiresAt: endsAt };
+        return { kind: 'extend', customerId, expiresAt: endsAt, ...(subscription.id ? { subscriptionId: subscription.id } : {}) };
       }
       return { kind: 'revoke', customerId, reason: 'subscription canceled' };
     }

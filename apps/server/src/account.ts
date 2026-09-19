@@ -46,6 +46,20 @@ const CREDENTIALS_FALLBACK = join(DIR, 'credentials.json');
 /** Renewal cadence while everything is fine. The lease itself lasts a week. */
 const RENEW_EVERY_MS = 6 * 60 * 60 * 1000;
 
+/** A machine on the account, as the settings page lists it. */
+export interface DeviceView {
+  readonly id: string;
+  readonly name: string;
+  readonly platform: string;
+  readonly appVersion: string;
+  readonly lastSeenAt: string;
+  readonly createdAt: string;
+  /** The one you are sitting at. */
+  readonly current: boolean;
+  /** Holding a seat right now, which is not the same as having signed in. */
+  readonly active: boolean;
+}
+
 export interface AccountStatus {
   readonly signedIn: boolean;
   readonly email: string;
@@ -58,6 +72,8 @@ export interface AccountStatus {
   readonly expiresAt?: string | undefined;
   readonly plan?: string | undefined;
   readonly seats?: { total: number; used: number } | undefined;
+  /** Every machine on the account. Empty when signed out or offline. */
+  readonly devices: DeviceView[];
   readonly device: { id: string; name: string; fingerprint: string };
   /** Where the refresh token is kept, said plainly rather than implied. */
   readonly credentialStore: 'keychain' | 'file';
@@ -75,6 +91,8 @@ export class AccountStore {
   #lastCheckedAt: string | undefined;
   #pending: { code: DeviceCode; cancelled: boolean } | null = null;
   #identity: Identity | undefined;
+  // Last known, kept so the list is still on screen when the network is not.
+  #devices: DeviceView[] = [];
 
   constructor(version: string) {
     this.#version = version;
@@ -122,8 +140,20 @@ export class AccountStore {
     const store = await this.#store();
     const saved = await store.read();
     const lease = this.leaseStatus();
-    const described = describeLease(lease);
     const claims = 'lease' in lease ? lease.lease.claims : undefined;
+
+    // `describeLease` only knows about the licence, so on its own it says
+    // "Not signed in" to someone who has just signed in and has no
+    // subscription. Those are different situations and the sentence has to
+    // say which: one of them is fixed by signing in and the other is not.
+    const described =
+      saved && lease.kind === 'none'
+        ? {
+            tier: 'free' as const,
+            headline: 'Signed in, no subscription',
+            detail: this.#lastError ?? 'This account has nothing active on it. Everything on the free tier works exactly as it does now.',
+          }
+        : describeLease(lease);
 
     return {
       signedIn: saved !== null,
@@ -136,9 +166,13 @@ export class AccountStore {
       expiresAt: 'lease' in lease ? new Date(lease.lease.notAfter * 1000).toISOString() : undefined,
       plan: claims?.plan,
       seats: 'lease' in lease ? lease.lease.seats : undefined,
+      devices: this.#devices,
       device: { id: this.#device.id, name: this.#device.name, fingerprint: deviceFingerprint(this.#device.id) },
       credentialStore: store.backend,
-      lastError: this.#lastError,
+      // A failed renewal only matters once a renewal is actually due. A
+      // licence with six days left and one missed poll is not a problem, and
+      // putting a warning on screen for it teaches people to ignore warnings.
+      lastError: lease.kind === 'valid' && !shouldRenew(lease) ? undefined : this.#lastError,
       lastCheckedAt: this.#lastCheckedAt,
     };
   }
@@ -218,6 +252,7 @@ export class AccountStore {
     await store.clear();
     rmSync(LEASE_FILE, { force: true });
     this.#identity = undefined;
+    this.#devices = [];
     this.#lastError = undefined;
     log.info('signed out');
     return this.status();
@@ -255,11 +290,18 @@ export class AccountStore {
         return this.status();
       }
       if (response.status >= 400) {
+        // A seat limit arrives with the machines holding the seats, because
+        // "no seats left" with nothing to act on is a dead end and the person
+        // almost always wants to sign out a laptop they no longer own.
+        const payload = response.body as { devices?: DeviceView[] } | null;
+        if (Array.isArray(payload?.devices)) this.#devices = payload.devices;
         this.#lastError = describe(response);
         return this.status();
       }
 
-      const token = (response.body as { lease?: string } | null)?.lease;
+      const payload = response.body as { lease?: string; devices?: DeviceView[] } | null;
+      if (Array.isArray(payload?.devices)) this.#devices = payload.devices;
+      const token = payload?.lease;
       if (typeof token !== 'string' || token === '') {
         this.#lastError = 'the licence service returned no lease';
         return this.status();
@@ -271,6 +313,49 @@ export class AccountStore {
       // Offline is the normal case, not an incident.
       this.#lastError = error instanceof Error ? error.message : String(error);
       log.debug('lease renewal did not happen', { error: this.#lastError });
+    }
+    return this.status();
+  }
+
+  /** The machines on this account, refreshed from the service. */
+  async devices(): Promise<DeviceView[]> {
+    const store = await this.#store();
+    const saved = await store.read();
+    if (!saved) return [];
+    try {
+      const response = await this.#post('/api/account/devices', { refresh_token: saved.refreshToken });
+      const payload = response.body as { devices?: DeviceView[] } | null;
+      if (Array.isArray(payload?.devices)) this.#devices = payload.devices;
+    } catch (error) {
+      // Offline: the last list is better than an empty one.
+      log.debug('could not refresh the device list', { error: error instanceof Error ? error.message : String(error) });
+    }
+    return this.#devices;
+  }
+
+  /**
+   * Signs a machine out, freeing its seat.
+   *
+   * Signing out the machine you are sitting at is allowed and does the obvious
+   * thing: the credentials and lease go, same as Sign out.
+   */
+  async revokeDevice(deviceId: string): Promise<AccountStatus> {
+    const store = await this.#store();
+    const saved = await store.read();
+    if (!saved) return this.status();
+    try {
+      const response = await this.#post('/api/account/devices/revoke', { refresh_token: saved.refreshToken, device_id: deviceId });
+      const payload = response.body as { devices?: DeviceView[]; wasCurrent?: boolean } | null;
+      if (Array.isArray(payload?.devices)) this.#devices = payload.devices;
+      if (payload?.wasCurrent) return this.signOut();
+      if (response.status >= 400) this.#lastError = describe(response);
+      else {
+        this.#lastError = undefined;
+        // A freed seat is usually freed in order to use it here.
+        await this.renew(true);
+      }
+    } catch (error) {
+      this.#lastError = error instanceof Error ? error.message : String(error);
     }
     return this.status();
   }
@@ -357,7 +442,15 @@ function readOrCreateDeviceId(): string {
   return id;
 }
 
+/**
+ * The sentence to put on screen.
+ *
+ * `description` is checked before `error`, because `error` is a machine code
+ * and putting `no_subscription` in front of a person is the same as saying
+ * nothing. The code is the last resort, and the status is the resort after
+ * that.
+ */
 function describe(response: { status: number; body: unknown }): string {
-  const body = response.body as { error_description?: string; message?: string; error?: string } | null;
-  return body?.error_description ?? body?.message ?? body?.error ?? `the licence service answered ${response.status}`;
+  const body = response.body as { description?: string; error_description?: string; message?: string; error?: string } | null;
+  return body?.description ?? body?.error_description ?? body?.message ?? body?.error ?? `the licence service answered ${response.status}`;
 }

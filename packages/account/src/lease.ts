@@ -143,8 +143,10 @@ export function describeLease(status: LeaseStatus): { tier: Tier; headline: stri
     case 'wrong-device':
       return { tier: 'free', headline: 'This licence belongs to another machine', detail: 'It was probably copied along with a home directory. Sign in to get one for this machine.' };
     case 'valid': {
+      // No detail. The email is already beside the headline, and repeating it
+      // underneath is a sentence that says nothing twice.
       const claims: LicenseClaims = status.lease.claims;
-      return { tier: 'pro', headline: `Pro, ${claims.plan}`, detail: claims.email };
+      return { tier: 'pro', headline: `Pro, ${claims.plan}` };
     }
     case 'grace':
       return {

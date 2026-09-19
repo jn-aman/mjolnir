@@ -157,12 +157,26 @@ export interface AccountStatus {
   expiresAt?: string;
   plan?: string;
   seats?: { total: number; used: number };
+  devices: AccountDevice[];
   device: { id: string; name: string; fingerprint: string };
   /** Where the refresh token is kept. Shown, not implied. */
   identity?: { provider: 'email' | 'github' | 'google' | 'okta'; email: string; handle?: string; organisation?: string };
   credentialStore: 'keychain' | 'file';
   lastError?: string;
   lastCheckedAt?: string;
+}
+
+export interface AccountDevice {
+  id: string;
+  name: string;
+  platform: string;
+  appVersion: string;
+  lastSeenAt: string;
+  createdAt: string;
+  /** The machine you are sitting at. */
+  current: boolean;
+  /** Holding a seat, which is not the same as having signed in. */
+  active: boolean;
 }
 
 export interface SignInProvider {
@@ -405,6 +419,8 @@ export const api = {
     cancel: () => request<AccountStatus>('/api/account/sign-in/cancel', { method: 'POST' }),
     signOut: () => request<AccountStatus>('/api/account/sign-out', { method: 'POST' }),
     refresh: () => request<AccountStatus>('/api/account/refresh', { method: 'POST' }),
+    devices: () => request<{ devices: AccountDevice[] }>('/api/account/devices'),
+    revokeDevice: (id: string) => request<AccountStatus>(`/api/account/devices/${encodeURIComponent(id)}/revoke`, { method: 'POST' }),
     billing: () => request<{ url: string; signedIn: boolean; email: string }>('/api/account/billing'),
   },
   licence: {

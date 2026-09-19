@@ -5,7 +5,20 @@ import { promisify } from 'node:util';
 import { logger } from '@mjolnir/logger';
 
 const log = logger.child('credentials');
-const run = promisify(execFile);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Every keychain call is bounded.
+ *
+ * `security` can block forever waiting on a dialog nobody is looking at, and
+ * this runs on the path of a request the settings page is waiting for. A
+ * credential read that hangs is worse than one that fails: a failure falls
+ * back and says so, a hang looks like the app is broken.
+ */
+const KEYCHAIN_TIMEOUT_MS = 4000;
+async function run(command: string, args: string[]): Promise<{ stdout: string }> {
+  return execFileAsync(command, args, { timeout: KEYCHAIN_TIMEOUT_MS, killSignal: 'SIGKILL' });
+}
 
 /**
  * Where a refresh token lives.
@@ -53,13 +66,26 @@ const ACCOUNT = 'account';
  */
 class MacKeychain implements CredentialStore {
   readonly backend = 'keychain' as const;
+  /**
+   * The last successful read.
+   *
+   * Shelling out on every status call would be a process spawn per render of
+   * the settings page. The cache is invalidated by every write and clear in
+   * this class, which are the only ways the value changes from here.
+   */
+  #cached: StoredCredentials | null | undefined;
 
   async read(): Promise<StoredCredentials | null> {
+    if (this.#cached !== undefined) return this.#cached;
     try {
       const { stdout } = await run('security', ['find-generic-password', '-s', SERVICE, '-a', ACCOUNT, '-w']);
-      return parse(stdout.trim());
+      this.#cached = parse(stdout.trim());
+      return this.#cached;
     } catch {
-      // Not found is the common case and is not an error.
+      // Not found is the common case and is not an error. A timeout lands
+      // here too, which is right: no credentials is a recoverable state and
+      // the person is asked to sign in.
+      this.#cached = null;
       return null;
     }
   }
@@ -67,18 +93,27 @@ class MacKeychain implements CredentialStore {
   async write(credentials: StoredCredentials): Promise<void> {
     // `-U` updates in place; without it a second sign-in fails with a
     // duplicate rather than replacing the old token.
+    //
+    // `-T /usr/bin/security` and not `-T ''`. An empty trusted-app list means
+    // *nothing* may read the item without a dialog, so every read blocks on a
+    // prompt: the first version of this hung the settings page on a window
+    // nobody could see. Naming the tool we read it with is the honest setting,
+    // and the protection that remains is the same one a mode 600 file has,
+    // namely that another user cannot read it.
     await run('security', [
       'add-generic-password',
       '-s', SERVICE,
       '-a', ACCOUNT,
       '-w', JSON.stringify(credentials),
       '-U',
-      '-T', '',
+      '-T', '/usr/bin/security',
       '-D', 'Mjolnir account',
     ]);
+    this.#cached = credentials;
   }
 
   async clear(): Promise<void> {
+    this.#cached = null;
     try {
       await run('security', ['delete-generic-password', '-s', SERVICE, '-a', ACCOUNT]);
     } catch {
@@ -163,6 +198,9 @@ export async function openCredentialStore(fallbackPath: string, platform: NodeJS
   if (platform === 'darwin') {
     const keychain = new MacKeychain();
     try {
+      // A real read, because `security` exists on a Mac whose keychain is
+      // locked and fails only when it is used. The call is bounded, so a
+      // machine that would have prompted falls back rather than hanging.
       await keychain.read();
       return keychain;
     } catch (error) {

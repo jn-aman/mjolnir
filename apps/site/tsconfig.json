@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "./src", "outDir": "./dist" },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/logger" },
+    { "path": "../../packages/licensing" },
+    { "path": "../../packages/account" },
+    { "path": "../../packages/endpoints" },
+    { "path": "../../packages/paddle" }
+  ]
+}

@@ -164,14 +164,32 @@ rather than silently doing the less safe thing.
 
 ## Seats
 
-A subscription has a seat count. A lease consumes a seat for its device.
+**Five by default.** The people who buy this run a laptop, a desktop, a work
+machine and something in a VM, and a tool that makes them choose is a tool they
+resent on the second machine. Five costs us nothing, and it is small enough
+that a team of twenty still has to buy twenty.
 
-- Asking for a lease when every seat is taken returns `seat_limit` with the
-  list of devices holding them: name, platform, last seen.
-- The app shows that list and offers to sign one out, which revokes that
-  device's refresh token and frees the seat immediately.
-- A device that has not refreshed for 60 days releases its seat on its own, so
-  a lost laptop does not permanently cost a seat.
+Seats are the `quantity` on the Paddle subscription item, so buying more is
+buying more of the same thing and the price follows automatically. A seat
+count that goes up mid-period takes effect immediately rather than at the next
+renewal, because someone who has just paid for more machines wants them today.
+
+**A seat is held by a machine with a live licence, not by one that has signed
+in.** Those are not the same and conflating them is wrong in both directions:
+signing in on a sixth machine just to look at the account page would burn a
+seat before that machine had a licence at all, and a machine that stopped
+renewing would keep its seat long after it stopped being used. Tying the seat
+to the lease means it frees itself a week after a machine stops asking, which
+is the same week that machine stops being Pro. One clock, not two.
+
+- Asking for a lease when every seat is taken returns `seat_limit` **with the
+  list of machines holding them**: name, platform, version, last seen. "No
+  seats left" with nothing to act on is a dead end, and what the person
+  actually wants is to sign out a laptop they no longer own.
+- Signing a machine out frees its seat immediately. The lease already on that
+  machine keeps working until it expires, because it is signed and we cannot
+  reach into it. That is the revocation window, and it is why the window is a
+  week.
 
 ## Lifetime licences
 
@@ -252,12 +270,38 @@ An account is optional. A licence key pasted into settings works with no
 account at all, which is what an air-gapped site or a security-conscious team
 will want.
 
-## Order of work
+## What is built
 
-1. `packages/account`: the lease format, its verification, and the device
-   grant client. Pure, testable, no network required to test.
-2. Keychain-backed credential storage with a stated fallback.
-3. `/api/account/*` in the local server, talking to mjolnir.sh.
-4. Settings → Account: sign in, plan, devices, billing link.
-5. The mjolnir.sh service.
-6. Paddle sandbox end to end, then live.
+| Piece | State |
+|---|---|
+| `packages/account`: lease format, verification, device grant client | done, 37 tests |
+| Keychain storage with a stated fallback | done |
+| `/api/account/*` in the local server | done |
+| Settings → Account: sign in, plan, machines, billing | done, behind `account.sign-in` |
+| `apps/site`: the service itself | done, 19 tests through HTTP |
+| Paddle webhook: payment becomes a subscription | done, not yet run against Paddle |
+| GitHub, Google and Okta callbacks | not started; email works |
+| SCIM deprovisioning | not started |
+| Deployment of api.mjolnir.sh | not started |
+
+### Running it
+
+```
+MJOLNIR_DB=/tmp/site.db PORT=8787 node apps/site/dist/main.js
+MJOLNIR_API_URL=http://127.0.0.1:8787 npm run dev
+```
+
+With no configuration it uses an in-memory store, makes a development signing
+key beside the database, and prints sign-in codes to its log instead of
+emailing them. That is not a shortcut: it is what makes the whole flow
+testable without an email provider or a Paddle account.
+
+### Verified end to end
+
+- Sign in from the app, approve on the site, app receives it
+- Subscription becomes a lease, lease verifies offline against the public key
+- The same lease refuses to work on a different machine
+- Five machines get seats, the sixth is refused with the list attached
+- Signing one out frees the seat and the sixth succeeds immediately
+- **Service killed: the app stays Pro, the cluster is untouched, and the error
+  names the host it could not reach**

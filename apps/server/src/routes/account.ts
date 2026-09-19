@@ -64,6 +64,18 @@ export function accountRoutes(account: AccountStore): Router {
 
   router.post('/sign-out', handle(async (_req, res) => res.json(await account.signOut())));
 
+  /** The machines on this account, and which of them hold a seat. */
+  router.get('/devices', handle(async (_req, res) => res.json({ devices: await account.devices() })));
+
+  router.post(
+    '/devices/:id/revoke',
+    handle(async (req, res) => {
+      const id = String(req.params.id ?? '');
+      if (!id) throw HttpError.badRequest('which device?');
+      res.json(await account.revokeDevice(id));
+    }),
+  );
+
   /** Ask for a lease now, for the "check again" button. */
   router.post('/refresh', handle(async (_req, res) => res.json(await account.renew(true))));
 
