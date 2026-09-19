@@ -50,7 +50,6 @@ export function ModuleRail({ active, onSelect, onSettings, settingsActive, expan
         label={expanded ? 'Collapse modules to icons' : 'Show module names'}
         hint="Alt B"
         testId="rail-toggle"
-        top="68px"
       />
 
       {entries.map((entry) => {

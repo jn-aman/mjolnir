@@ -12,6 +12,7 @@ import { accountRoutes } from './routes/account.ts';
 import { paddleRoutes } from './routes/paddle.ts';
 import { authRoutes } from './routes/auth.ts';
 import { scimRoutes } from './routes/scim.ts';
+import { wwwRoutes } from './www/routes.ts';
 import { OAuth, type OAuthConfig } from './auth/oauth.ts';
 
 const log = logger.child('site');
@@ -89,6 +90,21 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
   app.use('/api/auth', authRoutes(store, options.sendEmail, oauth));
   app.use('/scim/v2', scimRoutes(store, { publicUrl }));
 
+  /*
+   * The website, last.
+   *
+   * After every API route, so a page can never shadow an endpoint, and in the
+   * same process so there is one thing to deploy. `/device` is the reason it
+   * lives here rather than on a static host: it talks to the API beside it,
+   * with no second origin and no CORS to get wrong.
+   */
+  app.use(
+    wwwRoutes({
+      version: process.env['MJOLNIR_VERSION'] ?? '0.1.0',
+      ...(releaseInfo() ? { release: releaseInfo() } : {}),
+    }),
+  );
+
   // Abandoned sign-ins and spent codes do not accumulate.
   const sweeper = setInterval(() => {
     const swept = store.sweep();
@@ -110,6 +126,25 @@ export async function startSite(options: SiteOptions = {}): Promise<{ port: numb
       server.close();
       store.close();
     },
+  };
+}
+
+/**
+ * The published release, if the deploy was told about one.
+ *
+ * Read from the environment rather than from a build constant so publishing a
+ * new version does not need this service rebuilt: the release flow writes
+ * these and restarts it.
+ */
+function releaseInfo() {
+  const version = process.env['MJOLNIR_RELEASE_VERSION'];
+  if (!version) return undefined;
+  return {
+    version,
+    ...(process.env['MJOLNIR_RELEASE_ARM64'] ? { arm64: process.env['MJOLNIR_RELEASE_ARM64'] } : {}),
+    ...(process.env['MJOLNIR_RELEASE_INTEL'] ? { intel: process.env['MJOLNIR_RELEASE_INTEL'] } : {}),
+    ...(process.env['MJOLNIR_RELEASE_NOTES'] ? { notes: process.env['MJOLNIR_RELEASE_NOTES'] } : {}),
+    ...(process.env['MJOLNIR_RELEASE_AT'] ? { publishedAt: process.env['MJOLNIR_RELEASE_AT'] } : {}),
   };
 }
 
