@@ -282,6 +282,15 @@ export const FLAGS: readonly FlagDefinition[] = [
     module: 'kubernetes',
   },
   {
+    id: 'kubernetes.history',
+    label: 'Time travel',
+    description: 'Keeps a short window of what every watched object used to look like, and what changed when.',
+    fallback: true,
+    stage: 'beta',
+    module: 'kubernetes',
+    warning: 'This holds recent versions of watched objects in memory. Secret values are never kept.',
+  },
+  {
     id: 'kubernetes.drift',
     label: 'Diff and drift',
     description: 'Compares a live object against its Helm chart or the last kubectl apply, ignoring everything Kubernetes defaults.',

@@ -17,6 +17,8 @@ import { metricRoutes } from './routes/metrics.ts';
 import { diagnoseRoutes } from './routes/diagnose.ts';
 import { certificateRoutes } from './routes/certificates.ts';
 import { driftRoutes } from './routes/drift.ts';
+import { HistoryRecorder } from './history.ts';
+import { historyRoutes } from './routes/history.ts';
 import { resourceRoutes } from './routes/resources.ts';
 import { forwardRoutes } from './routes/forwards.ts';
 import { settingsRoutes } from './routes/settings.ts';
@@ -69,6 +71,8 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
 
   const crds = new CrdCatalogue(registry);
 
+  const history = new HistoryRecorder(registry);
+
   // Kubernetes keeps no usage history, so something has to accumulate it.
   const metrics = new MetricsCollector(registry);
 
@@ -119,6 +123,7 @@ export async function startServer(port = Number(process.env['MJOLNIR_PORT'] ?? 0
   app.use('/api/diagnose', diagnoseRoutes(registry, flags));
   app.use('/api/certificates', certificateRoutes(registry, flags));
   app.use('/api/drift', driftRoutes(registry, crds, flags));
+  app.use('/api/history', historyRoutes(history, crds, flags));
   app.use(errorHandler);
 
   /**

@@ -179,6 +179,35 @@ export interface AccountDevice {
   active: boolean;
 }
 
+export interface HistoryChange {
+  path: string;
+  /** Absent when the field was added: JSON has no undefined. */
+  before?: unknown;
+  /** Absent when the field was removed. */
+  after?: unknown;
+  kind: 'added' | 'removed' | 'changed';
+  note?: string | null;
+}
+
+export interface HistoryEntry {
+  at: string;
+  resourceVersion: string;
+  kind: 'created' | 'changed' | 'deleted';
+  /** Whether somebody did this, or it followed from something they did. */
+  origin: 'spec' | 'status';
+  changes: HistoryChange[];
+}
+
+export interface HistoryResult {
+  /** Whether this kind is being recorded at all. */
+  recording: boolean;
+  object: { kind: string; name: string; namespace?: string | null };
+  /** Newest first: an incident is read backwards from "it is broken now". */
+  revisions: HistoryEntry[];
+  /** When the window starts, so the page can say what it does not know. */
+  since: string | null;
+}
+
 export interface DriftChange {
   path: string;
   kind: 'changed' | 'removed' | 'type-changed';
@@ -631,6 +660,13 @@ export const api = {
     release: (context: string, namespace: string, name: string, revision?: number) =>
       request<{ release: HelmReleaseFull; history: HelmReleaseSummary[] }>(`/api/helm/${encodeURIComponent(context)}/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${revision ? `?revision=${revision}` : ''}`),
   },
+  history: {
+    get: (context: string, kind: string, name: string, namespace?: string) =>
+      request<HistoryResult>(
+        `/api/history/${encodeURIComponent(context)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`,
+      ),
+  },
+
   drift: {
     check: (context: string, kind: string, name: string, namespace?: string) =>
       request<DriftResult>(

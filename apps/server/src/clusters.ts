@@ -76,6 +76,14 @@ export interface ResourceSource {
   snapshot(): WatchSnapshot<never>;
   /** Called with every coalesced change, and once right away. Returns the unsubscribe. */
   subscribe(listener: (snapshot: WatchSnapshot<never>) => void): () => void;
+  /**
+   * Called with each object as it changes, uncoalesced.
+   *
+   * Separate from `subscribe`, which coalesces because a table wants it to. A
+   * recorder that missed the middle of three rapid edits would hold a history
+   * that never happened.
+   */
+  onChange(listener: (type: 'add' | 'update' | 'delete', object: never) => void): () => void;
   start(): Promise<void>;
   stop(): Promise<void>;
 }

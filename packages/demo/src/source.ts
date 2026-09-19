@@ -1,5 +1,5 @@
 import type { KubeObject } from '@mjolnir/schemas';
-import type { ResourceDefinition, WatchListener, WatchSnapshot, WatchState } from '@mjolnir/k8s';
+import type { ChangeListener, ResourceDefinition, WatchListener, WatchSnapshot, WatchState } from '@mjolnir/k8s';
 import { logger } from '@mjolnir/logger';
 import { demoStore, mergePatch } from './store.ts';
 
@@ -17,6 +17,7 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
   readonly #resource: ResourceDefinition;
   readonly #namespace: string | undefined;
   readonly #listeners = new Set<WatchListener<T>>();
+  readonly #changeListeners = new Set<ChangeListener<T>>();
 
   #state: WatchState = 'idle';
   #updatedAt: Date | null = null;
@@ -72,6 +73,28 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
     };
   }
 
+  /**
+   * Each object as it changes, which the demo has to offer too.
+   *
+   * Anything the real watch can do, this has to do, or a feature built on it
+   * is a feature the end-to-end suite cannot see. The demo store mutates on a
+   * timer to look alive, and those mutations are what this reports.
+   */
+  onChange(listener: ChangeListener<T>): () => void {
+    this.#changeListeners.add(listener);
+    return () => {
+      this.#changeListeners.delete(listener);
+    };
+  }
+
+  /** Called from the tick, with whatever the store now holds. */
+  #emitChanges(): void {
+    if (this.#changeListeners.size === 0) return;
+    for (const item of this.items()) {
+      for (const listener of this.#changeListeners) listener('update', item);
+    }
+  }
+
   async start(): Promise<void> {
     if (this.#timer) return;
     // A real watch takes a moment to sync. Resolving instantly would hide every
@@ -88,14 +111,25 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
       if (plural !== this.#resource.plural) return;
       this.#updatedAt = new Date();
       this.#emit();
+      this.#emitChanges();
     });
 
     if (this.#resource.plural === 'pods') {
+      /*
+       * The crash-looper, crash-looping.
+       *
+       * Six seconds rather than thirty: a pod that restarts twice a minute
+       * reads as a pod in trouble, which is what it is meant to show, and a
+       * demo whose one moving part moves twice while somebody watches is a
+       * demo that looks alive. It also means anything recording history has
+       * something to record without waiting half a minute for it.
+       */
       this.#timer = setInterval(() => {
         this.#restarts += 1;
         this.#updatedAt = new Date();
         this.#emit();
-      }, 30_000);
+        this.#emitChanges();
+      }, 6_000);
       this.#timer.unref?.();
     }
     log.debug('demo watch started', { kind: this.#resource.kind, namespace: this.#namespace });
@@ -107,6 +141,7 @@ export class DemoWatch<T extends KubeObject = KubeObject> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
     this.#listeners.clear();
+    this.#changeListeners.clear();
     this.#state = 'idle';
   }
 

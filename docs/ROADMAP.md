@@ -186,12 +186,33 @@ Small, and they make everything before them stickier.
 
 ## Phase 4, Expand
 
-### 7. Time travel
-Watch events are already streaming through the app. Keep a rolling window and
-let people scrub backwards: what did this Deployment look like twenty minutes
-ago, and which field changed when the pods started failing? **Nothing else in
-the category does this**, and the data is already passing through us, the cost
-is storage and UI, not integration.
+### 7. Time travel — built
+
+A bounded window of what every watched object used to look like, hanging off
+the watches the app already runs. No extra API calls, no polling, no load on
+the cluster: the cost is memory and nothing else.
+
+Two things make it affordable, and both are about what is *not* kept.
+
+**Churn is not a change.** An informer fires constantly for things nobody
+did: `resourceVersion` moves on every write anywhere in the object,
+`managedFields` records who touched what, Leases carry a heartbeat every few
+seconds. Recording those fills an hour's window in about a minute.
+
+**A rollout settling is one entry, not eight.** One `kubectl scale` produces
+one change to `spec.replicas` and then eight to `status` as pods come and go.
+Consecutive status-only updates fold into a single entry spanning the whole
+settle, so the change somebody made is not evicted by its own consequences.
+Against a live cluster that took twenty revisions down to six, with the two
+things a person actually did on top and labelled.
+
+Everything is capped per object, in total, and by age, and a Secret's values
+are never kept: the keys are, because "somebody added a key to this secret"
+is the change worth seeing and the value is not.
+
+The window is short and the page says so. An empty list is not evidence that
+an object has been stable, only that nobody was watching, and letting those
+read the same way is how a history page lies quietly.
 
 ### 8. Database browser
 Postgres, MySQL, Redis, MongoDB. Reuses Phase 3's detection and forwarding.

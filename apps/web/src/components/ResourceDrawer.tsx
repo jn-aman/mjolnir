@@ -20,6 +20,7 @@ import { kindTint } from '../lib/kindIcons.ts';
 import { ResizeHandle, useResizable } from '../lib/useResizable.tsx';
 import { useFlags } from '../lib/flags.tsx';
 import { DriftPanel } from './DriftPanel.tsx';
+import { HistoryPanel } from './HistoryPanel.tsx';
 import { age, podStatus, type KubeItem } from './columns.tsx';
 import { LoadingState } from './ui/States.tsx';
 import { ResourceDetail } from './detail/ResourceDetail.tsx';
@@ -91,6 +92,9 @@ export function ResourceDrawer({
    * would promise an answer that is always "nothing to compare against".
    */
   const canDrift = (flagValues['kubernetes.drift'] ?? true) && !['Pod', 'ReplicaSet', 'Event', 'Endpoints', 'Node'].includes(kind);
+  // Offered on everything, because "what changed here" is a question about
+  // any object, including the pod a controller made.
+  const canHistory = (flagValues['kubernetes.history'] ?? true) && kind !== 'Event';
   const [expanded, setExpanded] = useState(false);
   const [logContainer, setLogContainer] = useState<string | undefined>(undefined);
   const [logPrevious, setLogPrevious] = useState(false);
@@ -285,6 +289,7 @@ export function ResourceDrawer({
     { id: 'yaml', label: 'Edit YAML', onSelect: () => setTab('yaml') },
     { id: 'events', label: 'Events', onSelect: () => setTab('events') },
     ...(canDrift ? [{ id: 'drift', label: 'Compare with the chart', onSelect: () => setTab('drift') }] : []),
+    ...(canHistory ? [{ id: 'history', label: 'What changed here', onSelect: () => setTab('history') }] : []),
     SEPARATOR,
     ...copyEntry('copy-name', 'Copy name', name),
     ...copyEntry('copy-namespace', 'Copy namespace', namespace),
@@ -311,6 +316,7 @@ export function ResourceDrawer({
     // Beside the YAML on purpose: "what does this look like" and "is this
     // what it was supposed to look like" are the same question asked twice.
     ...(canDrift ? [{ id: 'drift', label: 'Drift' }] : []),
+    ...(canHistory ? [{ id: 'history', label: 'History' }] : []),
   ];
 
   return (
@@ -491,6 +497,14 @@ export function ResourceDrawer({
                 secrets decoded for a tab nobody opened. */}
             {tab === 'drift' ? (
               <DriftPanel context={context} kind={kind} name={name} namespace={namespace || undefined} />
+            ) : null}
+          </Tabs.Content>
+        ) : null}
+
+        {canHistory ? (
+          <Tabs.Content value="history" className="flex min-h-0 flex-1 flex-col outline-none">
+            {tab === 'history' ? (
+              <HistoryPanel context={context} kind={kind} name={name} namespace={namespace || undefined} />
             ) : null}
           </Tabs.Content>
         ) : null}

@@ -9,3 +9,4 @@ export * from './diagnose.ts';
 export * from './certificates.ts';
 export * from './images.ts';
 export * from './drift.ts';
+export * from './history.ts';

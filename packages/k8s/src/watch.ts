@@ -24,6 +24,9 @@ export interface WatchSnapshot<T> {
 
 export type WatchListener<T> = (snapshot: WatchSnapshot<T>) => void;
 
+export type ChangeType = 'add' | 'update' | 'delete';
+export type ChangeListener<T> = (type: ChangeType, object: T) => void;
+
 interface KubeList<T> {
   items?: T[];
   metadata?: { resourceVersion?: string };
@@ -52,6 +55,7 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
 
   #informer: (Informer<T> & ObjectCache<T>) | null = null;
   #listeners = new Set<WatchListener<T>>();
+  #changeListeners = new Set<ChangeListener<T>>();
   #state: WatchState = 'idle';
   #error: string | null = null;
   #updatedAt: Date | null = null;
@@ -92,6 +96,31 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
     };
   }
 
+  /**
+   * Subscribe to each object as it changes, uncoalesced.
+   *
+   * Separate from `subscribe` on purpose: that one exists to redraw a table
+   * and coalesces for it, and a recorder that missed the middle of three
+   * rapid edits would record a history that never happened.
+   */
+  onChange(listener: ChangeListener<T>): () => void {
+    this.#changeListeners.add(listener);
+    return () => {
+      this.#changeListeners.delete(listener);
+    };
+  }
+
+  #emitChange(type: ChangeType, object: T): void {
+    for (const listener of this.#changeListeners) {
+      try {
+        listener(type, object);
+      } catch (error) {
+        // One bad recorder must not stop the watch that feeds every list.
+        log.debug('a change listener threw', { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  }
+
   /** Subscribe to coalesced changes. The returned function unsubscribes. */
   subscribe(listener: WatchListener<T>): () => void {
     this.#listeners.add(listener);
@@ -118,9 +147,25 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
     const informer = makeInformer<T>(this.#config, path, listFn);
     this.#informer = informer;
 
-    informer.on('add', () => this.#touch());
-    informer.on('update', () => this.#touch());
-    informer.on('delete', () => this.#touch());
+    /*
+     * The object, not just the fact that something moved.
+     *
+     * The snapshot listeners get a coalesced list because that is what a table
+     * needs. Anything recording history needs each version as it arrives, and
+     * diffing whole lists to recover them would cost more than the feature.
+     */
+    informer.on('add', (object: T) => {
+      this.#touch();
+      this.#emitChange('add', object);
+    });
+    informer.on('update', (object: T) => {
+      this.#touch();
+      this.#emitChange('update', object);
+    });
+    informer.on('delete', (object: T) => {
+      this.#touch();
+      this.#emitChange('delete', object);
+    });
 
     /*
      * A reconnect, not a sync.
@@ -190,6 +235,7 @@ export class ResourceWatch<T extends KubernetesObject = KubernetesObject> {
       }
     }
     this.#listeners.clear();
+    this.#changeListeners.clear();
   }
 
   #setState(state: WatchState): void {
