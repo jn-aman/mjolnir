@@ -1,5 +1,7 @@
 import { gzipSync } from 'node:zlib';
 import type { KubeObject } from '@mjolnir/schemas';
+import { hours, iso, uid } from './clock.ts';
+import { DEMO_CERT_MANAGER, DEMO_INGRESSES, DEMO_TLS_SECRETS } from './extras.ts';
 
 /**
  * A synthetic cluster.
@@ -22,11 +24,8 @@ export function isDemoContext(context: string): boolean {
   return context === DEMO_CONTEXT;
 }
 
-const START = Date.now();
 
-const iso = (msAgo: number): string => new Date(START - msAgo).toISOString();
 const minutes = (n: number): number => n * 60_000;
-const hours = (n: number): number => n * 3_600_000;
 
 /** Deterministic pseudo-random, so a screenshot taken twice looks the same. */
 function seeded(seed: number): () => number {
@@ -39,10 +38,6 @@ function seeded(seed: number): () => number {
 
 const rand = seeded(0x5eed);
 
-const uid = (() => {
-  let counter = 0;
-  return () => `de3b0000-0000-4000-8000-${(counter++).toString(16).padStart(12, '0')}`;
-})();
 
 export const NAMESPACES = ['payments', 'checkout', 'ingest', 'platform', 'kube-system'] as const;
 export type DemoNamespace = (typeof NAMESPACES)[number];
@@ -311,6 +306,34 @@ function podTemplateFor(app: string): Record<string, unknown> {
   };
 }
 
+/**
+ * Which deployments came from a chart, and which from a kubectl apply.
+ *
+ * Both, because drift reads differently against each: a chart will reassert
+ * itself on the next upgrade whether anybody meant it to or not, and an apply
+ * only when somebody runs one.
+ */
+const HELM_MANAGED: Readonly<Record<string, boolean>> = {
+  'platform/grafana': true,
+  'payments/api': true,
+};
+
+/**
+ * What was applied, for the one deployment that came from a file.
+ *
+ * It asks for three replicas and the cluster runs two, which is what a
+ * `kubectl scale` during an incident leaves behind: nothing looks wrong until
+ * the next apply quietly undoes it.
+ */
+const APPLIED: Readonly<Record<string, string>> = {
+  'checkout/web': JSON.stringify({
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    metadata: { name: 'web', namespace: 'checkout', labels: { app: 'web' } },
+    spec: { replicas: 3, selector: { matchLabels: { app: 'web' } } },
+  }),
+};
+
 export const DEMO_DEPLOYMENTS: readonly KubeObject[] = (
   [
     ['payments', 'api', 2, 2],
@@ -327,8 +350,16 @@ export const DEMO_DEPLOYMENTS: readonly KubeObject[] = (
     namespace,
     uid: uid(),
     creationTimestamp: iso(hours(48)),
-    labels: { app: name },
-    annotations: { 'deployment.kubernetes.io/revision': '3' },
+    // Helm writes this label on everything it installs, and it is how the
+    // drift check finds the chart an object came from.
+    labels: { app: name, ...(HELM_MANAGED[`${namespace}/${name}`] ? { 'app.kubernetes.io/managed-by': 'Helm' } : {}) },
+    annotations: {
+      'deployment.kubernetes.io/revision': '3',
+      ...(HELM_MANAGED[`${namespace}/${name}`]
+        ? { 'meta.helm.sh/release-name': name, 'meta.helm.sh/release-namespace': namespace }
+        : {}),
+      ...(APPLIED[`${namespace}/${name}`] ? { 'kubectl.kubernetes.io/last-applied-configuration': APPLIED[`${namespace}/${name}`] as string } : {}),
+    },
   },
   spec: {
     replicas,
@@ -465,6 +496,38 @@ export const DEMO_HELM_SECRETS: readonly KubeObject[] = [
   helmReleaseSecret('payments', 'api', 5, 'deployed', { name: 'mjolnir-service', version: '1.9.0', appVersion: '1.5.0' }, { image: { tag: '1.5.0' }, replicaCount: 2 }, hours(6)),
 ];
 
+/**
+ * One endpoint per Service, naming a pod that really exists in the demo.
+ *
+ * Without these a Service is a name with nothing behind it, and anything that
+ * asks "what would a connection to this actually reach" gets no answer. Port
+ * forwarding is the obvious one: "forward Redis" is a sentence about a
+ * service, and the pod behind it is what the forward attaches to.
+ */
+export const DEMO_ENDPOINTS: readonly KubeObject[] = (DEMO_SERVICES as ReadonlyArray<KubeObject & { metadata?: { name?: string; namespace?: string }; spec?: { ports?: Array<{ port?: number; targetPort?: number; name?: string }> } }>).flatMap(
+  (service) => {
+    const name = service.metadata?.name ?? '';
+    const namespace = service.metadata?.namespace ?? '';
+    const backing = (DEMO_PODS as ReadonlyArray<KubeObject & { metadata?: { name?: string; namespace?: string; labels?: Record<string, string> } }>).find(
+      (pod) => pod.metadata?.namespace === namespace && pod.metadata?.labels?.['app'] === name,
+    );
+    if (!backing) return [];
+    return [
+      {
+        apiVersion: 'v1',
+        kind: 'Endpoints',
+        metadata: { name, namespace, uid: uid(), creationTimestamp: iso(hours(48)) },
+        subsets: [
+          {
+            addresses: [{ ip: '10.42.0.11', targetRef: { kind: 'Pod', name: backing.metadata?.name, namespace } }],
+            ports: (service.spec?.ports ?? []).map((port) => ({ name: port.name, port: port.targetPort ?? port.port, protocol: 'TCP' })),
+          },
+        ],
+      } as KubeObject,
+    ];
+  },
+);
+
 export const DEMO_SECRETS: readonly KubeObject[] = [
   {
     apiVersion: 'v1',
@@ -532,5 +595,8 @@ export const DEMO_RESOURCES: Readonly<Record<string, readonly KubeObject[]>> = {
   services: DEMO_SERVICES,
   events: DEMO_EVENTS,
   configmaps: DEMO_CONFIGMAPS,
-  secrets: [...DEMO_SECRETS, ...DEMO_HELM_SECRETS],
+  secrets: [...DEMO_SECRETS, ...DEMO_HELM_SECRETS, ...DEMO_TLS_SECRETS],
+  endpoints: DEMO_ENDPOINTS,
+  ingresses: DEMO_INGRESSES,
+  certificates: DEMO_CERT_MANAGER,
 };

@@ -33,7 +33,22 @@ import { Buffer } from 'node:buffer';
 export const CRITICAL_DAYS = 7;
 export const SOON_DAYS = 30;
 
-export type CertificateState = 'expired' | 'critical' | 'soon' | 'ok' | 'not-yet-valid';
+export type CertificateState =
+  | 'expired'
+  | 'critical'
+  | 'soon'
+  | 'ok'
+  | 'not-yet-valid'
+  /**
+   * cert-manager has a Certificate and there is no certificate behind it.
+   *
+   * Distinct from expired on purpose. "Expired 1 day ago" is what this used to
+   * say, and it is a lie with a plausible shape: nothing expired, because
+   * nothing was ever issued. The two need different words because they need
+   * different actions, and because a date that was never real should never be
+   * printed as though it were.
+   */
+  | 'not-issued';
 
 export interface CertificateUse {
   readonly kind: string;
@@ -232,9 +247,16 @@ export function inspectCertificates(input: CertificateInput): CertificateReport 
 
   // Soonest first, and an expired certificate is not "very soon", it is worse
   // than anything still working.
-  const sorted = [...summaries].sort((a, b) => a.daysLeft - b.daysLeft);
+  const sorted = [...summaries].sort((a, b) => {
+    // Never issued first: an expired certificate is still answering, badly,
+    // and one that does not exist is not answering at all.
+    const rank = (entry: CertificateSummary) => (entry.state === 'not-issued' ? 0 : 1);
+    return rank(a) - rank(b) || a.daysLeft - b.daysLeft;
+  });
   const counts = {
-    expired: sorted.filter((entry) => entry.state === 'expired').length,
+    // Counted with the expired, because both mean nothing usable is being
+    // served and both want somebody today.
+    expired: sorted.filter((entry) => entry.state === 'expired' || entry.state === 'not-issued').length,
     critical: sorted.filter((entry) => entry.state === 'critical').length,
     soon: sorted.filter((entry) => entry.state === 'soon').length,
     ok: sorted.filter((entry) => entry.state === 'ok' || entry.state === 'not-yet-valid').length,
@@ -264,6 +286,16 @@ function describe(
   counts: CertificateReport['counts'],
   nextUnmanaged: CertificateSummary | undefined,
 ): string {
+  // Before expiry, because nothing is serving this at all: an expired
+  // certificate is at least still answering, badly.
+  const missing = certificates.filter((entry) => entry.state === 'not-issued');
+  if (missing.length > 0) {
+    const first = missing[0]!;
+    return missing.length === 1
+      ? `${first.name} has never been issued, so nothing is serving it.`
+      : `${missing.length} certificates have never been issued, including ${first.name}.`;
+  }
+
   const expired = certificates.filter((entry) => entry.state === 'expired');
   if (expired.length > 0) {
     const first = expired[0]!;
@@ -424,7 +456,11 @@ function summarise(input: SummariseInput): CertificateSummary | null {
 function fromCertManagerAlone(certificate: CertManagerCertificate, now: number): CertificateSummary {
   const ready = certificate.status?.conditions?.find((condition) => condition.type === 'Ready');
   const notAfter = certificate.status?.notAfter ?? '';
-  const daysLeft = notAfter ? Math.floor((Date.parse(notAfter) - now) / DAY) : -1;
+  const issued = Boolean(notAfter);
+  // Zero, not a negative number. There is no expiry, so there is no countdown,
+  // and sorting one of these among real expiries by a made-up date would put
+  // it in the wrong place as well as describe it wrongly.
+  const daysLeft = issued ? Math.floor((Date.parse(notAfter) - now) / DAY) : 0;
   return {
     id: `certmanager:${certificate.metadata?.namespace}/${certificate.metadata?.name}`,
     source: 'cert-manager',
@@ -436,7 +472,7 @@ function fromCertManagerAlone(certificate: CertManagerCertificate, now: number):
     notBefore: certificate.status?.notBefore ?? '',
     notAfter,
     daysLeft,
-    state: notAfter ? stateOf(daysLeft, false) : 'expired',
+    state: issued ? stateOf(daysLeft, false) : 'not-issued',
     selfSigned: false,
     managed: true,
     ...(certificate.spec?.issuerRef?.name

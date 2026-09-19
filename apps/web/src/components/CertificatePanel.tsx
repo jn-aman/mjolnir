@@ -30,6 +30,7 @@ const STATE: Record<CertificateSummary['state'], { color: string; label: string 
   soon: { color: 'var(--status-warn)', label: 'This month' },
   ok: { color: 'var(--status-ok)', label: 'Fine' },
   'not-yet-valid': { color: 'var(--status-warn)', label: 'Not valid yet' },
+  'not-issued': { color: 'var(--status-error)', label: 'Never issued' },
 };
 
 const SOURCE_LABEL: Record<CertificateSummary['source'], string> = {
@@ -112,6 +113,7 @@ export function CertificatePanel({ context, namespace, onNavigate }: Certificate
         />
         <Button
           variant={onlyUnmanaged ? 'secondary' : 'ghost'}
+          data-testid="certificates-unmanaged"
           onClick={() => setOnlyUnmanaged((current) => !current)}
           hint="Hide everything cert-manager looks after, leaving only what needs a person"
         >
@@ -222,7 +224,7 @@ function CertificateRow({ entry, onNavigate }: { entry: CertificateSummary; onNa
             >
               {entry.state === 'expired'
                 ? `Expired ${Math.abs(entry.daysLeft)}d ago`
-                : entry.state === 'not-yet-valid'
+                : entry.state === 'not-yet-valid' || entry.state === 'not-issued'
                   ? tone.label
                   : `${entry.daysLeft}d left`}
             </span>

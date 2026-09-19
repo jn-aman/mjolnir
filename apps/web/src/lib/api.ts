@@ -219,7 +219,7 @@ export interface CertificateSummary {
   notAfter: string;
   /** Negative once it has expired. */
   daysLeft: number;
-  state: 'expired' | 'critical' | 'soon' | 'ok' | 'not-yet-valid';
+  state: 'expired' | 'critical' | 'soon' | 'ok' | 'not-yet-valid' | 'not-issued';
   selfSigned: boolean;
   /** True when a controller renews this without anyone doing anything. */
   managed: boolean;

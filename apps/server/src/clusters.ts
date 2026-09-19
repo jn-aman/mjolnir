@@ -1,7 +1,7 @@
 import { delimiter as pathDelimiter } from 'node:path';
 import { Writable, type Duplex, type Readable } from 'node:stream';
 import { Exec, PortForward } from '@kubernetes/client-node';
-import type { KubeConfig } from '@kubernetes/client-node';
+import { KubeConfig } from '@kubernetes/client-node';
 import {
   ClusterTransport,
   type ClusterContext,
@@ -397,9 +397,26 @@ export class ClusterRegistry {
   extraKubeconfigs: string[] = [];
 
   async reload(): Promise<void> {
+    /*
+     * The demo cluster, and only the demo cluster, when asked for.
+     *
+     * `MJOLNIR_DEMO` existed in the end-to-end fixture and did nothing, so
+     * every spec ran against whatever kubeconfig the machine happened to
+     * have. On a laptop with a real cluster that meant the whole suite
+     * asserted against someone's actual workloads and failed for reasons that
+     * had nothing to do with the change being tested; on a machine with no
+     * cluster it passed. A test run must not depend on whose desk it is on.
+     *
+     * Hiding the real contexts is the point, not a side effect: a spec that
+     * can reach a production cluster is a spec that can change one.
+     */
+    const demoOnly = process.env['MJOLNIR_DEMO'] === '1';
+
     const base = kubeconfigPaths(process.env);
     const all = [...base, ...this.extraKubeconfigs.filter((entry) => !base.includes(entry))];
-    const result = await loadKubeconfig({ ...process.env, KUBECONFIG: all.join(pathDelimiter) });
+    const result = demoOnly
+      ? { config: new KubeConfig(), contexts: [], currentContext: null, failures: [] }
+      : await loadKubeconfig({ ...process.env, KUBECONFIG: all.join(pathDelimiter) });
     this.#kubeconfig = result.config;
     this.#failures = result.failures;
 

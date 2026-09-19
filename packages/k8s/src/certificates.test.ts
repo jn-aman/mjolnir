@@ -298,3 +298,36 @@ describe('the parsing underneath', () => {
 });
 
 process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
+
+describe('a certificate that was never issued', () => {
+  it('does not call it expired, because nothing expired', () => {
+    const report = inspectCertificates({
+      certificates: [
+        {
+          metadata: { name: 'checkout-tls', namespace: 'payments' },
+          spec: { secretName: 'checkout-tls', dnsNames: ['checkout.acme.test'] },
+          status: { conditions: [{ type: 'Ready', status: 'False', message: 'the DNS-01 challenge did not propagate' }] },
+        },
+      ],
+    });
+
+    const entry = report.certificates[0]!;
+    expect(entry.state).toBe('not-issued');
+    // "Expired 1 day ago" is a lie with a plausible shape: there was never a
+    // date, so a countdown from one is invented.
+    expect(entry.daysLeft).toBe(0);
+    expect(report.summary).toBe('checkout-tls has never been issued, so nothing is serving it.');
+  });
+
+  it('puts it above an expired one, which is at least still answering', () => {
+    const report = inspectCertificates({
+      secrets: [secret('long', URGENT)],
+      certificates: [
+        { metadata: { name: 'never', namespace: 'shop' }, spec: { secretName: 'never' }, status: { conditions: [] } },
+      ],
+      now: Date.now() + 8 * DAY,
+    });
+    expect(report.certificates[0]?.name).toBe('never');
+    expect(report.counts.expired).toBe(2);
+  });
+});

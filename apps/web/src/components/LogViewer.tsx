@@ -270,7 +270,15 @@ export function LogViewer({
         />
         )}
 
-        {compact ? null : (
+        {/*
+          Shown in the dock too, unlike the other controls here.
+          
+          Logs live in the dock now, and this is the control a crash loop
+          needs: the current container has not started, so its logs are empty,
+          and the output that explains the crash belongs to the run that
+          already ended. Leaving it in an overflow menu hides the one button
+          the feature exists for, at the one moment somebody is looking for it.
+        */}
         <Segmented
           value={previous ? 'previous' : 'current'}
           onChange={(value) => setPrevious(value === 'previous')}
@@ -281,7 +289,6 @@ export function LogViewer({
             { value: 'previous', label: 'Previous' },
           ]}
         />
-        )}
 
         <button
           type="button"
