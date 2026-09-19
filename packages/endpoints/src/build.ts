@@ -16,9 +16,25 @@
  * clients, so a determined person extracting it from the bundle learns which
  * flags exist and nothing else. It cannot change a toggle.
  */
-export const BUILD = {
+export interface BuildValues {
   /** Unleash client token, scoped to one project and environment. */
-  flagsToken: '',
+  readonly flagsToken: string;
   /** Set by the release script so support can tell builds apart. */
+  readonly channel: string;
+}
+
+/**
+ * Typed as `string`, deliberately, and not `as const`.
+ *
+ * With `as const` these empty strings become literal types, and the moment the
+ * release script writes a real token in, every `BUILD.flagsToken !== ''` in
+ * the codebase becomes a comparison TypeScript rejects as impossible. The
+ * result is a build that compiles in the repository and fails only while
+ * packaging a release, which is the worst possible moment to find out. These
+ * are placeholders for something decided at build time, so the type has to
+ * describe the shape rather than today's contents.
+ */
+export const BUILD: BuildValues = {
+  flagsToken: '',
   channel: '',
-} as const;
+};

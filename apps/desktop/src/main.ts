@@ -1,13 +1,45 @@
 import { createRequire } from 'node:module';
+import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BrowserWindow as BrowserWindowType, MenuItemConstructorOptions } from 'electron';
 import { ENDPOINTS } from '@mjolnir/endpoints';
-import { logger } from '@mjolnir/logger';
+import { fileTransport, logger } from '@mjolnir/logger';
 import { setDesktopBridge, startServer, type ServerHandle } from '@mjolnir/server';
 import { check, initUpdater, installNow, setPreferences, updateState } from './updater.ts';
 
+/**
+ * A log file, from the first line.
+ *
+ * A double-clicked `.app` has no console, so a packaged build that fails to
+ * start prints into nowhere and the only evidence is that nothing happened.
+ * That is not a state anyone can report a bug from, and it is not a state
+ * anyone can debug either: this was written after a packaged build exited
+ * silently and left no trace at all. The file is the first thing set up, on
+ * purpose, so a failure in anything below it is still recorded.
+ */
+const logDir = join(homedir(), '.mjolnir');
+try {
+  mkdirSync(logDir, { recursive: true, mode: 0o700 });
+} catch {
+  // A log we cannot write is not a reason not to start.
+}
+export const LOG_FILE = join(logDir, 'app.log');
+// Attached to the shared logger, so the server's lines land here too: when a
+// launch fails it is almost always the server that knows why.
+logger.attach(fileTransport(LOG_FILE));
 const log = logger.child('desktop');
+
+// Anything that gets past the try/catch below still lands in the file, which
+// is the difference between "it did not open" and a stack trace.
+process.on('uncaughtException', (error: Error) => {
+  log.error('uncaught exception in the main process', { error: error.message, stack: error.stack ?? '' });
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  log.error('unhandled rejection in the main process', { reason: reason instanceof Error ? reason.message : String(reason), stack: reason instanceof Error ? (reason.stack ?? '') : '' });
+});
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 // Electron's main-process module is CommonJS, and its exports are defined
@@ -197,7 +229,11 @@ function buildTray(): void {
 
 // One instance owns the server and the kubeconfig watches; a second launch
 // raises the first one's window instead of starting a rival copy.
+log.info('main process starting', { version: process.versions['electron'] ?? '', packaged: app.isPackaged, pid: process.pid });
+
 if (!app.requestSingleInstanceLock()) {
+  // Not an error: another copy is already running and will raise its window.
+  log.info('another instance holds the lock, handing over');
   app.quit();
 } else {
   app.on('second-instance', () => {
@@ -220,11 +256,23 @@ if (!app.requestSingleInstanceLock()) {
       app.quit();
       return;
     }
-    buildMenu();
-    buildTray();
-    createWindow();
-    startUpdates();
-    reportCrashesToServer();
+    // Each of these has failed in a packaged build at some point, and a
+    // failure in any one of them used to take the window with it.
+    for (const [name, step] of [
+      ['menu', buildMenu],
+      ['tray', buildTray],
+      ['window', createWindow],
+      ['updates', startUpdates],
+      ['crash reporting', reportCrashesToServer],
+    ] as const) {
+      try {
+        step();
+      } catch (error) {
+        log.error(`could not set up the ${name}`, { error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? (error.stack ?? '') : '' });
+        // A missing tray icon is not a reason to have no window.
+        if (name === 'window') throw error;
+      }
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

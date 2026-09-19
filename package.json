@@ -36,7 +36,9 @@
     "lint:no-js": "! find packages apps e2e -type f \\( -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \\) -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/release/*' | grep . || (echo 'JavaScript source files found: Mjolnir is TypeScript only' && exit 1)",
     "verify": "npm run lint:no-js && npm run typecheck && npm test",
     "desktop": "npm run build --workspaces --if-present && cd apps/desktop && electron .",
-    "dmg": "npm run build --workspaces --if-present && cd apps/desktop && electron-builder --mac"
+    "release": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/release.ts",
+    "release:verify": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/release.ts --verify-only",
+    "dmg": "npm run release"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
